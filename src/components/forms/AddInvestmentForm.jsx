@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
 
@@ -11,9 +11,14 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
   const [symbol, setSymbol] = useState('');
   const [comments, setComments] = useState('');
   const [type, setType] = useState('Stock');
+  const [currentPrice, setCurrentPrice] = useState(0);
 
-  // Removed shares and avgCost from local state since they are not permanently 
-  // stored on profiles anymore! Those are driven strictly by execution orders.
+  // MF Live Search States
+  const [mfQuery, setMfQuery] = useState('');
+  const [mfResults, setMfResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (initialData) {
@@ -21,8 +26,59 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
       setSymbol(initialData.symbol || '');
       setComments(initialData.comments || '');
       setType(initialData.type || 'Stock');
+      setCurrentPrice(initialData.currentPrice || 0);
+
+      if (initialData.type === 'Mutual Fund') {
+         setMfQuery(`${initialData.symbol} - ${initialData.name}`);
+      }
     }
   }, [initialData]);
+
+  const handleMfSearch = (query) => {
+    setMfQuery(query);
+    setShowDropdown(true);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!query.trim()) {
+       setMfResults([]);
+       setIsSearching(false);
+       return;
+    }
+
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+       try {
+          const res = await fetch(`https://api.mfapi.in/mf/search?q=${query}`);
+          const data = await res.json();
+          setMfResults(data);
+       } catch (err) {
+          console.error("Failed to search mutual funds:", err);
+       } finally {
+          setIsSearching(false);
+       }
+    }, 300);
+  };
+
+  const handleMfSelect = async (fund) => {
+    setMfQuery(fund.schemeName);
+    setShowDropdown(false);
+    
+    // Autofill internal states
+    setName(fund.schemeName);
+    setSymbol(fund.schemeCode.toString());
+
+    // Fetch initial NAV concurrently so it's ready upon creation execution
+    try {
+       const res = await fetch(`https://api.mfapi.in/mf/${fund.schemeCode}/latest`);
+       const latestData = await res.json();
+       if (latestData && latestData.data && latestData.data.length > 0) {
+          setCurrentPrice(parseFloat(latestData.data[0].nav));
+       }
+    } catch (e) {
+       console.error("Failed to fetch initial NAV", e);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -39,9 +95,8 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
       updateInvestment(initialData.id, payload);
       addNotification({ title: 'Investment Updated', message: `Modified properties for ${name}.` });
     } else {
-      // Safe-guard currentPrice logically initializing it to 0 so math doesn't crash 
-      // globally. True pricing will trace from trading dynamically or future updates.
-      addInvestment({ ...payload, currentPrice: 0 });
+      // Pass the fully loaded NAV directly into tracking database securely.
+      addInvestment({ ...payload, currentPrice: type === 'Mutual Fund' ? currentPrice : 0 });
       addNotification({ title: 'Investment Profile Created', message: `Successfully tracked ${name}. You can now execute trades on it.` });
     }
 
@@ -59,7 +114,14 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto px-2 pb-6 no-scrollbar">
       <div>
         <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Type</label>
-        <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary">
+        <select value={type} onChange={e => {
+            setType(e.target.value); 
+            if (e.target.value !== 'Mutual Fund') {
+               setMfQuery('');
+               setName('');
+               setSymbol('');
+            }
+          }} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary">
           <option value="Stock">Stocks</option>
           <option value="Mutual Fund">Mutual Funds</option>
           <option value="Crypto">Crypto</option>
@@ -68,18 +130,53 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Name *</label>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
+      {type === 'Mutual Fund' ? (
+        <div className="relative">
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Search Fund Library *</label>
+          <input 
+             type="text" 
+             value={mfQuery} 
+             onChange={e => handleMfSearch(e.target.value)} 
+             placeholder="Search by AMC or Name (e.g., SBI Small Cap)"
+             className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" 
+             required 
+             autoComplete="off"
+          />
+          {showDropdown && (mfQuery.length > 0) && (
+             <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-high border border-outline/10 rounded-lg shadow-2xl max-h-60 overflow-y-auto py-2 z-50">
+               {isSearching ? (
+                 <p className="px-4 py-3 text-sm text-on-surface-variant italic">Searching framework...</p>
+               ) : mfResults.length > 0 ? (
+                 mfResults.map(fund => (
+                   <div 
+                     key={fund.schemeCode} 
+                     onClick={() => handleMfSelect(fund)}
+                     className="px-4 py-3 hover:bg-primary/20 cursor-pointer text-sm border-b border-outline/5 last:border-0"
+                   >
+                     <p className="font-bold text-on-surface">{fund.schemeName}</p>
+                     <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mt-1">Code Mapping: {fund.schemeCode}</p>
+                   </div>
+                 ))
+               ) : (
+                 <p className="px-4 py-3 text-sm text-on-surface-variant">No mutual funds matching request.</p>
+               )}
+             </div>
+          )}
         </div>
-        <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 flex items-center gap-1">
-            Ticker / Symbol *
-          </label>
-          <input type="text" value={symbol} onChange={e => setSymbol(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Name *</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
+          </div>
+          <div>
+            <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 flex items-center gap-1">
+              Ticker / Symbol *
+            </label>
+            <input type="text" value={symbol} onChange={e => setSymbol(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Comments</label>
