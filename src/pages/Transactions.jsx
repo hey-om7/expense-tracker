@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency } from '../utils/currency';
+import Modal from '../components/ui/Modal';
+import AddTransactionForm from '../components/forms/AddTransactionForm';
 
 const TransactionsScreen = () => {
   const { transactions, monthlySpent, getCategory, categories } = useAppContext();
@@ -9,6 +11,12 @@ const TransactionsScreen = () => {
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
+  
+  const [filterDate, setFilterDate] = useState('');
+  const [filterMonth, setFilterMonth] = useState('all');
+  const [filterYear, setFilterYear] = useState('all');
+
+  const [editModal, setEditModal] = useState({ isOpen: false, data: null });
 
   const filteredTransactions = useMemo(() => {
     let result = transactions;
@@ -24,12 +32,27 @@ const TransactionsScreen = () => {
 
     // Filter Type
     if (filterType !== 'all') {
-      result = result.filter(t => t.type === filterType);
+      if (filterType === 'trade') {
+         result = result.filter(t => t.type === 'buy_investment' || t.type === 'sell_investment');
+      } else {
+         result = result.filter(t => t.type === filterType);
+      }
     }
 
     // Filter Category
     if (filterCategory !== 'all') {
       result = result.filter(t => t.categoryId === filterCategory);
+    }
+    
+    // Strict Date Filters
+    if (filterDate) {
+       result = result.filter(t => new Date(t.date).toISOString().split('T')[0] === filterDate);
+    }
+    if (filterMonth !== 'all') {
+       result = result.filter(t => new Date(t.date).getMonth().toString() === filterMonth);
+    }
+    if (filterYear !== 'all') {
+       result = result.filter(t => new Date(t.date).getFullYear().toString() === filterYear);
     }
 
     // Sort
@@ -42,7 +65,13 @@ const TransactionsScreen = () => {
     });
 
     return result;
-  }, [transactions, searchTerm, filterType, filterCategory, sortBy]);
+  }, [transactions, searchTerm, filterType, filterCategory, sortBy, filterDate, filterMonth, filterYear]);
+
+  // Generate Year options
+  const uniqueYears = useMemo(() => {
+    const years = new Set(transactions.map(t => new Date(t.date).getFullYear()));
+    return Array.from(years).sort((a,b) => b - a);
+  }, [transactions]);
 
   return (
     <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto min-h-screen">
@@ -61,13 +90,13 @@ const TransactionsScreen = () => {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <section className="mb-8 p-4 bg-surface-container-lowest rounded-xl flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
+      {/* Primary Search Bar */}
+      <section className="mb-4 p-4 bg-surface-container-lowest rounded-xl border border-outline/5 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="md:col-span-1 relative">
           <span className="material-symbols-outlined absolute left-3 top-3 text-on-surface-variant">search</span>
           <input 
             type="text" 
-            placeholder="Search keywords, notes..." 
+            placeholder="Search notes..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-3 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary"
@@ -77,6 +106,7 @@ const TransactionsScreen = () => {
           <option value="all">All Types</option>
           <option value="expense">Expenses</option>
           <option value="income">Income</option>
+          <option value="trade">Trades (Buy/Sell)</option>
         </select>
         <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
            <option value="all">All Categories</option>
@@ -88,6 +118,38 @@ const TransactionsScreen = () => {
           <option value="highest">Highest Amount</option>
           <option value="lowest">Lowest Amount</option>
         </select>
+      </section>
+
+      {/* Advanced Timing Filters */}
+      <section className="mb-8 p-4 bg-surface-container-lowest rounded-xl border border-outline/5 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Exact Date</span>
+          <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none" />
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Or By Month</span>
+          <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none">
+             <option value="all">Any Month</option>
+             {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Or By Year</span>
+          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none">
+             <option value="all">Any Year</option>
+             {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex items-end justify-end">
+           {(filterDate || filterMonth !== 'all' || filterYear !== 'all') && (
+              <button 
+                onClick={() => {setFilterDate(''); setFilterMonth('all'); setFilterYear('all')}}
+                className="text-xs text-error hover:underline mb-3"
+              >
+                Clear Date Filters
+              </button>
+           )}
+        </div>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
@@ -105,11 +167,16 @@ const TransactionsScreen = () => {
               </div>
             ) : (
                filteredTransactions.map(t => {
-                 const cat = getCategory(t.categoryId);
+                 let cat = getCategory(t.categoryId);
+                 // Intercept Trades 
+                 if (t.type === 'buy_investment' || t.type === 'sell_investment') {
+                    cat = { color: '#95CD41', icon: 'monitoring', name: 'Trade Executed' }
+                 }
+
                  return (
-                  <div key={t.id} className="group bg-surface-container-low hover:bg-surface-container-high transition-all rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div key={t.id} onClick={() => setEditModal({ isOpen: true, data: t })} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high hover:scale-[1.01] transition-all rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-transparent hover:border-primary/20">
                     <div className="flex items-center gap-4">
-                      <div className="min-w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center text-primary" style={{ backgroundColor: cat?.color || '#3D332B' }}>
+                      <div className="min-w-[3rem] h-12 flex-shrink-0 rounded-2xl flex items-center justify-center text-primary" style={{ backgroundColor: cat?.color || '#3D332B' }}>
                         <span className="material-symbols-outlined">{cat?.icon || 'receipt'}</span>
                       </div>
                       <div>
@@ -118,9 +185,12 @@ const TransactionsScreen = () => {
                         {t.notes && <p className="text-xs text-on-surface-variant mt-1 italic">"{t.notes}"</p>}
                       </div>
                     </div>
-                    <div className="text-left md:text-right mt-2 md:mt-0">
-                      <span className={`block font-headline font-extrabold text-lg ${t.type === 'expense' ? 'text-on-surface' : 'text-[#95CD41]'}`}>
-                        {t.type === 'expense' ? '-' : '+'}{formatCurrency(t.amount)}
+                    <div className="text-left md:text-right mt-2 md:mt-0 flex flex-col items-end">
+                      <span className={`block font-headline font-extrabold text-lg ${(t.type === 'expense' || t.type === 'buy_investment') ? 'text-on-surface' : 'text-[#95CD41]'}`}>
+                        {(t.type === 'expense' || t.type === 'buy_investment') ? '-' : '+'}{formatCurrency(t.amount)}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline group-hover:text-primary transition-colors flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100">
+                         Edit <span className="material-symbols-outlined text-[10px]">edit</span>
                       </span>
                     </div>
                   </div>
@@ -130,6 +200,10 @@ const TransactionsScreen = () => {
           </div>
         </div>
       </section>
+
+      <Modal isOpen={editModal.isOpen} onClose={() => setEditModal({ isOpen: false, data: null})} title="Edit Transaction">
+        <AddTransactionForm initialData={editModal.data} onClose={() => setEditModal({isOpen: false, data: null})} />
+      </Modal>
     </main>
   );
 };

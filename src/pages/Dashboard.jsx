@@ -5,7 +5,7 @@ import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 
 const DashboardScreen = () => {
-  const { totalBalance, monthlySpent } = useAppContext();
+  const { totalBalance, monthlySpent, totalPortfolioValue, totalRealizedProfit, totalUnrealizedProfit } = useAppContext();
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
   return (
@@ -17,10 +17,6 @@ const DashboardScreen = () => {
             <h2 className="text-5xl md:text-7xl font-manrope font-extrabold text-on-surface tracking-tighter">
               {formatCurrency(totalBalance)}
             </h2>
-            <div className="flex items-center gap-2 mt-4 text-[#95CD41]">
-              <span className="material-symbols-outlined text-sm">trending_up</span>
-              <span className="text-sm font-medium font-body">+4.2% from last month</span>
-            </div>
           </div>
           <div className="flex gap-3">
             <button onClick={() => setIsQuickAddOpen(true)} className="bg-[#E5BA73]/10 text-[#E5BA73] p-4 rounded-xl flex items-center gap-2 font-manrope font-bold text-sm hover:bg-[#E5BA73]/20 transition-all active:scale-95">
@@ -34,11 +30,33 @@ const DashboardScreen = () => {
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        <div className="md:col-span-12 flex flex-col gap-6">
+        <div className="md:col-span-8 flex flex-col gap-6">
           <div className="bg-surface-container-low rounded-lg p-8">
             <h3 className="font-manrope font-bold text-xl mb-4">Welcome to Wallo</h3>
             <p className="text-[#F1DFD3]/60">Navigate using the sidebar or bottom navigation to explore transactions, investments, and analytics.</p>
             <p className="text-[#F1DFD3]/60 mt-4">Current Monthly Spent: <span className="font-bold text-error">{formatCurrency(monthlySpent)}</span></p>
+          </div>
+        </div>
+
+        <div className="md:col-span-4 flex flex-col gap-6">
+          <div className="bg-[#241a12] border border-outline/10 rounded-lg p-6">
+             <h3 className="font-manrope font-bold text-sm uppercase tracking-widest text-on-surface-variant mb-4">Portfolio Summary</h3>
+             <div className="flex justify-between items-center mb-3">
+                <span className="text-sm font-medium text-outline">Total Value</span>
+                <span className="font-bold text-lg">{formatCurrency(totalPortfolioValue)}</span>
+             </div>
+             <div className="flex justify-between items-center mb-3">
+                <span className="text-sm font-medium text-outline">Unrealized P/L</span>
+                <span className={`font-bold ${totalUnrealizedProfit >= 0 ? 'text-[#95CD41]' : 'text-error'}`}>
+                   {totalUnrealizedProfit >= 0 ? '+' : ''}{formatCurrency(totalUnrealizedProfit)}
+                </span>
+             </div>
+             <div className="flex justify-between items-center pt-3 border-t border-outline/10">
+                <span className="text-sm font-medium text-outline">Realized (Cash) P/L</span>
+                <span className={`font-bold ${totalRealizedProfit >= 0 ? 'text-[#95CD41]' : 'text-error'}`}>
+                   {totalRealizedProfit >= 0 ? '+' : ''}{formatCurrency(totalRealizedProfit)}
+                </span>
+             </div>
           </div>
         </div>
       </div>
