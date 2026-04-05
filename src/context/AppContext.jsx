@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { getFromStorage, saveToStorage, initialCategories, initialTransactions, initialInvestments, initialNotifications } from '../services/dataService';
 
@@ -33,16 +33,60 @@ export const AppProvider = ({ children }) => {
     if (curr.type === 'buy_investment') return acc - curr.amount;
     if (curr.type === 'sell_investment') return acc + curr.amount;
     return acc;
-  }, 142850.32); // Using initial hardcoded base from UI for this demo
+  }, 0); // No hardcoded offset! Starts at 0 natively.
 
   const monthlySpent = transactions
-    .filter(t => (t.type === 'expense' || t.type === 'buy_investment') && new Date(t.date).getMonth() === new Date().getMonth() && new Date(t.date).getFullYear() === new Date().getFullYear())
+    .filter(t => (t.type === 'expense') && new Date(t.date).getMonth() === new Date().getMonth() && new Date(t.date).getFullYear() === new Date().getFullYear())
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  const totalPortfolioValue = investments.reduce((acc, curr) => acc + (curr.shares * curr.currentPrice), 0);
-  const totalInvested = investments.reduce((acc, curr) => acc + (curr.shares * curr.avgCost), 0);
-  const totalRealizedProfit = investments.reduce((acc, curr) => acc + (curr.realizedProfit || 0), 0);
-  const totalUnrealizedProfit = totalPortfolioValue - totalInvested;
+  // Compute Live Investments
+  const derivedInvestments = useMemo(() => {
+    return investments.map(inv => {
+      // Find all trades for this investment
+      const trades = transactions.filter(t => t.investmentId === inv.id && (t.type === 'buy_investment' || t.type === 'sell_investment'));
+      
+      let totalShares = 0;
+      let totalCostBase = 0;
+      let realizedProfit = 0;
+
+      // Ensure chronological calculation
+      const sortedTrades = [...trades].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      sortedTrades.forEach(trade => {
+         const tradeShares = parseFloat(trade.shares || 0);
+         const tradePrice = parseFloat(trade.price || 0);
+
+         if (trade.type === 'buy_investment') {
+            const tempCost = totalShares * (totalShares > 0 ? totalCostBase / totalShares : 0);
+            const purchaseCost = tradeShares * tradePrice;
+            totalShares += tradeShares;
+            totalCostBase = totalShares > 0 ? tempCost + purchaseCost : 0;
+         } else if (trade.type === 'sell_investment') {
+            const currentAvgCost = totalShares > 0 ? totalCostBase / totalShares : 0;
+            realizedProfit += (tradePrice - currentAvgCost) * tradeShares;
+            totalShares -= tradeShares;
+            totalCostBase = totalShares * currentAvgCost; // Scale down base
+         }
+      });
+
+      const avgCost = totalShares > 0 ? totalCostBase / totalShares : 0;
+      const unrealizedProfit = (inv.currentPrice - avgCost) * totalShares;
+
+      return {
+        ...inv,
+        shares: totalShares,
+        avgCost: avgCost,
+        realizedProfit: realizedProfit,
+        unrealizedProfit: unrealizedProfit,
+        trades: sortedTrades
+      };
+    });
+  }, [investments, transactions]);
+
+  const totalPortfolioValue = derivedInvestments.reduce((acc, curr) => acc + (curr.shares * curr.currentPrice), 0);
+  const totalInvested = derivedInvestments.reduce((acc, curr) => acc + (curr.shares * curr.avgCost), 0);
+  const totalRealizedProfit = derivedInvestments.reduce((acc, curr) => acc + (curr.realizedProfit || 0), 0);
+  const totalUnrealizedProfit = derivedInvestments.reduce((acc, curr) => acc + (curr.unrealizedProfit || 0), 0);
 
   // Actions
   const addTransaction = (t) => {
@@ -61,59 +105,52 @@ export const AppProvider = ({ children }) => {
   const updateCategory = (id, updatedC) => setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updatedC } : c));
   const deleteCategory = (id) => setCategories(prev => prev.filter(c => c.id !== id));
 
-  const addInvestment = (i) => setInvestments(prev => [...prev, { ...i, id: uuidv4(), realizedProfit: 0 }]);
+  const addInvestment = (i) => setInvestments(prev => [...prev, { ...i, id: uuidv4() }]);
   const updateInvestment = (id, updatedI) => setInvestments(prev => prev.map(i => i.id === id ? { ...i, ...updatedI } : i));
-  const deleteInvestment = (id) => setInvestments(prev => prev.filter(i => i.id !== id));
+  const deleteInvestment = (id) => {
+    setInvestments(prev => prev.filter(i => i.id !== id));
+    // Also cleanup orphaned trades
+    setTransactions(prev => prev.filter(t => t.investmentId !== id));
+  };
 
   // Advanced Buy/Sell Logic
-  const executeTrade = (investmentId, trade) => {
+  const executeTrade = (investmentId, trade, existingTradeId = null) => {
     // trade = { type: 'BUY' | 'SELL', shares, price, date }
-    let success = false;
-    let title = '';
+    const inv = derivedInvestments.find(i => i.id === investmentId);
+    if (!inv) return;
 
-    setInvestments(prev => prev.map(inv => {
-      if (inv.id !== investmentId) return inv;
-      
-      const tradeShares = parseFloat(trade.shares);
-      const tradePrice = parseFloat(trade.price);
-      
-      title = `${trade.type === 'BUY' ? 'Bought' : 'Sold'} ${tradeShares} units of ${inv.name}`;
+    if (trade.type === 'SELL') {
+       // Validate that we aren't selling more than we own! 
+       // If editing, we ignore the current trade's previous sell quantity logic temporarily, but let's be safe.
+       let availableShares = inv.shares;
+       if (existingTradeId) {
+          const oldTrade = inv.trades.find(t => t.id === existingTradeId);
+          if (oldTrade && oldTrade.type === 'sell_investment') availableShares += oldTrade.shares;
+       }
 
-      if (trade.type === 'BUY') {
-        const totalCostBefore = inv.shares * inv.avgCost;
-        const purchaseCost = tradeShares * tradePrice;
-        const newShares = inv.shares + tradeShares;
-        const newAvgCost = newShares > 0 ? (totalCostBefore + purchaseCost) / newShares : 0;
-        
-        success = true;
-        return { ...inv, shares: newShares, avgCost: newAvgCost };
-      } 
-      else if (trade.type === 'SELL') {
-        if (tradeShares > inv.shares) {
-           addNotification({ title: 'Trade Failed', message: 'Cannot sell more shares than currently owned.', isRead: false, date: new Date().toISOString(), id: uuidv4() });
-           return inv; // abort
-        }
-        
-        const newShares = inv.shares - tradeShares;
-        const profitFromSale = (tradePrice - inv.avgCost) * tradeShares;
-        
-        success = true;
-        return { ...inv, shares: newShares, realizedProfit: (inv.realizedProfit || 0) + profitFromSale };
-      }
-      return inv;
-    }));
+       if (parseFloat(trade.shares) > availableShares) {
+          addNotification({ title: 'Trade Failed', message: 'You cannot sell more shares than you hold globally.', isRead: false, date: new Date().toISOString(), id: uuidv4() });
+          return;
+       }
+    }
 
-    // If trade modified holdings correctly, log cashflow
-    if (success) {
-       addTransaction({
-         type: trade.type === 'BUY' ? 'buy_investment' : 'sell_investment',
-         amount: parseFloat(trade.shares) * parseFloat(trade.price),
-         title: title,
-         date: trade.date || new Date().toISOString(),
-         categoryId: 'trade', // Special bypass
-         notes: `Exec price: ${trade.price}`
-       });
-       addNotification({ title: 'Trade Executed', message: title, isRead: false, date: new Date().toISOString(), id: uuidv4() });
+    const payload = {
+      investmentId: investmentId,
+      shares: parseFloat(trade.shares),
+      price: parseFloat(trade.price),
+      amount: parseFloat(trade.shares) * parseFloat(trade.price),
+      type: trade.type === 'BUY' ? 'buy_investment' : 'sell_investment',
+      date: trade.date || new Date().toISOString(),
+      categoryId: 'trade',
+      title: `${trade.type === 'BUY' ? 'Bought' : 'Sold'} ${trade.shares} units of ${inv.name}`,
+    };
+
+    if (existingTradeId) {
+      updateTransaction(existingTradeId, payload);
+      addNotification({ title: 'Trade Updated', message: `Updated execution for ${inv.name}`, isRead: false, date: new Date().toISOString(), id: uuidv4() });
+    } else {
+      addTransaction(payload);
+      addNotification({ title: 'Trade Executed', message: `Successfully ${trade.type === 'BUY' ? 'bought' : 'sold'} units of ${inv.name}`, isRead: false, date: new Date().toISOString(), id: uuidv4() });
     }
   };
 
@@ -126,7 +163,7 @@ export const AppProvider = ({ children }) => {
 
   return (
     <AppContext.Provider value={{
-      transactions, categories, investments, notifications,
+      transactions, categories, investments: derivedInvestments, notifications,
       totalBalance, monthlySpent, totalPortfolioValue, totalInvested, totalRealizedProfit, totalUnrealizedProfit,
       addTransaction, updateTransaction, deleteTransaction, 
       addCategory, updateCategory, deleteCategory, getCategory,

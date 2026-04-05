@@ -3,9 +3,10 @@ import { useAppContext } from '../context/AppContext';
 import { formatCurrency } from '../utils/currency';
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
+import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
 
 const TransactionsScreen = () => {
-  const { transactions, monthlySpent, getCategory, categories } = useAppContext();
+  const { transactions, monthlySpent, getCategory, categories, investments } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -17,6 +18,7 @@ const TransactionsScreen = () => {
   const [filterYear, setFilterYear] = useState('all');
 
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
+  const [tradeModal, setTradeModal] = useState({ isOpen: false, data: null });
 
   const filteredTransactions = useMemo(() => {
     let result = transactions;
@@ -174,7 +176,14 @@ const TransactionsScreen = () => {
                  }
 
                  return (
-                  <div key={t.id} onClick={() => setEditModal({ isOpen: true, data: t })} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high hover:scale-[1.01] transition-all rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-transparent hover:border-primary/20">
+                  <div key={t.id} onClick={() => {
+                     if (t.type === 'buy_investment' || t.type === 'sell_investment') {
+                        const inv = investments.find(i => i.id === t.investmentId);
+                        if (inv) setTradeModal({ isOpen: true, data: t, investment: inv });
+                     } else {
+                        setEditModal({ isOpen: true, data: t });
+                     }
+                  }} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high hover:scale-[1.01] transition-all rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-transparent hover:border-primary/20">
                     <div className="flex items-center gap-4">
                       <div className="min-w-[3rem] h-12 flex-shrink-0 rounded-2xl flex items-center justify-center text-primary" style={{ backgroundColor: cat?.color || '#3D332B' }}>
                         <span className="material-symbols-outlined">{cat?.icon || 'receipt'}</span>
@@ -203,6 +212,10 @@ const TransactionsScreen = () => {
 
       <Modal isOpen={editModal.isOpen} onClose={() => setEditModal({ isOpen: false, data: null})} title="Edit Transaction">
         <AddTransactionForm initialData={editModal.data} onClose={() => setEditModal({isOpen: false, data: null})} />
+      </Modal>
+
+      <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({isOpen: false, data: null})} title="Edit Trade">
+         {tradeModal.data && <InvestmentTradeForm initialTradeData={tradeModal.data} investment={tradeModal.investment} onClose={() => setTradeModal({isOpen: false, data: null})} />}
       </Modal>
     </main>
   );
