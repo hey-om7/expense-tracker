@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
   const { executeTrade, deleteTransaction } = useAppContext();
   
-  // Tab logic: If we have initialTradeData, default to 'EDIT', else default to 'TRADE'
   const [activeTab, setActiveTab] = useState(initialTradeData ? 'EDIT' : 'TRADE');
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Form State
   const [tradeId, setTradeId] = useState(initialTradeData?.id || null);
@@ -15,7 +16,6 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
   const [price, setPrice] = useState(investment.currentPrice || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Load initial data
   useEffect(() => {
     if (initialTradeData) {
        setTradeId(initialTradeData.id);
@@ -53,27 +53,24 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
       shares: parseFloat(shares),
       price: parseFloat(price),
       date: new Date(date).toISOString()
-    }, tradeId); // Pass tradeId for updates!
+    }, tradeId); 
     
-    // If not from main transaction page, stay alive and go to history tabs
-    if (initialTradeData) {
-       onClose();
-    } else {
-       resetForm();
-       setActiveTab('HISTORY');
-    }
+    // Per user instructions: Instantly close modal if open and rely on the new Toast overlay
+    onClose();
   };
 
-  const handleDeleteTrade = (id) => {
-    if (window.confirm("Delete this trade? This will reverse its financial impact instantly.")) {
-      deleteTransaction(id);
-      if (initialTradeData) onClose();
-      else resetForm();
+  const confirmDelete = () => {
+    deleteTransaction(tradeId);
+    setShowConfirm(false);
+    if (initialTradeData) onClose();
+    else {
+      resetForm();
+      setActiveTab('HISTORY');
     }
   };
 
   return (
-    <div className="flex flex-col gap-4 max-h-[70vh] overflow-hidden">
+    <div className="flex flex-col gap-4 max-h-[70vh] overflow-hidden relative">
       {!initialTradeData && (
         <div className="flex border-b border-outline/10 text-sm font-bold">
           <button onClick={() => { setActiveTab('TRADE'); resetForm(); }} className={`flex-1 pb-2 border-b-2 transition-all ${activeTab === 'TRADE' || activeTab === 'EDIT' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
@@ -85,7 +82,7 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
         </div>
       )}
 
-      <div className="overflow-y-auto no-scrollbar flex-1 px-1">
+      <div className="overflow-y-auto no-scrollbar flex-1 px-1 pb-8">
         {(activeTab === 'TRADE' || activeTab === 'EDIT') && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
             {!initialTradeData && activeTab === 'TRADE' && (
@@ -131,7 +128,7 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
 
             <div className="mt-4 flex gap-3">
               {activeTab === 'EDIT' && (
-                <button type="button" onClick={() => handleDeleteTrade(tradeId)} className="bg-error-container text-on-error-container px-4 py-4 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95">
+                <button type="button" onClick={() => setShowConfirm(true)} className="bg-error-container text-on-error-container px-4 py-4 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95">
                   Delete
                 </button>
               )}
@@ -166,6 +163,14 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
            </div>
         )}
       </div>
+
+      <ConfirmDialog 
+         isOpen={showConfirm}
+         title="Reverse Execution"
+         message="Are you sure you want to delete this historical trade? Your capital and portfolio quantity natively adjust backwards."
+         onConfirm={confirmDelete}
+         onCancel={() => setShowConfirm(false)}
+      />
     </div>
   );
 };

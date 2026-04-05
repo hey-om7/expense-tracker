@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 const AddTransactionForm = ({ onClose, initialData }) => {
   const { addTransaction, updateTransaction, deleteTransaction, categories } = useAppContext();
+  const [showConfirm, setShowConfirm] = useState(false);
   const isEditing = !!initialData;
   
   const [type, setType] = useState('expense');
@@ -54,10 +56,12 @@ const AddTransactionForm = ({ onClose, initialData }) => {
   };
   
   const handleDelete = () => {
-    if (window.confirm("Are you sure you want to delete this transaction? (If it's an investment trade, you should adjust holdings manually!)")) {
-       deleteTransaction(initialData.id);
-       onClose();
-    }
+    setShowConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    deleteTransaction(initialData.id);
+    onClose();
   };
 
   const currentCategories = categories.filter(c => c.type === type);
@@ -126,6 +130,14 @@ const AddTransactionForm = ({ onClose, initialData }) => {
           {isEditing ? 'Save Changes' : 'Add Transaction'}
         </button>
       </div>
+
+      <ConfirmDialog 
+        isOpen={showConfirm} 
+        title="Confirm Deletion" 
+        message="Are you sure you want to delete this record? This action cannot be officially undone." 
+        onConfirm={confirmDelete} 
+        onCancel={() => setShowConfirm(false)} 
+      />
     </form>
   );
 };

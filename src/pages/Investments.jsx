@@ -58,8 +58,9 @@ const InvestmentsScreen = () => {
                                {inv.name} 
                                <span className="text-xs text-outline bg-surface-container-highest px-2 py-0.5 rounded-full">{inv.symbol || inv.type}</span>
                              </h4>
-                             <p className="text-xs text-[#F1DFD3]/60 mt-1">{inv.shares} units @ {formatCurrency(inv.avgCost)} Avg Cost</p>
-                             <p className="text-[10px] text-on-surface-variant mt-2 group-hover:text-primary transition-colors">Edit Profile ✎</p>
+                             <p className="text-xs text-[#F1DFD3]/60 mt-1">{inv.shares} units | Cost per Stock: {formatCurrency(inv.avgCost)}</p>
+                             {inv.comments && <p className="text-xs text-[#F1DFD3]/40 mt-1 italic border-l-2 border-primary/20 pl-2">"{inv.comments}"</p>}
+                             <p className="text-[10px] text-on-surface-variant mt-3 group-hover:text-primary transition-colors">Edit Profile ✎</p>
                            </div>
                            
                            <div className="flex gap-8 items-center border-t border-outline/10 pt-4 md:border-t-0 md:pt-0">

@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/ui/Modal';
 import CategoryForm from '../components/forms/CategoryForm';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const CategoriesScreen = () => {
   const { categories, deleteCategory } = useAppContext();
   const [modalState, setModalState] = useState({ isOpen: false, data: null });
+  const [confirmState, setConfirmState] = useState({ isOpen: false, id: null });
 
   const expenses = categories.filter(c => c.type === 'expense');
   const incomes = categories.filter(c => c.type === 'income');
@@ -36,7 +38,7 @@ const CategoriesScreen = () => {
                   </div>
                   <div className="flex gap-2">
                      <button onClick={() => setModalState({ isOpen: true, data: c })} className="p-2 text-on-surface-variant hover:text-primary transition-colors"><span className="material-symbols-outlined text-sm">edit</span></button>
-                     <button onClick={() => deleteCategory(c.id)} className="p-2 text-on-surface-variant hover:text-error transition-colors"><span className="material-symbols-outlined text-sm">delete</span></button>
+                     <button onClick={() => setConfirmState({ isOpen: true, id: c.id })} className="p-2 text-on-surface-variant hover:text-error transition-colors"><span className="material-symbols-outlined text-sm">delete</span></button>
                   </div>
                </div>
              ))}
@@ -56,7 +58,7 @@ const CategoriesScreen = () => {
                   </div>
                   <div className="flex gap-2">
                      <button onClick={() => setModalState({ isOpen: true, data: c })} className="p-2 text-on-surface-variant hover:text-primary transition-colors"><span className="material-symbols-outlined text-sm">edit</span></button>
-                     <button onClick={() => deleteCategory(c.id)} className="p-2 text-on-surface-variant hover:text-error transition-colors"><span className="material-symbols-outlined text-sm">delete</span></button>
+                     <button onClick={() => setConfirmState({ isOpen: true, id: c.id })} className="p-2 text-on-surface-variant hover:text-error transition-colors"><span className="material-symbols-outlined text-sm">delete</span></button>
                   </div>
                </div>
              ))}
@@ -67,6 +69,17 @@ const CategoriesScreen = () => {
       <Modal isOpen={modalState.isOpen} onClose={() => setModalState({isOpen: false, data: null})} title={modalState.data ? "Edit Category" : "New Category"}>
         <CategoryForm initialData={modalState.data} onClose={() => setModalState({isOpen: false, data: null})} />
       </Modal>
+
+      <ConfirmDialog 
+        isOpen={confirmState.isOpen}
+        title="Delete Category"
+        message="Are you sure you want to delete this category? Past transactions assigned to this will become uncategorized!"
+        onConfirm={() => {
+           deleteCategory(confirmState.id);
+           setConfirmState({ isOpen: false, id: null });
+        }}
+        onCancel={() => setConfirmState({ isOpen: false, id: null })}
+      />
     </main>
   );
 };

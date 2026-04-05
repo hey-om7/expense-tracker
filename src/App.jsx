@@ -7,6 +7,7 @@ import TransactionsScreen from './pages/Transactions';
 import InvestmentsScreen from './pages/Investments';
 import AnalyticsScreen from './pages/Analytics';
 import CategoriesScreen from './pages/Categories';
+import ToastContainer from './components/ui/ToastContainer';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/analytics" element={<AnalyticsScreen />} />
             <Route path="/categories" element={<CategoriesScreen />} />
           </Routes>
+          <ToastContainer />
         </Layout>
       </Router>
     </AppProvider>
