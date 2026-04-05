@@ -40,3 +40,11 @@ export const initialInvestments = [
 export const initialNotifications = [
   { id: 'n1', title: 'Welcome to Wallo', message: 'Set up your first budget today.', isRead: false, date: new Date().toISOString() }
 ];
+
+export const initialSubscriptions = [
+  { id: 'sub1', name: 'Netflix Premium', amount: 649, renewalDate: new Date(new Date().getFullYear(), new Date().getMonth(), 15).toISOString(), categoryId: '1', isActive: true, period: 'monthly', lastExecutedDate: null }
+];
+
+export const initialCreditCards = [
+  { id: 'cc1', name: 'HDFC Regalia', last4Digits: '8932', billDueDate: new Date(new Date().getFullYear(), new Date().getMonth(), 20).toISOString(), totalLimit: 500000, notes: 'Primary card' }
+];
