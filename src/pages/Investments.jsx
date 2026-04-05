@@ -14,32 +14,46 @@ const InvestmentsScreen = () => {
   
   const hasFetchedNavs = useRef(false);
 
-  // Auto-refresh Mutual Fund NAVs on initial mount
+  // Auto-refresh Mutual Fund NAVs and Stock Quotes on initial mount
   useEffect(() => {
     if (investments.length === 0 || hasFetchedNavs.current) return;
 
-    const fetchLatestNavs = async () => {
+    const fetchLatestPrices = async () => {
        hasFetchedNavs.current = true;
-       const mfs = investments.filter(inv => inv.type === 'Mutual Fund' && inv.symbol);
+       const autoUpdateInvestments = investments.filter(inv => (inv.type === 'Mutual Fund' || inv.type === 'Stock') && inv.symbol);
        
-       for (const mf of mfs) {
+       for (const inv of autoUpdateInvestments) {
           try {
-             const response = await fetch(`https://api.mfapi.in/mf/${mf.symbol}/latest`);
-             const data = await response.json();
-             if (data && data.data && data.data.length > 0) {
-                 const latestNav = parseFloat(data.data[0].nav);
-                 // Only update if there is a discrepancy to avoid infinite loops and unnecessary DB writes
-                 if (latestNav && latestNav !== mf.currentPrice) {
-                    await updateInvestment(mf.id, { currentPrice: latestNav });
-                 }
+             let latestPrice = null;
+
+             if (inv.type === 'Mutual Fund') {
+                const response = await fetch(`https://api.mfapi.in/mf/${inv.symbol}/latest`);
+                const data = await response.json();
+                if (data && data.data && data.data.length > 0) {
+                    latestPrice = parseFloat(data.data[0].nav);
+                }
+             } else if (inv.type === 'Stock') {
+                // To avoid CORS issues, ensure api proxy is imported or use fetch
+                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/stocks/quote/${encodeURIComponent(inv.symbol)}`);
+                if (response.ok) {
+                   const data = await response.json();
+                   if (data && data.price) {
+                      latestPrice = parseFloat(data.price);
+                   }
+                }
+             }
+
+             // Only update if there is a discrepancy to avoid infinite loops and unnecessary DB writes
+             if (latestPrice && latestPrice !== inv.currentPrice) {
+                await updateInvestment(inv.id, { currentPrice: latestPrice });
              }
           } catch(e) {
-             console.error(`Failed to fetch NAV for ${mf.name}`, e);
+             console.error(`Failed to fetch live price for ${inv.name}`, e);
           }
        }
     };
     
-    fetchLatestNavs();
+    fetchLatestPrices();
   }, [investments, updateInvestment]);
 
   const filteredInvestments = investments.filter(inv => activeFilter === 'All' || inv.type === activeFilter);
@@ -118,7 +132,7 @@ const InvestmentsScreen = () => {
                                  </div>
                               </div>
                               <div className="text-right border-l border-outline/10 pl-6 border-r pr-6">
-                                 <span className="block text-[10px] uppercase text-on-surface-variant tracking-wider font-bold mb-1">Live NAV Value</span>
+                                 <span className="block text-[10px] uppercase text-on-surface-variant tracking-wider font-bold mb-1">Live Value</span>
                                  <div className="font-bold text-on-surface">{formatCurrency(inv.shares * inv.currentPrice)}</div>
                               </div>
                               <button onClick={() => setTradeModal({ isOpen: true, data: inv })} className="bg-surface-container-highest hover:bg-primary hover:text-on-primary transition-all px-4 py-2 flex items-center justify-center rounded-lg text-xs font-bold uppercase tracking-wider text-primary shadow-sm active:scale-95">

@@ -55,3 +55,7 @@ export const createNotification = (data) => request('/notifications', { method: 
 export const markNotificationRead = (id) => request(`/notifications/${id}/read`, { method: 'PUT' });
 export const markAllNotificationsRead = () => request('/notifications/mark-all-read', { method: 'PUT' });
 export const clearAllNotifications = () => request('/notifications', { method: 'DELETE' });
+
+// ─── Stocks (Yahoo Finance) ───
+export const searchStocks = (query) => request(`/stocks/search?q=${encodeURIComponent(query)}`);
+export const fetchStockQuote = (symbol) => request(`/stocks/quote/${encodeURIComponent(symbol)}`);
