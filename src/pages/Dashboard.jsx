@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
+import { formatCurrency } from '../utils/currency';
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 
@@ -14,7 +15,7 @@ const DashboardScreen = () => {
           <div>
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#F1DFD3]/40 font-semibold mb-2 block">Available Liquidity</span>
             <h2 className="text-5xl md:text-7xl font-manrope font-extrabold text-on-surface tracking-tighter">
-              ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {formatCurrency(totalBalance)}
             </h2>
             <div className="flex items-center gap-2 mt-4 text-[#95CD41]">
               <span className="material-symbols-outlined text-sm">trending_up</span>
@@ -35,9 +36,9 @@ const DashboardScreen = () => {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         <div className="md:col-span-12 flex flex-col gap-6">
           <div className="bg-surface-container-low rounded-lg p-8">
-            <h3 className="font-manrope font-bold text-xl mb-4">Welcome to Espresso Reserve</h3>
+            <h3 className="font-manrope font-bold text-xl mb-4">Welcome to Wallo</h3>
             <p className="text-[#F1DFD3]/60">Navigate using the sidebar or bottom navigation to explore transactions, investments, and analytics.</p>
-            <p className="text-[#F1DFD3]/60 mt-4">Current Monthly Spent: <span className="font-bold text-error">${monthlySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></p>
+            <p className="text-[#F1DFD3]/60 mt-4">Current Monthly Spent: <span className="font-bold text-error">{formatCurrency(monthlySpent)}</span></p>
           </div>
         </div>
       </div>

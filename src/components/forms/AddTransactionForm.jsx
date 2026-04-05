@@ -35,7 +35,7 @@ const AddTransactionForm = ({ onClose }) => {
       <div>
         <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Amount</label>
         <div className="relative">
-          <span className="absolute left-3 top-3 text-on-surface-variant">$</span>
+          <span className="absolute left-3 top-3 text-on-surface-variant">₹</span>
           <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary" placeholder="0.00" required />
         </div>
       </div>

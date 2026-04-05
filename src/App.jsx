@@ -6,6 +6,7 @@ import DashboardScreen from './pages/Dashboard';
 import TransactionsScreen from './pages/Transactions';
 import InvestmentsScreen from './pages/Investments';
 import AnalyticsScreen from './pages/Analytics';
+import CategoriesScreen from './pages/Categories';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="/transactions" element={<TransactionsScreen />} />
             <Route path="/investments" element={<InvestmentsScreen />} />
             <Route path="/analytics" element={<AnalyticsScreen />} />
+            <Route path="/categories" element={<CategoriesScreen />} />
           </Routes>
         </Layout>
       </Router>

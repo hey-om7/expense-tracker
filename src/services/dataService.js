@@ -33,3 +33,7 @@ export const initialInvestments = [
   { id: 'inv1', name: 'S&P 500 Index Fund', symbol: 'VOO', shares: 450.5, avgCost: 380.00, currentPrice: 480.20, type: 'Stock' },
   { id: 'inv2', name: 'Global Bond Fund', symbol: 'BND', shares: 1200, avgCost: 70.50, currentPrice: 72.10, type: 'Bond' }
 ];
+
+export const initialNotifications = [
+  { id: 'n1', title: 'Welcome to Wallo', message: 'Set up your first budget today.', isRead: false, date: new Date().toISOString() }
+];

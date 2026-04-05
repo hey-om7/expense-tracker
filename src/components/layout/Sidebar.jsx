@@ -8,7 +8,7 @@ const Sidebar = () => {
   return (
     <aside className="hidden md:flex flex-col p-6 gap-4 h-full w-72 fixed left-0 top-0 bg-[#1A120B] shadow-2xl z-50">
       <div className="mb-8 px-4 mt-16 md:mt-0">
-        <h2 className="font-manrope font-black text-xl text-[#E5BA73] tracking-tighter">Espresso Reserve</h2>
+        <h2 className="font-manrope font-black text-xl text-[#E5BA73] tracking-tighter">Wallo</h2>
         <p className="text-[10px] uppercase tracking-[0.2em] text-[#F1DFD3]/40 mt-1">Premium Wealth Management</p>
       </div>
       <nav className="flex flex-col gap-2">
@@ -27,6 +27,10 @@ const Sidebar = () => {
         <Link to="/analytics" className={`flex items-center gap-4 px-4 py-3 font-manrope font-semibold text-sm transition-all rounded-lg ${isActive('/analytics') ? 'bg-[#E5BA73]/10 text-[#E5BA73] border-l-4 border-[#E5BA73] translate-x-1' : 'text-[#F1DFD3]/50 hover:bg-[#E5BA73]/5 hover:text-[#E5BA73]'}`}>
           <span className="material-symbols-outlined" style={{ fontVariationSettings: isActive('/analytics') ? "'FILL' 1" : "'FILL' 0" }}>insights</span>
           Analytics
+        </Link>
+        <Link to="/categories" className={`flex items-center gap-4 px-4 py-3 font-manrope font-semibold text-sm transition-all rounded-lg ${isActive('/categories') ? 'bg-[#E5BA73]/10 text-[#E5BA73] border-l-4 border-[#E5BA73] translate-x-1' : 'text-[#F1DFD3]/50 hover:bg-[#E5BA73]/5 hover:text-[#E5BA73]'}`}>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: isActive('/categories') ? "'FILL' 1" : "'FILL' 0" }}>category</span>
+          Categories
         </Link>
       </nav>
       <div className="mt-auto p-4 bg-[#241a12] rounded-lg">
