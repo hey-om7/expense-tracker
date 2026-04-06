@@ -76,11 +76,27 @@ const AddTransactionForm = ({ onClose, initialData }) => {
       )}
 
       {!isTradeLog && (
-        <div className="flex bg-surface-container-highest p-1 rounded-lg">
-          <button type="button" onClick={() => setType('expense')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${type === 'expense' ? 'bg-error-container text-on-error-container' : 'text-on-surface-variant'}`}>
+        <div className="relative flex bg-surface-container-highest p-1 rounded-xl w-full h-12">
+          {/* Sliding Background */}
+          <div 
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] transition-all duration-300 ease-out z-0
+              ${type === 'expense' ? 'left-1 bg-error-container rounded-l-lg rounded-r-[4px]' : 'left-[calc(50%)] bg-tertiary-container rounded-r-lg rounded-l-[4px]'}
+            `}
+          />
+          
+          <button 
+            type="button" 
+            onClick={() => setType('expense')} 
+            className={`flex-1 relative z-10 py-2 text-sm font-bold transition-colors duration-300 ${type === 'expense' ? 'text-on-error-container' : 'text-on-surface-variant hover:text-on-surface'}`}
+          >
             Expense
           </button>
-          <button type="button" onClick={() => setType('income')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${type === 'income' ? 'bg-tertiary-container text-on-tertiary-container' : 'text-on-surface-variant'}`}>
+          
+          <button 
+            type="button" 
+            onClick={() => setType('income')} 
+            className={`flex-1 relative z-10 py-2 text-sm font-bold transition-colors duration-300 ${type === 'income' ? 'text-on-tertiary-container' : 'text-on-surface-variant hover:text-on-surface'}`}
+          >
             Income
           </button>
         </div>

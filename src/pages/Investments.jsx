@@ -166,17 +166,29 @@ const InvestmentsScreen = () => {
                           className="pl-9 pr-4 py-1.5 bg-surface-container-highest border border-outline/10 text-sm rounded-lg focus:outline-none focus:border-primary transition-colors text-on-surface w-full md:w-64"
                         />
                      </div>
-                     <div className="flex bg-surface-container-highest p-1 rounded-lg">
-                        {['All', 'Stock', 'Mutual Fund', 'Crypto', 'FD'].map(f => (
-                          <button 
-                            key={f}
-                            onClick={() => setActiveFilter(f)} 
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeFilter === f ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-                          >
-                            {f}
-                          </button>
-                        ))}
-                     </div>
+                    <div className="relative flex bg-surface-container-highest p-1 rounded-xl h-10 w-full md:w-auto overflow-hidden">
+                      {/* Sliding Multi-Selector Background */}
+                      <div 
+                        className="absolute top-1 bottom-1 transition-all duration-300 ease-out z-0 bg-primary"
+                        style={{
+                          width: 'calc((100% - 8px) / 5)',
+                          left: `calc(4px + (${['All', 'Stock', 'Mutual Fund', 'Crypto', 'FD'].indexOf(activeFilter)} * (100% - 8px) / 5))`,
+                          borderRadius: activeFilter === 'All' ? '8px 4px 4px 8px' : activeFilter === 'FD' ? '4px 8px 8px 4px' : '4px'
+                        }}
+                      />
+                      
+                      {['All', 'Stock', 'Mutual Fund', 'Crypto', 'FD'].map(f => (
+                        <button 
+                          key={f}
+                          onClick={() => setActiveFilter(f)} 
+                          className={`relative z-10 px-4 py-1.5 text-xs font-bold transition-colors duration-300 min-w-fit flex-1 md:flex-initial
+                            ${activeFilter === f ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}
+                          `}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                   </div>
                   </div>
                </div>
 
