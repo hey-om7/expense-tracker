@@ -39,13 +39,28 @@ const CyclicScreen = () => {
           <span className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-2 block">Automation Engine</span>
           <h1 className="font-headline font-extrabold text-4xl md:text-5xl text-on-surface tracking-tight">Cyclic</h1>
         </div>
-        <div className="flex bg-surface-container-highest p-1 rounded-xl">
-           <button onClick={() => setActiveTab('SUBSCRIPTIONS')} className={`px-6 py-3 text-sm font-bold rounded-lg transition-all ${activeTab === 'SUBSCRIPTIONS' ? 'bg-primary text-on-primary shadow-lg shadow-primary/20' : 'text-on-surface-variant hover:text-on-surface'}`}>
-             Active Subscriptions
-           </button>
-           <button onClick={() => setActiveTab('BILLS')} className={`px-6 py-3 text-sm font-bold rounded-lg transition-all ${activeTab === 'BILLS' ? 'bg-error-container text-on-error-container shadow-lg shadow-error-container/20' : 'text-on-surface-variant hover:text-on-surface'}`}>
-             Pending Bills (CC)
-           </button>
+        <div className="relative grid grid-cols-2 bg-surface-container-highest p-1 rounded-xl h-16 w-full md:w-auto overflow-hidden">
+          {/* Sliding Background (Calculated via grid-cols-2) */}
+          <div 
+            className={`absolute top-1 bottom-1 transition-all duration-300 ease-out z-0
+              ${activeTab === 'SUBSCRIPTIONS' ? 'left-1 bg-primary rounded-l-lg rounded-r-[4px] shadow-lg shadow-primary/20' : 'left-[calc(50%+1px)] bg-error-container rounded-r-lg rounded-l-[4px] shadow-lg shadow-error-container/20'}
+            `}
+            style={{ width: 'calc(50% - 2px)' }}
+          />
+          
+          <button 
+            onClick={() => setActiveTab('SUBSCRIPTIONS')} 
+            className={`relative z-10 py-1 text-sm font-bold transition-colors duration-300 flex items-center justify-center text-center px-4 ${activeTab === 'SUBSCRIPTIONS' ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}`}
+          >
+            Active Subscriptions
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('BILLS')} 
+            className={`relative z-10 py-1 text-sm font-bold transition-colors duration-300 flex items-center justify-center text-center px-4 ${activeTab === 'BILLS' ? 'text-on-error-container' : 'text-on-surface-variant hover:text-on-surface'}`}
+          >
+            Pending Bills (CC)
+          </button>
         </div>
       </div>
 
