@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const investmentSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   name: { type: String, required: true },
   symbol: { type: String, required: true },
   currentPrice: { type: Number, default: 0 },

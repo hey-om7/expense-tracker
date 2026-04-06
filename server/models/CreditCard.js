@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const creditCardSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   name: { type: String, required: true },
   last4Digits: { type: String, required: true },
   billDueDate: { type: Date, required: true },

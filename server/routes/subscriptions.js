@@ -3,10 +3,13 @@ const router = express.Router();
 const Subscription = require('../models/Subscription');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
+const auth = require('../middleware/authMiddleware');
+
+router.use(auth);
 
 router.get('/', async (req, res) => {
   try {
-    const subscriptions = await Subscription.find().sort({ createdAt: -1 });
+    const subscriptions = await Subscription.find({ userId: req.userId }).sort({ createdAt: -1 });
     res.json(subscriptions);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -15,7 +18,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const subscription = new Subscription(req.body);
+    const subscription = new Subscription({ ...req.body, userId: req.userId });
     const saved = await subscription.save();
     res.status(201).json(saved);
   } catch (err) {
@@ -25,7 +28,11 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const updated = await Subscription.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updated = await Subscription.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      req.body,
+      { new: true }
+    );
     if (!updated) return res.status(404).json({ message: 'Subscription not found' });
     res.json(updated);
   } catch (err) {
@@ -35,7 +42,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const deleted = await Subscription.findByIdAndDelete(req.params.id);
+    const deleted = await Subscription.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!deleted) return res.status(404).json({ message: 'Subscription not found' });
     res.json({ message: 'Deleted' });
   } catch (err) {
@@ -50,7 +57,7 @@ router.post('/run-check', async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().split('T')[0];
 
-    const activeSubs = await Subscription.find({ isActive: true });
+    const activeSubs = await Subscription.find({ userId: req.userId, isActive: true });
     const processed = [];
 
     for (const sub of activeSubs) {
@@ -63,6 +70,7 @@ router.post('/run-check', async (req, res) => {
       if (isDue && notExecutedToday) {
         // Create automated expense transaction
         const tx = new Transaction({
+          userId: req.userId,
           type: 'expense',
           categoryId: sub.categoryId || '',
           amount: sub.amount,
@@ -90,6 +98,7 @@ router.post('/run-check', async (req, res) => {
 
     if (processed.length > 0) {
       const notification = new Notification({
+        userId: req.userId,
         title: 'Cyclic Protocol Engaged',
         message: `Processed ${processed.length} automated subscription renewal(s): ${processed.join(', ')}`,
         isRead: false,
