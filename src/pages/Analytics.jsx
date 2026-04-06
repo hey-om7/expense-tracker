@@ -120,7 +120,7 @@ const AnalyticsScreen = () => {
           <h3 className="font-headline font-semibold text-lg text-on-surface mb-8">Income vs Expense</h3>
           <div className="flex-grow min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <BarChart data={barData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#4e4539" vertical={false} />
                 <XAxis dataKey="name" stroke="#9a8f80" axisLine={false} tickLine={false} />
                 <YAxis stroke="#9a8f80" axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value / 1000}k`} />

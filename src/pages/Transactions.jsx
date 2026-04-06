@@ -191,7 +191,7 @@ const TransactionsScreen = () => {
                       </div>
                       <div>
                         <h4 className="font-headline font-bold text-on-surface">{t.title}</h4>
-                        <p className="text-xs text-outline font-medium">{cat?.name || 'Uncategorized'} • {new Date(t.date).toLocaleDateString()}</p>
+                        <p className="text-xs text-outline font-medium">{cat?.name || 'Uncategorized'} • {new Date(t.date).toLocaleDateString('en-IN')}</p>
                         {t.notes && <p className="text-xs text-on-surface-variant mt-1 italic">"{t.notes}"</p>}
                       </div>
                     </div>
