@@ -92,9 +92,11 @@ const AnalyticsScreen = () => {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
-                     formatter={(value) => formatCurrency(value)}
-                     contentStyle={{ backgroundColor: '#221a13', border: 'none', borderRadius: '8px', color: '#f1dfd3' }}
+                  <Tooltip
+                    formatter={(value) => formatCurrency(value)}
+                    contentStyle={{ backgroundColor: '#1a140e', border: '1px solid rgba(241, 223, 211, 0.1)', borderRadius: '12px', color: '#f1dfd3', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}
+                    itemStyle={{ color: '#f1dfd3' }}
+                    labelStyle={{ color: '#f1dfd3', fontWeight: 'bold', marginBottom: '4px' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -121,11 +123,13 @@ const AnalyticsScreen = () => {
               <BarChart data={barData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#4e4539" vertical={false} />
                 <XAxis dataKey="name" stroke="#9a8f80" axisLine={false} tickLine={false} />
-                <YAxis stroke="#9a8f80" axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value/1000}k`} />
-                <Tooltip 
-                   formatter={(value) => formatCurrency(value)}
-                   contentStyle={{ backgroundColor: '#221a13', border: 'none', borderRadius: '8px', color: '#f1dfd3' }}
-                   cursor={{fill: '#3d332b'}}
+                <YAxis stroke="#9a8f80" axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value / 1000}k`} />
+                <Tooltip
+                  formatter={(value) => formatCurrency(value)}
+                  contentStyle={{ backgroundColor: '#1a140e', border: '1px solid rgba(241, 223, 211, 0.1)', borderRadius: '12px', color: '#f1dfd3', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}
+                  itemStyle={{ color: '#f1dfd3' }}
+                  labelStyle={{ color: '#f1dfd3', fontWeight: 'bold', marginBottom: '4px' }}
+                  cursor={{ fill: 'rgba(229, 186, 115, 0.05)' }}
                 />
                 <Bar dataKey="Income" fill="#95CD41" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Expense" fill="#E5BA73" radius={[4, 4, 0, 0]} />
