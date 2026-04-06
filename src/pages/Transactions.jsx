@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency } from '../utils/currency';
+import { getContrastingColor } from '../utils/colorUtils';
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
@@ -185,7 +186,7 @@ const TransactionsScreen = () => {
                      }
                   }} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high hover:scale-[1.01] transition-all rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-transparent hover:border-primary/20">
                     <div className="flex items-center gap-4">
-                      <div className="min-w-[3rem] h-12 flex-shrink-0 rounded-2xl flex items-center justify-center text-primary" style={{ backgroundColor: cat?.color || '#3D332B' }}>
+                      <div className="min-w-[3rem] h-12 flex-shrink-0 rounded-2xl flex items-center justify-center" style={{ backgroundColor: cat?.color || '#3D332B', color: getContrastingColor(cat?.color || '#3D332B') }}>
                         <span className="material-symbols-outlined">{cat?.icon || 'receipt'}</span>
                       </div>
                       <div>

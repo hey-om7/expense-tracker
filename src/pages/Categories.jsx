@@ -3,6 +3,7 @@ import { useAppContext } from '../context/AppContext';
 import Modal from '../components/ui/Modal';
 import CategoryForm from '../components/forms/CategoryForm';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { getContrastingColor } from '../utils/colorUtils';
 
 const CategoriesScreen = () => {
   const { categories, deleteCategory } = useAppContext();
@@ -31,7 +32,7 @@ const CategoriesScreen = () => {
              {expenses.map(c => (
                <div key={c.id} className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline/5 hover:border-outline/20 transition-all">
                   <div className="flex items-center gap-4">
-                     <span className="w-10 h-10 rounded-xl flex justify-center items-center text-primary" style={{backgroundColor: c.color}}>
+                     <span className="w-10 h-10 rounded-xl flex justify-center items-center" style={{backgroundColor: c.color, color: getContrastingColor(c.color)}}>
                        <span className="material-symbols-outlined text-sm">{c.icon}</span>
                      </span>
                      <span className="font-bold">{c.name}</span>
@@ -45,17 +46,17 @@ const CategoriesScreen = () => {
           </div>
         </div>
 
-        <div>
-           <h2 className="text-xl font-bold mb-4 border-b border-outline/10 pb-2">Income</h2>
-           <div className="flex flex-col gap-3">
-             {incomes.map(c => (
-               <div key={c.id} className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline/5 hover:border-outline/20 transition-all">
-                  <div className="flex items-center gap-4">
-                     <span className="w-10 h-10 rounded-xl flex justify-center items-center text-primary" style={{backgroundColor: c.color}}>
-                       <span className="material-symbols-outlined text-sm">{c.icon}</span>
-                     </span>
-                     <span className="font-bold">{c.name}</span>
-                  </div>
+         <div>
+            <h2 className="text-xl font-bold mb-4 border-b border-outline/10 pb-2">Income</h2>
+            <div className="flex flex-col gap-3">
+              {incomes.map(c => (
+                <div key={c.id} className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline/5 hover:border-outline/20 transition-all">
+                   <div className="flex items-center gap-4">
+                      <span className="w-10 h-10 rounded-xl flex justify-center items-center" style={{backgroundColor: c.color, color: getContrastingColor(c.color)}}>
+                        <span className="material-symbols-outlined text-sm">{c.icon}</span>
+                      </span>
+                      <span className="font-bold">{c.name}</span>
+                   </div>
                   <div className="flex gap-2">
                      <button onClick={() => setModalState({ isOpen: true, data: c })} className="p-2 text-on-surface-variant hover:text-primary transition-colors"><span className="material-symbols-outlined text-sm">edit</span></button>
                      <button onClick={() => setConfirmState({ isOpen: true, id: c.id })} className="p-2 text-on-surface-variant hover:text-error transition-colors"><span className="material-symbols-outlined text-sm">delete</span></button>
