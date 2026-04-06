@@ -81,7 +81,7 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Target Category *</label>
-          <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required>
+          <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
             <option value="" disabled>Select mapping...</option>
             {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -98,7 +98,7 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Cycle Frequency</label>
-          <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required>
+          <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
             <option value="monthly">Monthly</option>
             <option value="yearly">Yearly</option>
           </select>
