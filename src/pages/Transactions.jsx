@@ -195,10 +195,10 @@ const TransactionsScreen = () => {
                         {t.notes && <p className="text-xs text-on-surface-variant mt-1 italic">"{t.notes}"</p>}
                       </div>
                     </div>
-                    <div className="text-left md:text-right mt-2 md:mt-0 flex flex-col items-end">
-                      <span className={`block font-headline font-extrabold text-lg ${(t.type === 'expense' || t.type === 'buy_investment') ? 'text-on-surface' : 'text-[#95CD41]'}`}>
-                        {(t.type === 'expense' || t.type === 'buy_investment') ? '-' : '+'}{formatCurrency(t.amount)}
-                      </span>
+                      <div className="text-left md:text-right mt-2 md:mt-0 flex flex-col items-end">
+                        <span className={`block whitespace-nowrap font-headline font-extrabold text-lg ${(t.type === 'expense' || t.type === 'buy_investment') ? 'text-on-surface' : 'text-[#95CD41]'}`}>
+                          {(t.type === 'expense' || t.type === 'buy_investment') ? '-' : '+'}{formatCurrency(t.amount)}
+                        </span>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-outline group-hover:text-primary transition-colors flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100">
                          Edit <span className="material-symbols-outlined text-[10px]">edit</span>
                       </span>
