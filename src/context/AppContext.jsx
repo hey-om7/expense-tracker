@@ -42,6 +42,11 @@ export const AppProvider = ({ children }) => {
         setCreditCards(normalizeList(ccs));
         setError(null);
 
+        // Request OS Notification Permissions natively
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+
         // Run automated subscription check on app load
         try {
           const result = await api.runSubscriptionCheck();
@@ -319,6 +324,11 @@ export const AppProvider = ({ children }) => {
     try {
       const saved = await api.createNotification({ ...n, date: new Date().toISOString(), isRead: false });
       setNotifications(prev => [normalize(saved), ...prev]);
+
+      // OS Notification Trigger
+      if ('Notification' in window && Notification.permission === 'granted') {
+         new Notification(n.title, { body: n.message, icon: '/favicon.ico' });
+      }
     } catch (err) {
       console.error('Failed to add notification:', err);
     }

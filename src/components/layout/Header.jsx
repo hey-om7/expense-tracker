@@ -28,8 +28,8 @@ const Header = () => {
           </button>
 
           {showDropdown && (
-            <div className="absolute top-12 right-0 w-80 max-h-[400px] overflow-y-auto bg-surface-container-high border border-outline/20 rounded-xl shadow-2xl z-50">
-               <div className="flex justify-between items-center p-4 border-b border-outline/10">
+            <div className="absolute top-12 right-0 w-80 max-h-[400px] overflow-y-auto bg-surface-container-high border border-outline/20 rounded-lg shadow-2xl z-50 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline/20 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full">
+               <div className="flex justify-between items-center px-5 py-4 border-b border-outline/10">
                  <h3 className="font-bold">Notifications</h3>
                  <div className="flex gap-2">
                    <button onClick={markAllAsRead} className="text-xs text-primary hover:underline">Read All</button>
