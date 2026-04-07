@@ -51,6 +51,15 @@ export const AuthProvider = ({ children }) => {
     return response;
   }, []);
 
+  const googleLogin = useCallback(async (credential) => {
+    const response = await api.googleAuth({ credential });
+    localStorage.setItem('wallo_token', response.token);
+    localStorage.setItem('wallo_user', JSON.stringify(response.user));
+    setToken(response.token);
+    setUser(response.user);
+    return response;
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('wallo_token');
     localStorage.removeItem('wallo_user');
@@ -68,6 +77,7 @@ export const AuthProvider = ({ children }) => {
       isAuthenticated,
       login,
       register,
+      googleLogin,
       logout,
     }}>
       {children}

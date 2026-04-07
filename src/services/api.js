@@ -39,6 +39,7 @@ const request = async (endpoint, options = {}) => {
 // ─── Auth ───
 export const loginUser = (data) => request('/auth/login', { method: 'POST', body: data });
 export const registerUser = (data) => request('/auth/register', { method: 'POST', body: data });
+export const googleAuth = (data) => request('/auth/google', { method: 'POST', body: data });
 export const getMe = () => request('/auth/me');
 
 // ─── Transactions ───
