@@ -307,7 +307,7 @@ const InvestmentsScreen = () => {
                         </div>
 
                         {/* ===== MOBILE CARD ===== */}
-                        <div className="md:hidden bg-[#241a12] rounded-xl border border-outline/5 overflow-hidden active:border-outline/20 transition-all">
+                        <div className="md:hidden bg-[#241a12] rounded-lg border border-outline/5 overflow-hidden active:border-outline/20 transition-all">
                           {/* Top: Name + Tag */}
                           <div className="p-4 pb-3 cursor-pointer" onClick={() => setProfileModal({ isOpen: true, data: inv })}>
                             <div className="flex items-center justify-between mb-1">
