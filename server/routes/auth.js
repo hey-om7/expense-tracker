@@ -51,7 +51,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ message: 'Server error during registration' });
+    res.status(500).json({ message: 'Registration failed. Please try again.' });
   }
 });
 
@@ -90,7 +90,7 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({ message: 'Login failed. Please try again.' });
   }
 });
 
@@ -104,7 +104,7 @@ router.get('/me', auth, async (req, res) => {
     res.json(user.toJSON());
   } catch (err) {
     console.error('Get me error:', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Failed to fetch user profile' });
   }
 });
 
