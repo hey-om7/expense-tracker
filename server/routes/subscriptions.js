@@ -74,8 +74,13 @@ router.delete('/:id', validateId, async (req, res) => {
   }
 });
 
-// POST /run-check — cap at 50 cycles per sub to prevent abuse
+// POST /run-check — cap at 50 cycles per sub, with concurrency guard
+const runCheckLocks = new Set();
 router.post('/run-check', async (req, res) => {
+  if (runCheckLocks.has(req.userId)) {
+    return res.json({ processed: 0, names: [], message: 'Check already in progress' });
+  }
+  runCheckLocks.add(req.userId);
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -151,6 +156,8 @@ router.post('/run-check', async (req, res) => {
     res.json({ processed: processed.length, names: processed });
   } catch (err) {
     res.status(500).json({ message: 'Failed to run subscription check' });
+  } finally {
+    runCheckLocks.delete(req.userId);
   }
 });
 

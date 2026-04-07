@@ -22,14 +22,19 @@ router.post('/register', async (req, res) => {
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'All fields are required' });
     }
-    if (name.length < 2 || name.length > 50) {
+    // Sanitize name — strip HTML tags
+    const cleanName = String(name).replace(/<[^>]*>/g, '').trim();
+    if (cleanName.length < 2 || cleanName.length > 50) {
       return res.status(400).json({ message: 'Name must be 2-50 characters' });
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       return res.status(400).json({ message: 'Please enter a valid email address' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    if (String(email).length > 254) {
+      return res.status(400).json({ message: 'Email address is too long' });
+    }
+    if (password.length < 6 || password.length > 128) {
+      return res.status(400).json({ message: 'Password must be 6-128 characters' });
     }
 
     // Check duplicate email
@@ -39,7 +44,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Create user
-    const user = new User({ name, email, password });
+    const user = new User({ name: cleanName, email, password });
     await user.save();
 
     // Generate token
@@ -141,7 +146,7 @@ router.post('/google', async (req, res) => {
     } else {
       // Create new user
       user = new User({
-        name: name || email.split('@')[0],
+        name: String(name || email.split('@')[0]).replace(/<[^>]*>/g, '').trim().slice(0, 50) || 'User',
         email: email.toLowerCase(),
         googleId,
         authProvider: 'google',
