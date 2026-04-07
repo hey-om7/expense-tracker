@@ -53,30 +53,60 @@ const Header = () => {
             <span className="material-symbols-outlined">person</span>
           </button>
 
-          {/* Notifications dropdown */}
+          {/* Notifications dropdown - Desktop */}
           {showDropdown && (
-            <div className="absolute top-12 right-0 w-80 bg-surface-container-high border border-outline/20 rounded-lg shadow-2xl z-50 overflow-hidden flex flex-col">
-              <div className="flex justify-between items-center px-5 py-4 border-b border-outline/10 bg-surface-container-high">
-                <h3 className="font-bold">Notifications</h3>
-                <div className="flex gap-2">
-                  <button onClick={markAllAsRead} className="text-xs text-primary hover:underline">Read All</button>
-                  <button onClick={clearNotifications} className="text-xs text-on-surface-variant hover:text-error hover:underline">Clear</button>
+            <>
+              {/* Desktop dropdown */}
+              <div className="hidden md:flex absolute top-12 right-0 w-80 bg-surface-container-high border border-outline/20 rounded-lg shadow-2xl z-50 overflow-hidden flex-col">
+                <div className="flex justify-between items-center px-5 py-4 border-b border-outline/10 bg-surface-container-high">
+                  <h3 className="font-bold">Notifications</h3>
+                  <div className="flex gap-2">
+                    <button onClick={markAllAsRead} className="text-xs text-primary hover:underline">Read All</button>
+                    <button onClick={clearNotifications} className="text-xs text-on-surface-variant hover:text-error hover:underline">Clear</button>
+                  </div>
+                </div>
+                <div className="max-h-[340px] overflow-y-auto flex flex-col [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline/20 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {notifications.length === 0 ? (
+                    <p className="text-sm p-4 text-center text-outline">No notifications</p>
+                  ) : (
+                    notifications.map(n => (
+                      <div key={n.id} onClick={() => markAsRead(n.id)} className={`p-4 border-b border-outline/10 cursor-pointer hover:bg-surface-container-highest transition-colors ${!n.isRead ? 'bg-surface-container-lowest' : ''}`}>
+                        <h4 className={`text-sm font-bold ${!n.isRead ? 'text-on-surface' : 'text-on-surface-variant'}`}>{n.title}</h4>
+                        <p className="text-xs text-outline">{n.message}</p>
+                        <p className="text-[10px] text-on-surface-variant mt-1">{new Date(n.date).toLocaleDateString()}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <div className="max-h-[340px] overflow-y-auto flex flex-col [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline/20 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full">
-                {notifications.length === 0 ? (
-                  <p className="text-sm p-4 text-center text-outline">No notifications</p>
-                ) : (
-                  notifications.map(n => (
-                    <div key={n.id} onClick={() => markAsRead(n.id)} className={`p-4 border-b border-outline/10 cursor-pointer hover:bg-surface-container-highest transition-colors ${!n.isRead ? 'bg-surface-container-lowest' : ''}`}>
-                      <h4 className={`text-sm font-bold ${!n.isRead ? 'text-on-surface' : 'text-on-surface-variant'}`}>{n.title}</h4>
-                      <p className="text-xs text-outline">{n.message}</p>
-                      <p className="text-[10px] text-on-surface-variant mt-1">{new Date(n.date).toLocaleDateString()}</p>
+
+              {/* Mobile: full-width overlay panel */}
+              <div className="md:hidden fixed inset-0 top-16 z-50" onClick={() => setShowDropdown(false)}>
+                <div className="bg-black/30 absolute inset-0" />
+                <div className="relative mx-3 mt-2 bg-surface-container-high border border-outline/20 rounded-xl shadow-2xl overflow-hidden animate-[slideDown_0.15s_ease-out]" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center px-4 py-3 border-b border-outline/10">
+                    <h3 className="font-bold text-sm">Notifications</h3>
+                    <div className="flex gap-3">
+                      <button onClick={markAllAsRead} className="text-xs text-primary font-semibold">Read All</button>
+                      <button onClick={clearNotifications} className="text-xs text-on-surface-variant font-semibold">Clear</button>
                     </div>
-                  ))
-                )}
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-sm p-6 text-center text-outline">No notifications</p>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.id} onClick={() => markAsRead(n.id)} className={`px-4 py-3 border-b border-outline/10 cursor-pointer active:bg-surface-container-highest transition-colors ${!n.isRead ? 'bg-surface-container-lowest' : ''}`}>
+                          <h4 className={`text-sm font-bold ${!n.isRead ? 'text-on-surface' : 'text-on-surface-variant'}`}>{n.title}</h4>
+                          <p className="text-xs text-outline mt-0.5">{n.message}</p>
+                          <p className="text-[10px] text-on-surface-variant mt-1">{new Date(n.date).toLocaleDateString()}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* Mobile user menu dropdown */}

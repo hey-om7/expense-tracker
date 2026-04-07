@@ -39,7 +39,7 @@ const CategoryForm = ({ onClose, initialData }) => {
         <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required placeholder="e.g. Utilities" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Color Hex</label>
           <div className="flex gap-2 items-center">
@@ -56,7 +56,7 @@ const CategoryForm = ({ onClose, initialData }) => {
         </div>
       </div>
 
-      <button type="submit" className="mt-4 bg-primary-container text-on-primary py-4 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95">
+      <button type="submit" className="mt-4 bg-primary-container text-on-primary py-3.5 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95 text-sm">
         {isEditing ? 'Save Changes' : 'Create Category'}
       </button>
     </form>

@@ -154,11 +154,11 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
   const expenseCategories = categories.filter(c => c.type === 'expense');
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto px-2 pb-8 no-scrollbar">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] md:max-h-[70vh] max-md:max-h-none overflow-y-auto px-2 max-md:px-0 pb-8 no-scrollbar">
       
-      <div className="flex items-center justify-between bg-surface-container-low p-4 rounded-xl border border-outline/10">
+      <div className="flex items-center justify-between bg-surface-container-low p-4 max-md:p-3 rounded-xl max-md:rounded-lg border border-outline/10">
          <div>
-            <h4 className="font-bold text-sm text-on-surface">Automation Status</h4>
+            <h4 className="font-bold text-sm text-on-surface max-md:text-xs">Automation Status</h4>
             <p className="text-[10px] text-on-surface-variant">Is this actively charging you?</p>
          </div>
          <label className="relative inline-flex items-center cursor-pointer">
@@ -174,16 +174,16 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Target Category *</label>
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Category *</label>
           <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
             <option value="" disabled>Select mapping...</option>
             {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Automated Amount *</label>
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Amount *</label>
           <div className="relative">
             <span className="absolute left-3 top-3 text-on-surface-variant">₹</span>
             <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary" placeholder="0.00" required />
@@ -191,9 +191,9 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Cycle Frequency</label>
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Frequency</label>
           <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
@@ -201,7 +201,7 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
           </select>
         </div>
         <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Subscription Start Date *</label>
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Start Date *</label>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} required />
         </div>
       </div>
@@ -215,12 +215,12 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
 
       <div className="mt-4 flex gap-3">
         {isEditing && (
-           <button type="button" onClick={() => setShowConfirm(true)} className="bg-error-container text-on-error-container px-4 py-4 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95">
+           <button type="button" onClick={() => setShowConfirm(true)} className="bg-error-container text-on-error-container px-4 py-3.5 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95 text-sm">
              Delete
            </button>
         )}
-        <button type="submit" className="flex-1 bg-primary-container text-on-primary py-4 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95">
-          {isEditing ? 'Save Changes' : 'Initialize Subscription'}
+        <button type="submit" className="flex-1 bg-primary-container text-on-primary py-3.5 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95 text-sm">
+          {isEditing ? 'Save Changes' : 'Add Subscription'}
         </button>
       </div>
 
