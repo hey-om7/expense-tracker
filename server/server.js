@@ -74,7 +74,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests, please try again later.' },
-  keyGenerator: (req) => req.ip,
+  // keyGenerator: (req) => req.ip,
 });
 app.use('/api', generalLimiter);
 
@@ -84,7 +84,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many authentication attempts. Please wait 15 minutes.' },
-  keyGenerator: (req) => req.ip,
+  // keyGenerator: (req) => req.ip,
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
