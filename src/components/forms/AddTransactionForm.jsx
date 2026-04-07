@@ -25,9 +25,48 @@ const AddTransactionForm = ({ onClose, initialData }) => {
     }
   }, [initialData]);
 
+  const evaluateExpression = (expr) => {
+    if (!expr) return '';
+    // Clean input: only digits, dots, plus, minus
+    const cleanExpr = expr.toString().replace(/[^0-9+\-.]/g, '');
+    if (!cleanExpr) return '';
+
+    try {
+      // Simple parser for + and -
+      const parts = cleanExpr.split(/([+\-])/).filter(p => p.trim() !== '');
+      if (parts.length === 0) return '';
+
+      let result = parseFloat(parts[0]) || 0;
+      for (let i = 1; i < parts.length; i += 2) {
+        const operator = parts[i];
+        const nextVal = parseFloat(parts[i + 1]) || 0;
+        if (operator === '+') result += nextVal;
+        if (operator === '-') result -= nextVal;
+      }
+      return Number.isInteger(result) ? result.toString() : result.toFixed(2);
+    } catch (e) {
+      return cleanExpr;
+    }
+  };
+
+  const handleAmountChange = (e) => {
+    const val = e.target.value;
+    // Only allow numbers, plus, minus, and dot
+    if (/^[0-9+\-.]*$/.test(val)) {
+      setAmount(val);
+    }
+  };
+
+  const handleAmountBlur = () => {
+    if (amount.includes('+') || amount.includes('-')) {
+      setAmount(evaluateExpression(amount));
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!amount || !categoryId || !title) return;
+    const finalAmount = evaluateExpression(amount);
+    if (!finalAmount || !categoryId || !title) return;
     
     // Safety check for trade modifications. Disallow editing amount/type/category of trade logs through this form directly, just title/notes/date.
     if (isEditing && (initialData.type === 'buy_investment' || initialData.type === 'sell_investment')) {
@@ -40,7 +79,7 @@ const AddTransactionForm = ({ onClose, initialData }) => {
 
     const payload = {
       type,
-      amount: parseFloat(amount),
+      amount: parseFloat(finalAmount),
       categoryId,
       title,
       notes,
@@ -106,7 +145,16 @@ const AddTransactionForm = ({ onClose, initialData }) => {
         <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Amount *</label>
         <div className="relative">
           <span className="absolute left-3 top-3 text-on-surface-variant">₹</span>
-          <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} disabled={isTradeLog} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50" placeholder="0.00" required />
+          <input 
+            type="text" 
+            value={amount} 
+            onChange={handleAmountChange}
+            onBlur={handleAmountBlur}
+            disabled={isTradeLog} 
+            className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50" 
+            placeholder="0.00" 
+            required 
+          />
         </div>
       </div>
 
