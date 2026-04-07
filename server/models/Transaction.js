@@ -10,6 +10,7 @@ const transactionSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
   // Investment-specific fields
   investmentId: { type: String, default: null },
+  subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', default: null },
   shares: { type: Number, default: null },
   price: { type: Number, default: null },
 }, { timestamps: true });

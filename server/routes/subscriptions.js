@@ -28,9 +28,10 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
+    const { startDate, endDate, ...safeUpdates } = req.body;
     const updated = await Subscription.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      req.body,
+      safeUpdates,
       { new: true }
     );
     if (!updated) return res.status(404).json({ message: 'Subscription not found' });
@@ -61,37 +62,68 @@ router.post('/run-check', async (req, res) => {
     const processed = [];
 
     for (const sub of activeSubs) {
-      const renewalDate = new Date(sub.renewalDate);
-      renewalDate.setHours(0, 0, 0, 0);
+      const baseDateStr = sub.startDate;
+      if (!baseDateStr) continue;
 
-      const isDue = today >= renewalDate;
-      const notExecutedToday = sub.lastExecutedDate !== todayStr;
+      const start = new Date(baseDateStr);
+      start.setHours(0, 0, 0, 0);
 
-      if (isDue && notExecutedToday) {
-        // Create automated expense transaction
+      const endLimit = sub.endDate ? new Date(sub.endDate) : null;
+      if (endLimit) endLimit.setHours(0, 0, 0, 0);
+
+      const limitDate = endLimit && endLimit < today ? endLimit : today;
+
+      let nextCycle = new Date(start);
+      // If there's a lastExecutedDate, the next cycle is one period after it
+      if (sub.lastExecutedDate) {
+        const lastExec = new Date(sub.lastExecutedDate);
+        lastExec.setHours(0, 0, 0, 0);
+        nextCycle = new Date(lastExec);
+        if (sub.period === 'weekly') {
+          nextCycle.setDate(nextCycle.getDate() + 7);
+        } else if (sub.period === 'yearly') {
+          nextCycle.setFullYear(nextCycle.getFullYear() + 1);
+        } else {
+          nextCycle.setMonth(nextCycle.getMonth() + 1);
+        }
+      }
+
+      let subProcessedCount = 0;
+      let lastExecString = sub.lastExecutedDate;
+
+      // Loop to generate all missing cycles up to the limit limitDate
+      while (nextCycle <= limitDate) {
+        // Create transaction at noon to avoid timezone midnight shift issues
+        const txDate = new Date(nextCycle);
+        txDate.setHours(12, 0, 0, 0);
+
         const tx = new Transaction({
           userId: req.userId,
           type: 'expense',
           categoryId: sub.categoryId || '',
           amount: sub.amount,
           title: `Subscription Payment - ${sub.name}`,
-          date: new Date(),
+          date: txDate,
           notes: 'Automated cyclic payment',
         });
         await tx.save();
 
-        // Advance renewal date
-        const nextRenewal = new Date(renewalDate);
-        if (sub.period === 'yearly') {
-          nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
+        lastExecString = nextCycle.toISOString().split('T')[0];
+        subProcessedCount++;
+
+        // Advance nextCycle correctly based on period
+        if (sub.period === 'weekly') {
+          nextCycle.setDate(nextCycle.getDate() + 7);
+        } else if (sub.period === 'yearly') {
+          nextCycle.setFullYear(nextCycle.getFullYear() + 1);
         } else {
-          nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+          nextCycle.setMonth(nextCycle.getMonth() + 1);
         }
+      }
 
-        sub.lastExecutedDate = todayStr;
-        sub.renewalDate = nextRenewal;
+      if (subProcessedCount > 0) {
+        sub.lastExecutedDate = lastExecString;
         await sub.save();
-
         processed.push(sub.name);
       }
     }

@@ -96,7 +96,12 @@ const CyclicScreen = () => {
                         <div className="flex justify-between items-end">
                            <div>
                               <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Next Renewal</span>
-                              <span className="font-body text-sm font-medium">{new Date(sub.renewalDate).toLocaleDateString()}</span>
+                              <span className="font-body text-sm font-medium">
+                                 {(() => {
+                                    const d = new Date(sub.startDate);
+                                    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+                                 })()}
+                              </span>
                            </div>
                            <div className="text-right">
                               <span className="block font-headline font-extrabold text-xl">{formatCurrency(sub.amount)}</span>

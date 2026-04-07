@@ -266,6 +266,7 @@ export const AppProvider = ({ children }) => {
     try {
       const saved = await api.createSubscription(s);
       setSubscriptions(prev => [normalize(saved), ...prev]);
+      return normalize(saved);
     } catch (err) {
       console.error('Failed to add subscription:', err);
     }

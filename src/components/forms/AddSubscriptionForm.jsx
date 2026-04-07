@@ -3,13 +3,17 @@ import { useAppContext } from '../../context/AppContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
 
 const AddSubscriptionForm = ({ onClose, initialData }) => {
-  const { addSubscription, updateSubscription, deleteSubscription, addNotification, categories } = useAppContext();
+  const { addSubscription, updateSubscription, deleteSubscription, addTransaction, addNotification, categories } = useAppContext();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showBackdatedConfirm, setShowBackdatedConfirm] = useState(false);
+  const [missedDates, setMissedDates] = useState([]);
+  const [pendingPayload, setPendingPayload] = useState(null);
   const isEditing = !!initialData;
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [renewalDate, setRenewalDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [period, setPeriod] = useState('monthly');
   const [isActive, setIsActive] = useState(true);
@@ -18,36 +22,128 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
     if (initialData) {
       setName(initialData.name || '');
       setAmount(initialData.amount || '');
-      setRenewalDate(initialData.renewalDate ? new Date(initialData.renewalDate).toISOString().split('T')[0] : '');
+      setStartDate(initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : '');
+      setEndDate(initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : '');
       setCategoryId(initialData.categoryId || '');
       setPeriod(initialData.period || 'monthly');
       setIsActive(initialData.isActive ?? true);
     }
   }, [initialData]);
 
+  const generateMissedCycles = (startStr, freqStr, endStr) => {
+    const missed = [];
+    const start = new Date(startStr);
+    start.setHours(0, 0, 0, 0);
+
+    const limit = new Date();
+    limit.setHours(0, 0, 0, 0);
+
+    const endObj = endStr ? new Date(endStr) : null;
+    if (endObj) endObj.setHours(0, 0, 0, 0);
+
+    const finalLimit = endObj && endObj < limit ? endObj : limit;
+
+    let current = new Date(start);
+    while (current <= finalLimit) {
+      missed.push(new Date(current));
+      if (freqStr === 'weekly') {
+        current.setDate(current.getDate() + 7);
+      } else if (freqStr === 'yearly') {
+        current.setFullYear(current.getFullYear() + 1);
+      } else {
+        current.setMonth(current.getMonth() + 1);
+      }
+    }
+    return missed;
+  };
+
+  const finalizeSave = async (payload) => {
+    if (isEditing) {
+      await updateSubscription(initialData.id, payload);
+      addNotification({ title: 'Subscription Updated', message: `Updated recurring config for ${payload.name}.` });
+    } else {
+      await addSubscription(payload);
+      addNotification({ title: 'Subscription Created', message: `Automated cyclic tracking enabled for ${payload.name}.` });
+    }
+    onClose();
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!name || !amount || !categoryId || !renewalDate) return;
+    if (!name || !amount || !categoryId || !startDate) return;
+
+    if (endDate && new Date(endDate) <= new Date(startDate)) {
+      addNotification({ title: 'Invalid Dates', message: 'End date must be after the start date.' });
+      return;
+    }
     
     const payload = {
       name,
       amount: parseFloat(amount),
-      renewalDate: new Date(renewalDate).toISOString(),
+      startDate: new Date(startDate).toISOString(),
+      endDate: endDate ? new Date(endDate).toISOString() : null,
       categoryId,
       period,
       isActive,
       lastExecutedDate: initialData?.lastExecutedDate || null
     };
 
-    if (isEditing) {
-      updateSubscription(initialData.id, payload);
-      addNotification({ title: 'Subscription Updated', message: `Updated recurring config for ${name}.` });
-    } else {
-      addSubscription(payload);
-      addNotification({ title: 'Subscription Created', message: `Automated cyclic tracking enabled for ${name}.` });
+    if (!isEditing) {
+      const missed = generateMissedCycles(startDate, period, endDate);
+      if (missed.length > 0) {
+        setMissedDates(missed);
+        setPendingPayload(payload);
+        setShowBackdatedConfirm(true);
+        return;
+      }
     }
+
+    finalizeSave(payload);
+  };
+
+  const handleBackdatedConfirm = async () => {
+    setShowBackdatedConfirm(false);
     
-    onClose();
+    try {
+      const finalPayload = { 
+        ...pendingPayload, 
+        lastExecutedDate: missedDates[missedDates.length - 1].toISOString().split('T')[0] 
+      };
+
+      // Step 1: Create the subscription first to ensure it exists
+      const savedSub = await addSubscription(finalPayload);
+      
+      if (!savedSub || !savedSub.id) {
+        addNotification({ title: 'Creation Failed', message: 'Could not initialize subscription ledger.' });
+        return;
+      }
+
+      // Step 2 & 3: Generate and persist missed transactions using valid subscriptionId
+      for (const d of missedDates) {
+        const txDate = new Date(d);
+        txDate.setHours(12, 0, 0, 0);
+        await addTransaction({
+          type: 'expense',
+          categoryId: categoryId,
+          amount: parseFloat(amount),
+          title: `Subscription Payment - ${name}`,
+          date: txDate.toISOString(),
+          notes: `Subscription Payment - ${name} (Auto-added)`,
+          subscriptionId: savedSub.id,
+        });
+      }
+
+      addNotification({ 
+        title: 'Subscription & History Sync', 
+        message: `Created ${name} and backfilled ${missedDates.length} historical entries.` 
+      });
+      
+      onClose();
+    } catch (err) {
+      console.error('Backdated sync failed:', err);
+      addNotification({ title: 'Sync Error', message: 'Subscription setup encountered an issue.' });
+      onClose();
+    }
   };
 
   const confirmDelete = () => {
@@ -99,13 +195,21 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Cycle Frequency</label>
           <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
+            <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
             <option value="yearly">Yearly</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Next Renewal Date *</label>
-          <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Subscription Start Date *</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} required />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        <div>
+          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">End Date (Optional)</label>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} />
         </div>
       </div>
 
@@ -126,6 +230,15 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
         message="Are you sure you want to delete this subscription? Note: Disabling the 'Automation Status' toggle merely pauses execution, whereas this formally sweeps it off the register. Existing generated expense records will remain untouched in your History ledger." 
         onConfirm={confirmDelete} 
         onCancel={() => setShowConfirm(false)} 
+      />
+
+      <ConfirmDialog 
+        isOpen={showBackdatedConfirm} 
+        title="Backdated Subscription Detected" 
+        message={`This subscription start date is in the past. ${missedDates.length} payment(s) (₹${amount} × ${missedDates.length} = ₹${(amount * missedDates.length).toFixed(2)}) will be added to your transaction history. These entries will be created immediately and cannot be auto-reversed.`} 
+        onConfirm={handleBackdatedConfirm} 
+        onCancel={() => setShowBackdatedConfirm(false)} 
+        confirmLabel="Add Subscription"
       />
     </form>
   );
