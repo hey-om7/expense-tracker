@@ -43,20 +43,18 @@ const Sidebar = () => {
         ))}
       </nav>
       
-      <div className="mt-auto p-8 mb-8">
-        <div className="bg-surface-container-low rounded-xl p-4 border border-outline/5">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-bold text-xs">
+      <div className="mt-auto px-4 pb-4">
+        <div className="bg-surface-container-low rounded-lg p-4 border border-outline/5">
+          <div className="flex flex-col items-center text-center mb-3">
+            <span className="w-10 h-10 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-bold text-sm mb-2">
               {user ? getInitials(user.name) : '?'}
             </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-on-surface text-ellipsis overflow-hidden whitespace-nowrap">
-                {user?.name || 'User'}
-              </p>
-              <p className="text-[10px] text-outline text-ellipsis overflow-hidden whitespace-nowrap">
-                {user?.email || ''}
-              </p>
-            </div>
+            <p className="text-sm font-bold text-on-surface w-full break-words">
+              {user?.name || 'User'}
+            </p>
+            <p className="text-[10px] text-outline w-full break-all leading-relaxed mt-0.5">
+              {user?.email || ''}
+            </p>
           </div>
           <button
             onClick={handleLogout}
