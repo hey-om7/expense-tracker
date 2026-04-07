@@ -2,64 +2,83 @@ const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
 const auth = require('../middleware/authMiddleware');
+const validateId = require('../middleware/validateId');
 
-// All routes require authentication
 router.use(auth);
 
-// GET all transactions (sorted newest first)
+// Whitelist allowed fields
+const pickFields = (body) => {
+  const allowed = ['type', 'amount', 'title', 'notes', 'categoryId', 'date', 'investmentId', 'subscriptionId', 'shares', 'price'];
+  const clean = {};
+  for (const key of allowed) {
+    if (body[key] !== undefined) clean[key] = body[key];
+  }
+  // Validate amount
+  if (clean.amount !== undefined) {
+    clean.amount = Number(clean.amount);
+    if (isNaN(clean.amount) || clean.amount <= 0 || clean.amount > 999999999) {
+      return null;
+    }
+  }
+  // Truncate strings
+  if (clean.title) clean.title = String(clean.title).slice(0, 200);
+  if (clean.notes) clean.notes = String(clean.notes).slice(0, 500);
+  return clean;
+};
+
 router.get('/', async (req, res) => {
   try {
-    const transactions = await Transaction.find({ userId: req.userId }).sort({ date: -1 });
+    const transactions = await Transaction.find({ userId: req.userId }).sort({ date: -1 }).limit(1000);
     res.json(transactions);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Failed to fetch transactions' });
   }
 });
 
-// POST create transaction
 router.post('/', async (req, res) => {
   try {
-    const transaction = new Transaction({ ...req.body, userId: req.userId });
+    const fields = pickFields(req.body);
+    if (!fields) return res.status(400).json({ message: 'Invalid amount' });
+    const transaction = new Transaction({ ...fields, userId: req.userId });
     const saved = await transaction.save();
     res.status(201).json(saved);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: 'Failed to create transaction' });
   }
 });
 
-// PUT update transaction
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateId, async (req, res) => {
   try {
+    const fields = pickFields(req.body);
+    if (!fields) return res.status(400).json({ message: 'Invalid amount' });
     const updated = await Transaction.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      req.body,
-      { new: true }
+      fields,
+      { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ message: 'Transaction not found' });
     res.json(updated);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: 'Failed to update transaction' });
   }
 });
 
-// DELETE transaction
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateId, async (req, res) => {
   try {
     const deleted = await Transaction.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!deleted) return res.status(404).json({ message: 'Transaction not found' });
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Failed to delete transaction' });
   }
 });
 
-// DELETE all transactions for a given investmentId
-router.delete('/investment/:investmentId', async (req, res) => {
+router.delete('/investment/:investmentId', validateId, async (req, res) => {
   try {
     await Transaction.deleteMany({ investmentId: req.params.investmentId, userId: req.userId });
     res.json({ message: 'Deleted all trades for investment' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Failed to delete investment trades' });
   }
 });
 

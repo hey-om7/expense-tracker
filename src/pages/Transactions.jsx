@@ -21,10 +21,21 @@ const TransactionsScreen = () => {
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
   const [tradeModal, setTradeModal] = useState({ isOpen: false, data: null });
 
+  // Mobile filter panel toggle
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  const activeFilterCount = [
+    filterType !== 'all',
+    filterCategory !== 'all',
+    sortBy !== 'latest',
+    filterDate !== '',
+    filterMonth !== 'all',
+    filterYear !== 'all',
+  ].filter(Boolean).length;
+
   const filteredTransactions = useMemo(() => {
     let result = transactions;
 
-    // Search
     if (searchTerm) {
       const lowerQuery = searchTerm.toLowerCase();
       result = result.filter(t => 
@@ -33,7 +44,6 @@ const TransactionsScreen = () => {
       );
     }
 
-    // Filter Type
     if (filterType !== 'all') {
       if (filterType === 'trade') {
          result = result.filter(t => t.type === 'buy_investment' || t.type === 'sell_investment');
@@ -42,12 +52,10 @@ const TransactionsScreen = () => {
       }
     }
 
-    // Filter Category
     if (filterCategory !== 'all') {
       result = result.filter(t => t.categoryId === filterCategory);
     }
     
-    // Strict Date Filters
     if (filterDate) {
        result = result.filter(t => new Date(t.date).toISOString().split('T')[0] === filterDate);
     }
@@ -58,7 +66,6 @@ const TransactionsScreen = () => {
        result = result.filter(t => new Date(t.date).getFullYear().toString() === filterYear);
     }
 
-    // Sort
     result = [...result].sort((a, b) => {
       if (sortBy === 'latest') return new Date(b.date) - new Date(a.date);
       if (sortBy === 'oldest') return new Date(a.date) - new Date(b.date);
@@ -70,11 +77,19 @@ const TransactionsScreen = () => {
     return result;
   }, [transactions, searchTerm, filterType, filterCategory, sortBy, filterDate, filterMonth, filterYear]);
 
-  // Generate Year options
   const uniqueYears = useMemo(() => {
     const years = new Set(transactions.map(t => new Date(t.date).getFullYear()));
     return Array.from(years).sort((a,b) => b - a);
   }, [transactions]);
+
+  const clearAllFilters = () => {
+    setFilterType('all');
+    setFilterCategory('all');
+    setSortBy('latest');
+    setFilterDate('');
+    setFilterMonth('all');
+    setFilterYear('all');
+  };
 
   return (
     <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto min-h-screen">
@@ -93,9 +108,9 @@ const TransactionsScreen = () => {
         </div>
       </div>
 
-      {/* Primary Search Bar */}
-      <section className="mb-4 p-4 bg-surface-container-lowest rounded-xl border border-outline/5 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-1 relative">
+      {/* ===== MOBILE: Search + Filter Toggle ===== */}
+      <div className="md:hidden mb-4 flex flex-col gap-3">
+        <div className="relative">
           <span className="material-symbols-outlined absolute left-3 top-3 text-on-surface-variant">search</span>
           <input 
             type="text" 
@@ -105,53 +120,139 @@ const TransactionsScreen = () => {
             className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-3 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary"
           />
         </div>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
-          <option value="all">All Types</option>
-          <option value="expense">Expenses</option>
-          <option value="income">Income</option>
-          <option value="trade">Trades (Buy/Sell)</option>
-        </select>
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
-           <option value="all">All Categories</option>
-           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
-          <option value="latest">Latest First</option>
-          <option value="oldest">Oldest First</option>
-          <option value="highest">Highest Amount</option>
-          <option value="lowest">Lowest Amount</option>
-        </select>
-      </section>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowMobileFilters(!showMobileFilters)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all border ${showMobileFilters ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-surface-container-low border-outline/20 text-on-surface-variant'}`}
+          >
+            <span className="material-symbols-outlined text-lg">tune</span>
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="bg-primary text-on-primary text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{activeFilterCount}</span>
+            )}
+          </button>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="flex-1 bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface-variant">
+            <option value="latest">Latest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="highest">Highest ₹</option>
+            <option value="lowest">Lowest ₹</option>
+          </select>
+        </div>
 
-      {/* Advanced Timing Filters */}
-      <section className="mb-8 p-4 bg-surface-container-lowest rounded-xl border border-outline/5 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Exact Date</span>
-          <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none" />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Or By Month</span>
-          <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none">
-             <option value="all">Any Month</option>
-             {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
-          </select>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Or By Year</span>
-          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none">
-             <option value="all">Any Year</option>
-             {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
-          </select>
-        </div>
-        <div className="flex items-end justify-end">
-           {(filterDate || filterMonth !== 'all' || filterYear !== 'all') && (
+        {showMobileFilters && (
+          <div className="bg-surface-container-lowest rounded-xl border border-outline/10 p-4 flex flex-col gap-3 animate-[slideDown_0.2s_ease-out]">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Filter By</span>
+              {activeFilterCount > 0 && (
+                <button onClick={clearAllFilters} className="text-[10px] text-error font-bold uppercase tracking-wider">Clear All</button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Type</span>
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none">
+                  <option value="all">All Types</option>
+                  <option value="expense">Expenses</option>
+                  <option value="income">Income</option>
+                  <option value="trade">Trades</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Category</span>
+                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none">
+                  <option value="all">All</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Date</span>
+                <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Month</span>
+                <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none">
+                  <option value="all">Any</option>
+                  {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Year</span>
+                <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none">
+                  <option value="all">Any</option>
+                  {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ===== DESKTOP: Unified filter bar ===== */}
+      <section className="hidden md:block mb-8">
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline/5 overflow-hidden">
+          {/* Top row: Search + Primary filters */}
+          <div className="p-5 flex items-center gap-4">
+            <div className="relative flex-1 max-w-xs">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+              <input 
+                type="text" 
+                placeholder="Search transactions..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-2.5 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">All Types</option>
+                <option value="expense">Expenses</option>
+                <option value="income">Income</option>
+                <option value="trade">Trades (Buy/Sell)</option>
+              </select>
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">All Categories</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="latest">Latest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="highest">Highest Amount</option>
+                <option value="lowest">Lowest Amount</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-outline/5 mx-5" />
+
+          {/* Bottom row: Date filters */}
+          <div className="px-5 py-3 flex items-center gap-4">
+            <span className="text-[10px] uppercase text-on-surface-variant font-bold tracking-widest shrink-0">Date Filter</span>
+            <div className="flex items-center gap-3 flex-1">
+              <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer" />
+              <span className="text-[10px] text-on-surface-variant/50">or</span>
+              <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">Any Month</option>
+                {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
+              </select>
+              <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">Any Year</option>
+                {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
+              </select>
+            </div>
+            {(filterDate || filterMonth !== 'all' || filterYear !== 'all') && (
               <button 
                 onClick={() => {setFilterDate(''); setFilterMonth('all'); setFilterYear('all')}}
-                className="text-xs text-error hover:underline mb-3"
+                className="text-xs text-error font-bold hover:underline shrink-0"
               >
-                Clear Date Filters
+                Clear
               </button>
-           )}
+            )}
+          </div>
         </div>
       </section>
 
@@ -171,7 +272,6 @@ const TransactionsScreen = () => {
             ) : (
                filteredTransactions.map(t => {
                  let cat = getCategory(t.categoryId);
-                 // Intercept Trades 
                  if (t.type === 'buy_investment' || t.type === 'sell_investment') {
                     cat = { color: '#95CD41', icon: 'monitoring', name: 'Trade Executed' }
                  }
@@ -218,6 +318,13 @@ const TransactionsScreen = () => {
       <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({isOpen: false, data: null})} title="Edit Trade">
          {tradeModal.data && <InvestmentTradeForm initialTradeData={tradeModal.data} investment={tradeModal.investment} onClose={() => setTradeModal({isOpen: false, data: null})} />}
       </Modal>
+
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </main>
   );
 };

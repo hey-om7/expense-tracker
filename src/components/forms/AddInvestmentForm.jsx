@@ -136,7 +136,7 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
   const isSearchable = type === 'Mutual Fund' || type === 'Stock';
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto px-2 pb-6 no-scrollbar">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] md:max-h-[70vh] max-md:max-h-none overflow-y-auto px-2 max-md:px-0 pb-6 no-scrollbar">
       <div>
         <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Type</label>
         <select value={type} onChange={e => {
@@ -166,14 +166,14 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
              type="text" 
              value={searchQuery} 
              onChange={e => handleLiveSearch(e.target.value)} 
-             placeholder={type === 'Stock' ? "Search by Company Name or Ticker (e.g. Reliance, TATAMOTORS.NS)" : "Search by AMC or Name (e.g., SBI Small Cap)"}
-             className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" 
+             placeholder={type === 'Stock' ? "Search company or ticker..." : "Search AMC or fund name..."}
+             className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary text-sm" 
              required 
              autoComplete="off"
              disabled={isEditing}
           />
           {showDropdown && (searchQuery.length > 0) && (
-             <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-high border border-outline/10 rounded-lg shadow-2xl max-h-60 overflow-y-auto py-2 z-50">
+             <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-high border border-outline/10 rounded-lg shadow-2xl max-h-48 md:max-h-60 overflow-y-auto py-2 z-50">
                {isSearching ? (
                  <p className="px-4 py-3 text-sm text-on-surface-variant italic">Searching framework...</p>
                ) : searchResults.length > 0 ? (
@@ -200,7 +200,7 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Name *</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
@@ -216,17 +216,17 @@ const AddInvestmentForm = ({ onClose, initialData }) => {
 
       <div>
         <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Comments</label>
-        <textarea rows={3} value={comments} onChange={e => setComments(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary resize-none" placeholder="Any strategic notes on this holding..." />
+        <textarea rows={2} value={comments} onChange={e => setComments(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary resize-none text-sm" placeholder="Any strategic notes on this holding..." />
       </div>
 
       <div className="mt-4 flex gap-3">
         {isEditing && (
-          <button type="button" onClick={handleDelete} className="bg-error-container text-on-error-container px-4 py-4 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95">
-            Delete Profile
+          <button type="button" onClick={handleDelete} className="bg-error-container text-on-error-container px-4 py-3.5 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95 text-sm">
+            Delete
           </button>
         )}
-        <button type="submit" className="flex-1 bg-primary-container text-on-primary py-4 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95">
-          {isEditing ? 'Save Configuration' : 'Establish Position Link'}
+        <button type="submit" className="flex-1 bg-primary-container text-on-primary py-3.5 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95 text-sm">
+          {isEditing ? 'Save Configuration' : 'Create Profile'}
         </button>
       </div>
 
