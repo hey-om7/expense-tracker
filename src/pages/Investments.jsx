@@ -235,7 +235,7 @@ const InvestmentsScreen = () => {
                       <button
                         key={f}
                         onClick={() => setActiveFilter(f)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeFilter === f ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${activeFilter === f ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
                       >
                         {f}
                       </button>

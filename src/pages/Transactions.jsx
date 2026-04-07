@@ -191,64 +191,68 @@ const TransactionsScreen = () => {
         )}
       </div>
 
-      {/* ===== DESKTOP: Original grid filters (unchanged) ===== */}
-      <section className="hidden md:grid mb-4 p-4 bg-surface-container-lowest rounded-xl border border-outline/5 grid-cols-4 gap-4">
-        <div className="col-span-1 relative">
-          <span className="material-symbols-outlined absolute left-3 top-3 text-on-surface-variant">search</span>
-          <input 
-            type="text" 
-            placeholder="Search notes..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-3 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary"
-          />
-        </div>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
-          <option value="all">All Types</option>
-          <option value="expense">Expenses</option>
-          <option value="income">Income</option>
-          <option value="trade">Trades (Buy/Sell)</option>
-        </select>
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
-           <option value="all">All Categories</option>
-           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-3 px-4 text-sm focus:outline-none">
-          <option value="latest">Latest First</option>
-          <option value="oldest">Oldest First</option>
-          <option value="highest">Highest Amount</option>
-          <option value="lowest">Lowest Amount</option>
-        </select>
-      </section>
+      {/* ===== DESKTOP: Unified filter bar ===== */}
+      <section className="hidden md:block mb-8">
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline/5 overflow-hidden">
+          {/* Top row: Search + Primary filters */}
+          <div className="p-5 flex items-center gap-4">
+            <div className="relative flex-1 max-w-xs">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+              <input 
+                type="text" 
+                placeholder="Search transactions..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-2.5 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">All Types</option>
+                <option value="expense">Expenses</option>
+                <option value="income">Income</option>
+                <option value="trade">Trades (Buy/Sell)</option>
+              </select>
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">All Categories</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="latest">Latest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="highest">Highest Amount</option>
+                <option value="lowest">Lowest Amount</option>
+              </select>
+            </div>
+          </div>
 
-      <section className="hidden md:grid mb-8 p-4 bg-surface-container-lowest rounded-xl border border-outline/5 grid-cols-4 gap-4">
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Exact Date</span>
-          <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none" />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Or By Month</span>
-          <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none">
-             <option value="all">Any Month</option>
-             {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
-          </select>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Or By Year</span>
-          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-3 text-sm focus:outline-none">
-             <option value="all">Any Year</option>
-             {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
-          </select>
-        </div>
-        <div className="flex items-end justify-end">
-           {(filterDate || filterMonth !== 'all' || filterYear !== 'all') && (
+          {/* Divider */}
+          <div className="h-px bg-outline/5 mx-5" />
+
+          {/* Bottom row: Date filters */}
+          <div className="px-5 py-3 flex items-center gap-4">
+            <span className="text-[10px] uppercase text-on-surface-variant font-bold tracking-widest shrink-0">Date Filter</span>
+            <div className="flex items-center gap-3 flex-1">
+              <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer" />
+              <span className="text-[10px] text-on-surface-variant/50">or</span>
+              <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">Any Month</option>
+                {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
+              </select>
+              <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
+                <option value="all">Any Year</option>
+                {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
+              </select>
+            </div>
+            {(filterDate || filterMonth !== 'all' || filterYear !== 'all') && (
               <button 
                 onClick={() => {setFilterDate(''); setFilterMonth('all'); setFilterYear('all')}}
-                className="text-xs text-error hover:underline mb-3"
+                className="text-xs text-error font-bold hover:underline shrink-0"
               >
-                Clear Date Filters
+                Clear
               </button>
-           )}
+            )}
+          </div>
         </div>
       </section>
 
