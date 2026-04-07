@@ -70,7 +70,7 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
   };
 
   return (
-    <div className="flex flex-col gap-4 max-h-[70vh] overflow-hidden relative">
+    <div className="flex flex-col gap-4 max-h-[70vh] md:max-h-[70vh] max-md:max-h-none overflow-hidden relative">
       {!initialTradeData && (
         <div className="flex border-b border-outline/10 text-sm font-bold">
           <button onClick={() => { setActiveTab('TRADE'); resetForm(); }} className={`flex-1 pb-2 border-b-2 transition-all ${activeTab === 'TRADE' || activeTab === 'EDIT' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
@@ -107,16 +107,16 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
                </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Quantity *</label>
-                <input type="number" step="0.0001" max={type === 'SELL' && !tradeId ? investment.shares : undefined} value={shares} onChange={e => setShares(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required placeholder="0.00" />
+                <input type="number" step="0.0001" max={type === 'SELL' && !tradeId ? investment.shares : undefined} value={shares} onChange={e => setShares(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary text-sm" required placeholder="0.00" />
               </div>
               <div>
-                <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Execution Price *</label>
+                <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Price *</label>
                 <div className="relative">
                   <span className="absolute left-3 top-3 text-on-surface-variant">₹</span>
-                  <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary" required placeholder="0.00" />
+                  <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary text-sm" required placeholder="0.00" />
                 </div>
               </div>
             </div>
@@ -128,11 +128,11 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
 
             <div className="mt-4 flex gap-3">
               {activeTab === 'EDIT' && (
-                <button type="button" onClick={() => setShowConfirm(true)} className="bg-error-container text-on-error-container px-4 py-4 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95">
+                <button type="button" onClick={() => setShowConfirm(true)} className="bg-error-container text-on-error-container px-4 py-3.5 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95 text-sm">
                   Delete
                 </button>
               )}
-              <button type="submit" className="flex-1 bg-primary-container text-on-primary py-4 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95">
+              <button type="submit" className="flex-1 bg-primary-container text-on-primary py-3.5 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95 text-sm">
                 {activeTab === 'EDIT' ? 'Save Changes' : `Execute ${type}`}
               </button>
             </div>
