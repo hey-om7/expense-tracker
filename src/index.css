@@ -7,6 +7,24 @@
     background-color: #1a120b;
     color: #f1dfd3;
     font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* Global mobile overflow prevention for form inputs */
+  input, select, textarea {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Date inputs are notorious for overflowing on mobile WebKit */
+  input[type="date"],
+  input[type="datetime-local"] {
+    -webkit-appearance: none;
+    appearance: none;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 }
 
