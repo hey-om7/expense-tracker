@@ -19,6 +19,7 @@ const pickFields = (body, isCreate = false) => {
   if (body.period !== undefined) clean.period = body.period;
   if (body.isActive !== undefined) clean.isActive = Boolean(body.isActive);
   if (body.lastExecutedDate !== undefined) clean.lastExecutedDate = body.lastExecutedDate;
+  if (body.expiryDate !== undefined) clean.expiryDate = body.expiryDate || null;
   // Only allow dates on create
   if (isCreate) {
     if (body.startDate !== undefined) clean.startDate = body.startDate;
@@ -89,6 +90,8 @@ router.post('/run-check', async (req, res) => {
     const processed = [];
 
     for (const sub of activeSubs) {
+      // Skip one-time subscriptions from cyclic processing
+      if (sub.period === 'one_time') continue;
       if (!sub.startDate) continue;
 
       const start = new Date(sub.startDate);

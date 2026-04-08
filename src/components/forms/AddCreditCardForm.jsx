@@ -57,7 +57,7 @@ const AddCreditCardForm = ({ onClose, initialData }) => {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto px-2 pb-8 no-scrollbar">
       
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Card Title *</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" placeholder="e.g. HDFC Regalia" required />
@@ -68,7 +68,7 @@ const AddCreditCardForm = ({ onClose, initialData }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
            <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Bill Due Date *</label>
            <input type="date" value={billDueDate} onChange={e => setBillDueDate(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />

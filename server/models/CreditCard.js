@@ -7,6 +7,7 @@ const creditCardSchema = new mongoose.Schema({
   billDueDate: { type: Date, required: true },
   totalLimit: { type: Number, default: 0, min: 0 },
   notes: { type: String, default: '', maxlength: 500 },
+  lastReminderSentDate: { type: Date, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('CreditCard', creditCardSchema);

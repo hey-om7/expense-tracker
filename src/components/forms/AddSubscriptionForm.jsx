@@ -14,6 +14,7 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
   const [amount, setAmount] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [period, setPeriod] = useState('monthly');
   const [isActive, setIsActive] = useState(true);
@@ -24,11 +25,14 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
       setAmount(initialData.amount || '');
       setStartDate(initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : '');
       setEndDate(initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : '');
+      setExpiryDate(initialData.expiryDate ? new Date(initialData.expiryDate).toISOString().split('T')[0] : '');
       setCategoryId(initialData.categoryId || '');
       setPeriod(initialData.period || 'monthly');
       setIsActive(initialData.isActive ?? true);
     }
   }, [initialData]);
+
+  const isOneTime = period === 'one_time';
 
   const generateMissedCycles = (startStr, freqStr, endStr) => {
     const missed = [];
@@ -70,9 +74,18 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!name || !amount || !categoryId || !startDate) return;
+    if (!name || !amount || !categoryId) return;
 
-    if (endDate && new Date(endDate) <= new Date(startDate)) {
+    // Validation for non-one-time
+    if (!isOneTime && !startDate) return;
+
+    // Validation for one-time
+    if (isOneTime && !expiryDate) {
+      addNotification({ title: 'Missing Expiry Date', message: 'Please set an expiry date for one-time subscriptions.' });
+      return;
+    }
+
+    if (!isOneTime && endDate && new Date(endDate) <= new Date(startDate)) {
       addNotification({ title: 'Invalid Dates', message: 'End date must be after the start date.' });
       return;
     }
@@ -80,15 +93,16 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
     const payload = {
       name,
       amount: parseFloat(amount),
-      startDate: new Date(startDate).toISOString(),
-      endDate: endDate ? new Date(endDate).toISOString() : null,
+      startDate: isOneTime ? null : new Date(startDate).toISOString(),
+      endDate: isOneTime ? null : (endDate ? new Date(endDate).toISOString() : null),
+      expiryDate: isOneTime ? new Date(expiryDate).toISOString() : null,
       categoryId,
       period,
       isActive,
       lastExecutedDate: initialData?.lastExecutedDate || null
     };
 
-    if (!isEditing) {
+    if (!isEditing && !isOneTime) {
       const missed = generateMissedCycles(startDate, period, endDate);
       if (missed.length > 0) {
         setMissedDates(missed);
@@ -153,6 +167,21 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
 
   const expenseCategories = categories.filter(c => c.type === 'expense');
 
+  const getReminderMessage = () => {
+    switch (period) {
+      case 'one_time':
+        return '🔔 You will be reminded one day before the expiry date via email and app notification.';
+      case 'weekly':
+        return '🔔 You will be reminded one day before each weekly renewal via email and app notification.';
+      case 'monthly':
+        return '🔔 You will be reminded one day before each monthly renewal via email and app notification.';
+      case 'yearly':
+        return '🔔 You will be reminded one day before each yearly renewal via email and app notification.';
+      default:
+        return '';
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] md:max-h-[70vh] max-md:max-h-none overflow-y-auto px-2 max-md:px-0 pb-8 no-scrollbar">
       
@@ -170,14 +199,14 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
       <div className="grid grid-cols-1 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Name *</label>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" placeholder="e.g. Netflix, Rent" required />
+          <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary box-border" placeholder="e.g. Netflix, Rent" required />
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Category *</label>
-          <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
+          <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat box-border" required>
             <option value="" disabled>Select mapping...</option>
             {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -186,7 +215,7 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Amount *</label>
           <div className="relative">
             <span className="absolute left-3 top-3 text-on-surface-variant">₹</span>
-            <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary" placeholder="0.00" required />
+            <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary box-border" placeholder="0.00" required />
           </div>
         </div>
       </div>
@@ -194,23 +223,44 @@ const AddSubscriptionForm = ({ onClose, initialData }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Frequency</label>
-          <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat" required>
+          <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-4 pr-10 text-on-surface focus:outline-none focus:border-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23E5BA73%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]%20bg-[length:1.25rem]%20bg-[right_1rem_center]%20bg-no-repeat box-border" required>
+            <option value="one_time">One Time</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
             <option value="yearly">Yearly</option>
           </select>
         </div>
-        <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Start Date *</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} required />
-        </div>
+
+        {/* Show Start Date only for recurring */}
+        {!isOneTime && (
+          <div>
+            <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Start Date *</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary box-border ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} required />
+          </div>
+        )}
+
+        {/* Show Expiry Date for One Time */}
+        {isOneTime && (
+          <div>
+            <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Expiry Date *</label>
+            <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary box-border" required />
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        <div>
-          <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">End Date (Optional)</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} />
+      {/* End Date — only for recurring */}
+      {!isOneTime && (
+        <div className="grid grid-cols-1 gap-4">
+          <div>
+            <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">End Date (Optional)</label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} disabled={isEditing} className={`w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary box-border ${isEditing ? 'opacity-60 cursor-not-allowed' : ''}`} />
+          </div>
         </div>
+      )}
+
+      {/* Reminder message */}
+      <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 text-xs text-on-surface leading-relaxed">
+        {getReminderMessage()}
       </div>
 
       <div className="mt-4 flex gap-3">

@@ -167,10 +167,10 @@ const TransactionsScreen = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex flex-col">
+            <div className="grid grid-cols-3 gap-2 min-w-0 overflow-hidden">
+              <div className="flex flex-col min-w-0">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Date</span>
-                <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none" />
+                <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none w-full min-w-0 box-border" />
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Month</span>

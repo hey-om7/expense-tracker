@@ -57,6 +57,17 @@ app.use(cors({
 // ─── Body parsing with strict size limit ───
 app.use(express.json({ limit: '256kb' }));
 
+// ─── Fix for Express 5 req.query immutability ───
+app.use((req, res, next) => {
+  Object.defineProperty(req, 'query', {
+    value: req.query,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
+  next();
+});
+
 // ─── NoSQL injection prevention ───
 app.use(mongoSanitize({ replaceWith: '_' }));
 
@@ -108,6 +119,7 @@ app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/credit-cards', require('./routes/creditCards'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/stocks', require('./routes/stocks'));
+app.use('/api/ai', require('./routes/ai'));
 
 // ─── Health check ───
 app.get('/api/health', (_req, res) => {
@@ -141,6 +153,11 @@ mongoose.connect(MONGO_URI, {
 })
   .then(() => {
     console.log('✅ MongoDB connected successfully');
+
+    // Initialize cron jobs for scheduled reminders
+    const { initCronJobs } = require('./services/cronJobs');
+    initCronJobs();
+
     const server = app.listen(PORT, () => {
       console.log(`🚀 Wallo API server running on port ${PORT}`);
     });
