@@ -8,7 +8,7 @@ const SettingsScreen = () => {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     aiEnabled: true,
-    aiModel: 'gemini-1.5-flash',
+    aiModel: 'gemini-2.5-flash',
     geminiApiKey: '',
     emailAlertsEnabled: true,
   });
@@ -20,7 +20,7 @@ const SettingsScreen = () => {
         if (data) {
           setSettings({
             aiEnabled: data.aiEnabled,
-            aiModel: data.aiModel || 'gemini-1.5-flash',
+            aiModel: data.aiModel || 'gemini-2.5-flash',
             geminiApiKey: data.geminiApiKey || '',
             emailAlertsEnabled: data.emailAlertsEnabled ?? true,
           });
@@ -44,6 +44,16 @@ const SettingsScreen = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+
+    // Validate: if AI is enabled, API key is required
+    if (settings.aiEnabled && !settings.geminiApiKey.trim()) {
+      addNotification({
+        title: 'API Key Required',
+        message: 'Please enter your Gemini API key to enable AI features.'
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       await updateSettings(settings);
@@ -107,22 +117,49 @@ const SettingsScreen = () => {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">AI Model</label>
                   <select name="aiModel" value={settings.aiModel} onChange={handleChange} className="w-full bg-surface-container-lowest border border-outline/20 rounded-xl py-3 px-4 text-on-surface text-sm focus:outline-none focus:border-primary appearance-none cursor-pointer">
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
-                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Advanced)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Higher Quality)</option>
+                    <option value="gemini-pro-latest">Gemini Pro Latest (General)</option>
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">Custom Gemini API Key <span className="text-[10px] text-outline normal-case font-normal">(Optional)</span></label>
+                  <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                    Gemini API Key <span className="text-error text-[10px] normal-case font-semibold">*Required</span>
+                  </label>
                   <input 
                     type="password" 
                     name="geminiApiKey" 
                     value={settings.geminiApiKey} 
                     onChange={handleChange} 
                     placeholder="AIzaSy..." 
-                    className="w-full bg-surface-container-lowest border border-outline/20 rounded-xl py-3 px-4 text-on-surface text-sm focus:outline-none focus:border-primary"
+                    required={settings.aiEnabled}
+                    className={`w-full bg-surface-container-lowest border rounded-xl py-3 px-4 text-on-surface text-sm focus:outline-none focus:border-primary ${
+                      settings.aiEnabled && !settings.geminiApiKey.trim() 
+                        ? 'border-error/40' 
+                        : 'border-outline/20'
+                    }`}
                   />
-                  <p className="text-[10px] text-outline mt-2">Leave blank to use the default system API key. Your custom key is stored securely in your database profile.</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[10px] text-on-surface-variant">Your API key is stored securely in your database profile.</p>
+                    <a 
+                      href="https://aistudio.google.com/app/api-keys/" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-sm">open_in_new</span>
+                      Get API Key
+                    </a>
+                  </div>
+                  {settings.aiEnabled && !settings.geminiApiKey.trim() && (
+                    <div className="mt-3 flex items-start gap-2 bg-error-container/10 border border-error/15 rounded-lg px-3 py-2.5">
+                      <span className="material-symbols-outlined text-error text-base mt-0.5">warning</span>
+                      <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                        An API key is required for AI features. Get a free key from <a href="https://ai.google.dev/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ai.google.dev</a>.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

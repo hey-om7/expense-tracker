@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
     if (!prefs) {
       prefs = {
         aiEnabled: true,
-        aiModel: 'gemini-1.5-flash',
+        aiModel: 'gemini-2.5-flash',
         geminiApiKey: '',
         emailAlertsEnabled: true,
       };
@@ -31,8 +31,8 @@ router.put('/', async (req, res) => {
   try {
     const { aiEnabled, aiModel, geminiApiKey, emailAlertsEnabled } = req.body;
     
-    const allowedModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
-    const modelToSave = allowedModels.includes(aiModel) ? aiModel : 'gemini-1.5-flash';
+    const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest'];
+    const modelToSave = allowedModels.includes(aiModel) ? aiModel : 'gemini-2.5-flash';
 
     const prefs = await UserPreferences.findOneAndUpdate(
       { userId: req.userId },

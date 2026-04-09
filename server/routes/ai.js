@@ -24,14 +24,18 @@ router.post('/chat', async (req, res) => {
     }
 
     // Check settings
-    // 1. Fetch user preferences early
     let prefs = await UserPreferences.findOne({ userId: req.userId }).lean();
     if (!prefs) {
-      prefs = { aiEnabled: true, aiModel: 'gemini-1.5-flash', geminiApiKey: '' }; // Default
+      prefs = { aiEnabled: true, aiModel: 'gemini-2.5-flash', geminiApiKey: '' };
     }
 
     if (!prefs.aiEnabled) {
       return res.status(403).json({ message: 'AI Chatbot is disabled in settings.' });
+    }
+
+    // Strict: user must have their own API key — no fallback to .env
+    if (!prefs.geminiApiKey || prefs.geminiApiKey.trim().length === 0) {
+      return res.status(403).json({ message: 'Please add your Gemini API key in Settings to use AI features.' });
     }
 
     // Fetch user-specific data including categories
@@ -54,19 +58,15 @@ router.post('/chat', async (req, res) => {
     };
 
     const options = {
-      model: prefs.aiModel || 'gemini-1.5-flash',
-      apiKey: prefs.geminiApiKey || process.env.GEMINI_API_KEY
+      model: prefs.aiModel || 'gemini-2.5-flash',
+      apiKey: prefs.geminiApiKey,
     };
-
-    if (!options.apiKey) {
-      return res.status(503).json({ message: 'GEMINI_API_KEY is missing. Please add it in Settings.' });
-    }
 
     const reply = await chatWithGemini(message.trim(), userData, options);
     res.json({ reply });
   } catch (err) {
     console.error('AI Chat Error:', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
+    if (err.message.includes('API key') || err.message.includes('GEMINI')) {
       return res.status(503).json({ message: err.message });
     }
     res.status(500).json({ message: 'Failed to get AI response. Please try again.' });

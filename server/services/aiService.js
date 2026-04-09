@@ -1,15 +1,14 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const getModel = (options = {}) => {
-  const apiKey = options.apiKey || process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-    throw new Error('GEMINI_API_KEY is not configured. Please set a valid API key in your .env file or Settings.');
+  const apiKey = options.apiKey;
+  if (!apiKey) {
+    throw new Error('No Gemini API key configured. Please add your API key in Settings.');
   }
   
-  // We recreate the GoogleGenerativeAI instance if the key changes, but we shouldn't cache a global one 
-  // if users have different keys. Let's just create a new instance per request.
   const ai = new GoogleGenerativeAI(apiKey);
-  const modelName = options.model || 'gemini-1.5-flash';
+  const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest'];
+  const modelName = allowedModels.includes(options.model) ? options.model : 'gemini-2.5-flash';
   return ai.getGenerativeModel({ model: modelName });
 };
 
@@ -45,7 +44,7 @@ ${subSummary}
 ${ccSummary}
 
 Answer the user's question based on this data. Keep responses concise (under 300 words) and formatted for readability.`;
-  console.log(`AI Model hit: ${options.model || 'gemini-1.5-flash'}`);
+  console.log(`AI Model hit: ${options.model || 'gemini-2.5-flash'}`);
   const result = await model.generateContent({
     contents: [
       { role: 'user', parts: [{ text: systemPrompt + '\n\nUser: ' + userMessage }] },

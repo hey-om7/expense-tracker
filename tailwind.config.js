@@ -21,6 +21,8 @@ export default {
         "primary": "#ffd796",
         "surface-variant": "#3d332b",
         "primary-container": "#e5ba73",
+        "primary-active": "#166534",
+        "primary-active-light": "#1a7a3d",
         "on-error": "#690005",
         "on-surface": "#f1dfd3",
         "on-background": "#f1dfd3",
