@@ -11,19 +11,23 @@ router.use(auth);
 const pickFields = (body, isCreate = false) => {
   const clean = {};
   if (body.name !== undefined) clean.name = String(body.name).slice(0, 100);
+  
   if (body.amount !== undefined) {
     clean.amount = Number(body.amount);
-    if (isNaN(clean.amount) || clean.amount <= 0 || clean.amount > 999999999) return null;
+    // CHANGED: Replaced <= 0 with < 0 to allow 0 amounts
+    if (isNaN(clean.amount) || clean.amount < 0 || clean.amount > 999999999) return null;
   }
+  
   if (body.categoryId !== undefined) clean.categoryId = String(body.categoryId).slice(0, 50);
   if (body.period !== undefined) clean.period = body.period;
   if (body.isActive !== undefined) clean.isActive = Boolean(body.isActive);
   if (body.lastExecutedDate !== undefined) clean.lastExecutedDate = body.lastExecutedDate;
   if (body.expiryDate !== undefined) clean.expiryDate = body.expiryDate || null;
-  // Only allow dates on create
+  
   if (isCreate) {
     if (body.startDate !== undefined) clean.startDate = body.startDate;
     if (body.endDate !== undefined) clean.endDate = body.endDate;
+    if (body.date !== undefined) clean.date = body.date; 
   }
   return clean;
 };
@@ -45,7 +49,9 @@ router.post('/', async (req, res) => {
     const saved = await subscription.save();
     res.status(201).json(saved);
   } catch (err) {
-    res.status(400).json({ message: 'Failed to create subscription' });
+    // FIXED: Expose the actual mongoose validation error so you can debug
+    console.error('Save Subscription Error:', err.message);
+    res.status(400).json({ message: 'Failed to create subscription', error: err.message });
   }
 });
 
@@ -56,12 +62,13 @@ router.put('/:id', validateId, async (req, res) => {
     const updated = await Subscription.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       fields,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
     if (!updated) return res.status(404).json({ message: 'Subscription not found' });
     res.json(updated);
   } catch (err) {
-    res.status(400).json({ message: 'Failed to update subscription' });
+    console.error('Update Subscription Error:', err.message);
+    res.status(400).json({ message: 'Failed to update subscription', error: err.message });
   }
 });
 
@@ -75,7 +82,7 @@ router.delete('/:id', validateId, async (req, res) => {
   }
 });
 
-// POST /run-check — cap at 50 cycles per sub, with concurrency guard
+// POST /run-check
 const runCheckLocks = new Set();
 router.post('/run-check', async (req, res) => {
   if (runCheckLocks.has(req.userId)) {
@@ -90,8 +97,39 @@ router.post('/run-check', async (req, res) => {
     const processed = [];
 
     for (const sub of activeSubs) {
-      // Skip one-time subscriptions from cyclic processing
-      if (sub.period === 'one_time') continue;
+      // FIXED: Process one-time subscriptions exactly once, then mark as inactive
+      if (sub.period === 'one_time') {
+        const targetDate = sub.startDate || sub.date; // fallback if schema uses 'date'
+        
+        if (targetDate && !sub.lastExecutedDate) {
+          const start = new Date(targetDate);
+          start.setHours(0, 0, 0, 0);
+
+          if (start <= today) {
+            const txDate = new Date(start);
+            txDate.setHours(12, 0, 0, 0);
+
+            const tx = new Transaction({
+              userId: req.userId,
+              type: 'expense',
+              categoryId: String(sub.categoryId || '').slice(0, 50),
+              amount: sub.amount,
+              title: String(`One-Time Payment - ${sub.name}`).slice(0, 200),
+              date: txDate,
+              notes: 'Automated one-time payment',
+            });
+            await tx.save();
+
+            sub.lastExecutedDate = txDate.toISOString().split('T')[0];
+            sub.isActive = false; // Turn off the sub so it doesn't trigger again
+            await sub.save();
+            processed.push(sub.name);
+          }
+        }
+        continue; // Skip the cyclic logic below for one-time subs
+      }
+
+      // --- Cyclic Logic Continues Below ---
       if (!sub.startDate) continue;
 
       const start = new Date(sub.startDate);
@@ -148,8 +186,8 @@ router.post('/run-check', async (req, res) => {
     if (processed.length > 0) {
       const notification = new Notification({
         userId: req.userId,
-        title: 'Cyclic Protocol Engaged',
-        message: String(`Processed ${processed.length} subscription renewal(s): ${processed.join(', ')}`).slice(0, 500),
+        title: 'Subscription Protocol Engaged',
+        message: String(`Processed ${processed.length} payment(s): ${processed.join(', ')}`).slice(0, 500),
         isRead: false,
         date: new Date(),
       });
@@ -158,6 +196,7 @@ router.post('/run-check', async (req, res) => {
 
     res.json({ processed: processed.length, names: processed });
   } catch (err) {
+    console.error('Run Check Error:', err);
     res.status(500).json({ message: 'Failed to run subscription check' });
   } finally {
     runCheckLocks.delete(req.userId);

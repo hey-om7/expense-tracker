@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const subscriptionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   name: { type: String, required: true, maxlength: 100 },
-  amount: { type: Number, required: true, min: 0.01, max: 999999999 },
+  amount: { type: Number, required: true, min:0, max: 999999999 },
   startDate: { type: Date, required: function() { return this.period !== 'one_time'; } },
   endDate: { type: Date, default: null },
   expiryDate: { type: Date, default: null },

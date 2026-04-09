@@ -128,7 +128,7 @@ export const AppProvider = ({ children }) => {
 
       // OS Notification Trigger
       if ('Notification' in window && Notification.permission === 'granted') {
-         new Notification(n.title, { body: n.message, icon: '/favicon.ico' });
+         new Notification(n.title, { body: n.message, icon: '/favicon.svg' });
       }
     } catch (err) {
       console.error('Failed to add notification:', err);

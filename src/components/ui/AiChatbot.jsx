@@ -91,7 +91,7 @@ const AiChatbot = () => {
         `}
         style={{ zIndex: 90 }}
       >
-        <span className="material-symbols-outlined text-2xl transition-transform duration-300" style={{ transform: isOpen ? 'rotate(45deg)' : 'none' }}>
+        <span className="material-symbols-outlined text-2xl transition-transform duration-300" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}>
           {isOpen ? 'close' : 'auto_awesome'}
         </span>
       </button>

@@ -121,10 +121,16 @@ const CyclicScreen = () => {
                           </div>
                           <div className="flex justify-between items-end">
                              <div>
-                                <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Next Renewal</span>
+                                {/* EDITED: Conditionally show Expiry vs Renewal based on period */}
+                                <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">
+                                   {sub.period === 'one_time' ? 'Expiry Date' : 'Next Renewal'}
+                                </span>
                                 <span className="font-body text-sm font-medium">
                                    {(() => {
-                                      const d = new Date(sub.startDate);
+                                      // EDITED: Select expiryDate if one_time, else startDate
+                                      const targetDate = sub.period === 'one_time' ? sub.expiryDate : sub.startDate;
+                                      if (!targetDate) return "—";
+                                      const d = new Date(targetDate);
                                       return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
                                    })()}
                                 </span>
@@ -156,8 +162,13 @@ const CyclicScreen = () => {
                           </div>
                           <div className="flex justify-between items-center">
                              <span className="text-xs text-on-surface-variant">
+                                <span className="font-bold opacity-70 tracking-wide text-[10px] uppercase mr-1">
+                                   {sub.period === 'one_time' ? 'Expires:' : 'Renews:'}
+                                </span>
                                 {(() => {
-                                   const d = new Date(sub.startDate);
+                                   const targetDate = sub.period === 'one_time' ? sub.expiryDate : sub.startDate;
+                                   if (!targetDate) return "—";
+                                   const d = new Date(targetDate);
                                    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
                                 })()}
                              </span>
