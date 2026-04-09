@@ -1,27 +1,23 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-let genAI = null;
-
-const getModel = () => {
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
-    throw new Error('GEMINI_API_KEY is not configured. Please set a valid API key in your .env file.');
+const getModel = (options = {}) => {
+  const apiKey = options.apiKey || process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
+    throw new Error('GEMINI_API_KEY is not configured. Please set a valid API key in your .env file or Settings.');
   }
-  if (!genAI) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  }
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  
+  // We recreate the GoogleGenerativeAI instance if the key changes, but we shouldn't cache a global one 
+  // if users have different keys. Let's just create a new instance per request.
+  const ai = new GoogleGenerativeAI(apiKey);
+  const modelName = options.model || 'gemini-1.5-flash';
+  return ai.getGenerativeModel({ model: modelName });
 };
 
-/**
- * Chat with Gemini using user-specific financial data as context.
- * @param {string} userMessage - The user's question
- * @param {object} userData - { transactions, investments, subscriptions, creditCards, userName }
- * @returns {string} AI response text
- */
-const chatWithGemini = async (userMessage, userData) => {
-  const model = getModel();
+const chatWithGemini = async (userMessage, userData, options = {}) => {
+  const model = getModel(options);
 
   // Build financial context summary
+  const catSummary = buildCategoriesSummary(userData.categories || []);
   const txSummary = buildTransactionSummary(userData.transactions || []);
   const invSummary = buildInvestmentSummary(userData.investments || []);
   const subSummary = buildSubscriptionSummary(userData.subscriptions || []);
@@ -29,9 +25,12 @@ const chatWithGemini = async (userMessage, userData) => {
 
   const systemPrompt = `You are Wallo AI, a friendly and knowledgeable personal finance assistant embedded in the Wallo expense tracking app. You help users understand their spending, investments, subscriptions, and bills.
 
-Always be helpful, concise, and actionable. Use ₹ (Indian Rupees) for currency. If you don't have enough data to answer, say so honestly.
+Always be helpful, concise, and actionable. Use ₹ (Indian Rupees) for currency. If you don't have enough data to answer, say so honestly. NEVER invent data or share other users' information.
 
 Here is ${userData.userName || 'the user'}'s current financial data:
+
+=== CATEGORIES ===
+${catSummary}
 
 === TRANSACTIONS (Recent 50) ===
 ${txSummary}
@@ -46,7 +45,7 @@ ${subSummary}
 ${ccSummary}
 
 Answer the user's question based on this data. Keep responses concise (under 300 words) and formatted for readability.`;
-
+  console.log(`AI Model hit: ${options.model || 'gemini-1.5-flash'}`);
   const result = await model.generateContent({
     contents: [
       { role: 'user', parts: [{ text: systemPrompt + '\n\nUser: ' + userMessage }] },
@@ -56,6 +55,11 @@ Answer the user's question based on this data. Keep responses concise (under 300
   const response = result.response;
   return response.text();
 };
+
+function buildCategoriesSummary(categories) {
+  if (categories.length === 0) return 'No custom categories created.';
+  return categories.map(c => `- ${c.name} (${c.type.toUpperCase()})`).join('\n');
+}
 
 function buildTransactionSummary(transactions) {
   if (transactions.length === 0) return 'No transactions recorded yet.';
@@ -70,9 +74,17 @@ function buildTransactionSummary(transactions) {
 
 function buildInvestmentSummary(investments) {
   if (investments.length === 0) return 'No investments tracked.';
-  return investments.map(i =>
-    `- ${i.name} (${i.type}): ${i.shares || 0} units @ ₹${i.currentPrice || 0} | Symbol: ${i.symbol || 'N/A'}`
-  ).join('\n');
+  return investments.map(i => {
+    // Compute quantity from holdings dynamically for AI representation
+    let quantity = 0;
+    if (i.holdings && Array.isArray(i.holdings)) {
+      i.holdings.forEach(h => {
+        if (h.type === 'BUY') quantity += h.quantity || 0;
+        if (h.type === 'SELL') quantity -= h.quantity || 0;
+      });
+    }
+    return `- ${i.name} (${i.type}): ${quantity} units @ Live Nav ₹${i.currentPrice || 0} | Symbol: ${i.symbol || 'N/A'}`;
+  }).join('\n');
 }
 
 function buildSubscriptionSummary(subscriptions) {

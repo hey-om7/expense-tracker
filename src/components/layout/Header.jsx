@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -115,6 +115,12 @@ const Header = () => {
               <div className="px-4 py-3 border-b border-outline/10">
                 <p className="text-sm font-bold text-on-surface">{user?.name || 'User'}</p>
                 <p className="text-[10px] text-outline">{user?.email || ''}</p>
+              </div>
+              <div className="py-1">
+                <Link to="/settings" onClick={() => setShowUserMenu(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-inter text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-all">
+                  <span className="material-symbols-outlined text-base">settings</span>
+                  Settings
+                </Link>
               </div>
               <button
                 onClick={handleLogout}

@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 const getToken = () => localStorage.getItem('wallo_token');
 
@@ -47,7 +47,10 @@ export const fetchTransactions = () => request('/transactions');
 export const createTransaction = (data) => request('/transactions', { method: 'POST', body: data });
 export const updateTransaction = (id, data) => request(`/transactions/${id}`, { method: 'PUT', body: data });
 export const deleteTransaction = (id) => request(`/transactions/${id}`, { method: 'DELETE' });
-export const deleteTransactionsByInvestment = (investmentId) => request(`/transactions/investment/${investmentId}`, { method: 'DELETE' });
+
+// ─── Settings APIs ───
+export const fetchSettings = () => request('/settings');
+export const updateSettings = (settingsData) => request('/settings', { method: 'PUT', body: settingsData });
 
 // ─── Categories ───
 export const fetchCategories = () => request('/categories');
@@ -60,6 +63,10 @@ export const fetchInvestments = () => request('/investments');
 export const createInvestment = (data) => request('/investments', { method: 'POST', body: data });
 export const updateInvestment = (id, data) => request(`/investments/${id}`, { method: 'PUT', body: data });
 export const deleteInvestment = (id) => request(`/investments/${id}`, { method: 'DELETE' });
+
+// ─── Investment Trades (Holdings) ───
+export const executeInvestmentTrade = (investmentId, tradeData) => request(`/investments/${investmentId}/trade`, { method: 'POST', body: tradeData });
+export const deleteInvestmentHolding = (investmentId, holdingId) => request(`/investments/${investmentId}/holdings/${holdingId}`, { method: 'DELETE' });
 
 // ─── Subscriptions ───
 export const fetchSubscriptions = () => request('/subscriptions');

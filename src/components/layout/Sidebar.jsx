@@ -9,6 +9,7 @@ const navItems = [
   { path: '/cyclic', icon: 'autorenew', label: 'Cyclic' },
   { path: '/analytics', icon: 'bar_chart', label: 'Analytics' },
   { path: '/categories', icon: 'category', label: 'Categories' },
+  { path: '/settings', icon: 'settings', label: 'Settings' },
 ];
 
 const Sidebar = () => {

@@ -3,29 +3,18 @@ import { useAppContext } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
 import ConfirmDialog from '../ui/ConfirmDialog';
 
-const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
-  const { executeTrade, deleteTransaction } = useAppContext();
+const InvestmentTradeForm = ({ onClose, investment }) => {
+  const { executeTradeOnInvestment, deleteHolding } = useAppContext();
   
-  const [activeTab, setActiveTab] = useState(initialTradeData ? 'EDIT' : 'TRADE');
+  const [activeTab, setActiveTab] = useState('TRADE');
   const [showConfirm, setShowConfirm] = useState(false);
 
   // Form State
-  const [tradeId, setTradeId] = useState(initialTradeData?.id || null);
+  const [tradeId, setTradeId] = useState(null);
   const [type, setType] = useState('BUY');
   const [shares, setShares] = useState('');
   const [price, setPrice] = useState(investment.currentPrice || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-
-  useEffect(() => {
-    if (initialTradeData) {
-       setTradeId(initialTradeData.id);
-       setType(initialTradeData.type === 'buy_investment' ? 'BUY' : 'SELL');
-       setShares(initialTradeData.shares || '');
-       setPrice(initialTradeData.price || '');
-       setDate(initialTradeData.date ? new Date(initialTradeData.date).toISOString().split('T')[0] : '');
-       setActiveTab('EDIT');
-    }
-  }, [initialTradeData]);
 
   const resetForm = () => {
     setTradeId(null);
@@ -37,55 +26,58 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
 
   const startEdit = (trade) => {
     setTradeId(trade.id);
-    setType(trade.type === 'buy_investment' ? 'BUY' : 'SELL');
+    // Historical trades can be deleted but not easily updated in this simple UI
+    setType(trade.type === 'buy_investment' || trade.type === 'BUY' ? 'BUY' : 'SELL');
     setShares(trade.shares);
     setPrice(trade.price);
     setDate(new Date(trade.date).toISOString().split('T')[0]);
     setActiveTab('EDIT');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!shares || !price) return;
     
-    executeTrade(investment.id, {
-      type,
-      shares: parseFloat(shares),
-      price: parseFloat(price),
-      date: new Date(date).toISOString()
-    }, tradeId); 
-    
-    // Per user instructions: Instantly close modal if open and rely on the new Toast overlay
-    onClose();
+    // We only create new trades, no updating historical
+    try {
+      await executeTradeOnInvestment(investment.id, {
+        type,
+        shares: parseFloat(shares),
+        price: parseFloat(price),
+        date: new Date(date).toISOString()
+      });
+      onClose();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const confirmDelete = () => {
-    deleteTransaction(tradeId);
-    setShowConfirm(false);
-    if (initialTradeData) onClose();
-    else {
+  const confirmDelete = async () => {
+    try {
+      await deleteHolding(investment.id, tradeId);
+      setShowConfirm(false);
       resetForm();
       setActiveTab('HISTORY');
+    } catch (err) {
+      console.error(err);
     }
   };
 
   return (
     <div className="flex flex-col gap-4 max-h-[70vh] md:max-h-[70vh] max-md:max-h-none overflow-hidden relative">
-      {!initialTradeData && (
         <div className="flex border-b border-outline/10 text-sm font-bold">
           <button onClick={() => { setActiveTab('TRADE'); resetForm(); }} className={`flex-1 pb-2 border-b-2 transition-all ${activeTab === 'TRADE' || activeTab === 'EDIT' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
-            {activeTab === 'EDIT' ? 'Edit Trade' : 'New Order'}
+            {activeTab === 'EDIT' ? 'Viewing Trade' : 'New Order'}
           </button>
           <button onClick={() => setActiveTab('HISTORY')} className={`flex-1 pb-2 border-b-2 transition-all ${activeTab === 'HISTORY' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
             Trade History
           </button>
         </div>
-      )}
 
       <div className="overflow-y-auto no-scrollbar flex-1 px-1 pb-8">
         {(activeTab === 'TRADE' || activeTab === 'EDIT') && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
-            {!initialTradeData && activeTab === 'TRADE' && (
+            {!tradeId && activeTab === 'TRADE' && (
               <div className="flex bg-surface-container-highest p-1 rounded-lg mb-2">
                 <button type="button" onClick={() => setType('BUY')} className={`flex-1 py-2 text-[10px] uppercase tracking-widest font-bold rounded-md transition-all ${type === 'BUY' ? 'bg-[#95CD41] text-[#1A120B]' : 'text-on-surface-variant'}`}>
                   Buy
@@ -97,11 +89,11 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
             )}
             {activeTab === 'EDIT' && (
                <div className={`p-3 text-center text-xs font-bold rounded-lg uppercase tracking-widest mb-2 ${type === 'BUY' ? 'bg-[#95CD41]/20 text-[#95CD41]' : 'bg-error-container text-on-error-container'}`}>
-                 Editing {type} Order
+                 Historical {type} Order
                </div>
             )}
 
-            {type === 'SELL' && (
+            {type === 'SELL' && !tradeId && (
                <div className="text-xs text-on-surface-variant pb-2">
                   Max available to sell: <span className="font-bold text-on-surface">{investment.shares} units</span>
                </div>
@@ -110,31 +102,33 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Quantity *</label>
-                <input type="number" step="0.0001" max={type === 'SELL' && !tradeId ? investment.shares : undefined} value={shares} onChange={e => setShares(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary text-sm" required placeholder="0.00" />
+                <input type="number" step="0.0001" max={type === 'SELL' && !tradeId ? investment.shares : undefined} value={shares} onChange={e => setShares(e.target.value)} disabled={tradeId} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50" required placeholder="0.00" />
               </div>
               <div>
                 <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Price *</label>
                 <div className="relative">
                   <span className="absolute left-3 top-3 text-on-surface-variant">₹</span>
-                  <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary text-sm" required placeholder="0.00" />
+                  <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} disabled={tradeId} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 pl-8 pr-4 text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50" required placeholder="0.00" />
                 </div>
               </div>
             </div>
 
             <div>
               <label className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mb-1 block">Date *</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary" required />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} disabled={tradeId} className="w-full bg-surface-container-lowest border border-outline/20 rounded-lg py-3 px-4 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50" required />
             </div>
 
             <div className="mt-4 flex gap-3">
               {activeTab === 'EDIT' && (
-                <button type="button" onClick={() => setShowConfirm(true)} className="bg-error-container text-on-error-container px-4 py-3.5 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95 text-sm">
-                  Delete
+                <button type="button" onClick={() => setShowConfirm(true)} className="flex-1 bg-error-container text-on-error-container px-4 py-3.5 rounded-xl font-manrope font-bold hover:brightness-110 transition-all active:scale-95 text-sm">
+                  Delete Historical Trade
                 </button>
               )}
-              <button type="submit" className="flex-1 bg-primary-container text-on-primary py-3.5 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95 text-sm">
-                {activeTab === 'EDIT' ? 'Save Changes' : `Execute ${type}`}
-              </button>
+              {!tradeId && (
+                <button type="submit" className="flex-1 bg-primary-container text-on-primary py-3.5 rounded-xl font-manrope font-bold shadow-xl shadow-primary-container/20 hover:brightness-110 transition-all active:scale-95 text-sm">
+                  Execute {type}
+                </button>
+              )}
             </div>
           </form>
         )}
@@ -148,7 +142,7 @@ const InvestmentTradeForm = ({ onClose, investment, initialTradeData }) => {
                   <div key={trade.id} onClick={() => startEdit(trade)} className={`cursor-pointer flex items-center justify-between p-3 rounded-lg border border-outline/10 hover:border-outline/30 transition-all ${trade.type === 'buy_investment' ? 'bg-[#95CD41]/5' : 'bg-error/5'}`}>
                      <div>
                         <div className="flex gap-2 items-center">
-                           <span className={`text-[10px] uppercase tracking-wider font-bold ${trade.type === 'buy_investment' ? 'text-[#95CD41]' : 'text-error'}`}>{trade.type === 'buy_investment' ? 'BUY' : 'SELL'}</span>
+                           <span className={`text-[10px] uppercase tracking-wider font-bold ${trade.type === 'buy_investment' || trade.type === 'BUY' ? 'text-[#95CD41]' : 'text-error'}`}>{trade.type === 'buy_investment' || trade.type === 'BUY' ? 'BUY' : 'SELL'}</span>
                            <span className="text-sm font-bold">{trade.shares} <span className="text-xs text-outline font-normal">units</span></span>
                         </div>
                         <span className="text-[10px] text-on-surface-variant">{new Date(trade.date).toLocaleDateString()}</span>

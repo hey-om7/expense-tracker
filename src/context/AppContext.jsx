@@ -19,7 +19,7 @@ export const AppProvider = ({ children }) => {
     const { _id, __v, ...rest } = doc;
     return { ...rest, id: _id };
   };
-  const normalizeList = (list) => list.map(normalize);
+  const normalizeList = (list) => Array.isArray(list) ? list.map(normalize) : [];
 
   // ─── Initial Data Load ───
   useEffect(() => {
@@ -87,52 +87,80 @@ export const AppProvider = ({ children }) => {
     .filter(t => (t.type === 'expense') && new Date(t.date).getMonth() === new Date().getMonth() && new Date(t.date).getFullYear() === new Date().getFullYear())
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  // ─── Compute Live Investments ───
+  // ─── Live Investments ───
+  // Since the backend now computes totalQuantity and avgBuyPrice from holdings,
+  // we just use the investments array directly.
   const derivedInvestments = useMemo(() => {
     return investments.map(inv => {
-      const trades = transactions.filter(t => t.investmentId === inv.id && (t.type === 'buy_investment' || t.type === 'sell_investment'));
-
-      let totalShares = 0;
-      let totalCostBase = 0;
-      let realizedProfit = 0;
-
-      const sortedTrades = [...trades].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-      sortedTrades.forEach(trade => {
-        const tradeShares = parseFloat(trade.shares || 0);
-        const tradePrice = parseFloat(trade.price || 0);
-
-        if (trade.type === 'buy_investment') {
-          const tempCost = totalShares * (totalShares > 0 ? totalCostBase / totalShares : 0);
-          const purchaseCost = tradeShares * tradePrice;
-          totalShares += tradeShares;
-          totalCostBase = totalShares > 0 ? tempCost + purchaseCost : 0;
-        } else if (trade.type === 'sell_investment') {
-          const currentAvgCost = totalShares > 0 ? totalCostBase / totalShares : 0;
-          realizedProfit += (tradePrice - currentAvgCost) * tradeShares;
-          totalShares -= tradeShares;
-          totalCostBase = totalShares * currentAvgCost;
-        }
-      });
-
-      const avgCost = totalShares > 0 ? totalCostBase / totalShares : 0;
-      const unrealizedProfit = (inv.currentPrice - avgCost) * totalShares;
+      const shares = inv.totalQuantity || 0;
+      const avgCost = inv.avgBuyPrice || 0;
+      const unrealizedProfit = (inv.currentPrice - avgCost) * shares;
 
       return {
         ...inv,
-        shares: totalShares,
+        shares,
         avgCost,
-        realizedProfit,
         unrealizedProfit,
-        trades: sortedTrades,
+        // In backend we compute realizedProfit.
+        realizedProfit: inv.realizedProfit || 0,
+        // Frontend uses trades property in the history tab, map from holdings
+        trades: [...(inv.holdings || [])].sort((a, b) => new Date(a.date) - new Date(b.date)).map(h => ({
+          ...h,
+          id: h._id,
+          shares: h.quantity, // map quantity -> shares for the UI
+        })),
       };
     });
-  }, [investments, transactions]);
+  }, [investments]);
 
   const totalPortfolioValue = derivedInvestments.reduce((acc, curr) => acc + (curr.shares * curr.currentPrice), 0);
   const totalInvested = derivedInvestments.reduce((acc, curr) => acc + (curr.shares * curr.avgCost), 0);
   const totalRealizedProfit = derivedInvestments.reduce((acc, curr) => acc + (curr.realizedProfit || 0), 0);
   const totalUnrealizedProfit = derivedInvestments.reduce((acc, curr) => acc + (curr.unrealizedProfit || 0), 0);
+
+  // ─── Notification Actions ───
+  const getCategory = (id) => categories.find(c => c.id === id);
+
+  const addNotification = useCallback(async (n) => {
+    try {
+      const saved = await api.createNotification({ ...n, date: new Date().toISOString(), isRead: false });
+      setNotifications(prev => [normalize(saved), ...prev]);
+
+      // OS Notification Trigger
+      if ('Notification' in window && Notification.permission === 'granted') {
+         new Notification(n.title, { body: n.message, icon: '/favicon.ico' });
+      }
+    } catch (err) {
+      console.error('Failed to add notification:', err);
+    }
+  }, []);
+
+  const markAsRead = useCallback(async (id) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
+    }
+  }, []);
+
+  const clearNotifications = useCallback(async () => {
+    try {
+      await api.clearAllNotifications();
+      setNotifications([]);
+    } catch (err) {
+      console.error('Failed to clear notifications:', err);
+    }
+  }, []);
 
   // ─── Transaction Actions ───
   const addTransaction = useCallback(async (t) => {
@@ -213,53 +241,55 @@ export const AppProvider = ({ children }) => {
   const deleteInvestment = useCallback(async (id) => {
     try {
       await api.deleteInvestment(id);
-      await api.deleteTransactionsByInvestment(id);
       setInvestments(prev => prev.filter(i => i.id !== id));
+      // Transactions are independent now, but filter them out in UI just in case
       setTransactions(prev => prev.filter(t => t.investmentId !== id));
     } catch (err) {
       console.error('Failed to delete investment:', err);
     }
   }, []);
 
-  const executeTrade = useCallback(async (investmentId, trade, existingTradeId = null) => {
-    const inv = derivedInvestments.find(i => i.id === investmentId);
-    if (!inv) return;
-
-    if (trade.type === 'SELL') {
-      let availableShares = inv.shares;
-      if (existingTradeId) {
-        const oldTrade = inv.trades.find(t => t.id === existingTradeId);
-        if (oldTrade && oldTrade.type === 'sell_investment') availableShares += oldTrade.shares;
-      }
-      if (parseFloat(trade.shares) > availableShares) {
-        await addNotification({ title: 'Trade Failed', message: 'You cannot sell more shares than you hold globally.' });
-        return;
-      }
-    }
-
-    const payload = {
-      investmentId,
-      shares: parseFloat(trade.shares),
-      price: parseFloat(trade.price),
-      amount: parseFloat(trade.shares) * parseFloat(trade.price),
-      type: trade.type === 'BUY' ? 'buy_investment' : 'sell_investment',
-      date: trade.date || new Date().toISOString(),
-      categoryId: 'trade',
-      title: `${trade.type === 'BUY' ? 'Bought' : 'Sold'} ${trade.shares} units of ${inv.name}`,
-    };
-
+  const executeTradeOnInvestment = useCallback(async (investmentId, tradeData) => {
     try {
-      if (existingTradeId) {
-        await updateTransaction(existingTradeId, payload);
-        await addNotification({ title: 'Trade Updated', message: `Updated execution for ${inv.name}` });
-      } else {
-        await addTransaction(payload);
-        await addNotification({ title: 'Trade Executed', message: `Successfully ${trade.type === 'BUY' ? 'bought' : 'sold'} units of ${inv.name}` });
-      }
+      const updatedInv = await api.executeInvestmentTrade(investmentId, {
+        type: tradeData.type,
+        quantity: parseFloat(tradeData.shares), // tradeData uses "shares" in UI
+        price: parseFloat(tradeData.price),
+        date: tradeData.date
+      });
+      // Replace the investment with the newly saved/computed one from the backend
+      // But wait! The router we wrote returns the raw saved doc. We need to refetch it 
+      // or compute locally. It's safer to refetch investments.
+      const freshInvestments = await api.fetchInvestments();
+      setInvestments(normalizeList(freshInvestments));
+      
+      // Also refetch transactions because we just created a parallel tx
+      const txs = await api.fetchTransactions();
+      setTransactions(normalizeList(txs));
+
+      await addNotification({ title: 'Trade Executed', message: `Successfully ${tradeData.type === 'BUY' ? 'bought' : 'sold'} units` });
     } catch (err) {
       console.error('Failed to execute trade:', err);
+      // Wait, we need to handle "Cannot sell more than held", maybe throw error back
+      throw err;
     }
-  }, [derivedInvestments, addTransaction, updateTransaction]);
+  }, [addNotification]);
+
+  const deleteHolding = useCallback(async (investmentId, holdingId) => {
+    try {
+      await api.deleteInvestmentHolding(investmentId, holdingId);
+      // Refetch data
+      const [freshInvestments, txs] = await Promise.all([
+        api.fetchInvestments(),
+        api.fetchTransactions()
+      ]);
+      setInvestments(normalizeList(freshInvestments));
+      setTransactions(normalizeList(txs));
+      await addNotification({ title: 'Trade Reversed', message: `Historical trade deleted.` });
+    } catch (err) {
+      console.error('Failed to delete holding:', err);
+    }
+  }, [addNotification]);
 
   // ─── Subscription Actions ───
   const addSubscription = useCallback(async (s) => {
@@ -318,49 +348,7 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
-  // ─── Notification Actions ───
-  const getCategory = (id) => categories.find(c => c.id === id);
 
-  const addNotification = useCallback(async (n) => {
-    try {
-      const saved = await api.createNotification({ ...n, date: new Date().toISOString(), isRead: false });
-      setNotifications(prev => [normalize(saved), ...prev]);
-
-      // OS Notification Trigger
-      if ('Notification' in window && Notification.permission === 'granted') {
-         new Notification(n.title, { body: n.message, icon: '/favicon.ico' });
-      }
-    } catch (err) {
-      console.error('Failed to add notification:', err);
-    }
-  }, []);
-
-  const markAsRead = useCallback(async (id) => {
-    try {
-      await api.markNotificationRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-    }
-  }, []);
-
-  const markAllAsRead = useCallback(async () => {
-    try {
-      await api.markAllNotificationsRead();
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch (err) {
-      console.error('Failed to mark all as read:', err);
-    }
-  }, []);
-
-  const clearNotifications = useCallback(async () => {
-    try {
-      await api.clearAllNotifications();
-      setNotifications([]);
-    } catch (err) {
-      console.error('Failed to clear notifications:', err);
-    }
-  }, []);
 
   // ─── Loading / Error States ───
   if (loading) {
@@ -395,7 +383,7 @@ export const AppProvider = ({ children }) => {
       totalBalance, monthlySpent, totalPortfolioValue, totalInvested, totalRealizedProfit, totalUnrealizedProfit,
       addTransaction, updateTransaction, deleteTransaction,
       addCategory, updateCategory, deleteCategory, getCategory,
-      addInvestment, updateInvestment, deleteInvestment, executeTrade,
+      addInvestment, updateInvestment, deleteInvestment, executeTradeOnInvestment, deleteHolding,
       addSubscription, updateSubscription, deleteSubscription,
       addCreditCard, updateCreditCard, deleteCreditCard,
       addNotification, markAsRead, markAllAsRead, clearNotifications

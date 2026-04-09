@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { sendAiChat } from '../../services/api';
+import { sendAiChat, fetchSettings } from '../../services/api';
 
 const AiChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [messages, setMessages] = useState([
     { role: 'ai', text: 'Hey! I\'m Wallo AI — your personal finance assistant. Ask me anything about your spending, investments, or subscriptions. 💰' }
   ]);
@@ -10,6 +11,16 @@ const AiChatbot = () => {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await fetchSettings();
+        if (settings && settings.aiEnabled === false) setAiEnabled(false);
+      } catch (err) {}
+    };
+    loadSettings();
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,6 +65,8 @@ const AiChatbot = () => {
       .replace(/`(.*?)`/g, '<code style="background:rgba(229,186,115,0.15);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>')
       .replace(/\n/g, '<br/>');
   };
+
+  if (!aiEnabled) return null;
 
   return (
     <>

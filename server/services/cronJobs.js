@@ -3,6 +3,7 @@ const Subscription = require('../models/Subscription');
 const CreditCard = require('../models/CreditCard');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const UserPreferences = require('../models/UserPreferences');
 const { sendEmail } = require('./emailService');
 
 /**
@@ -63,6 +64,8 @@ const processSubscriptions = async () => {
 
     if (shouldNotify) {
       const user = await User.findById(sub.userId).select('email name');
+      const prefs = await UserPreferences.findOne({ userId: sub.userId }).lean();
+      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false; // Default true
 
       // In-app notification
       await new Notification({
@@ -74,12 +77,16 @@ const processSubscriptions = async () => {
       }).save();
 
       // Email notification
-      if (user?.email) {
-        await sendEmail(
-          user.email,
-          `Wallo Reminder: ${sub.name}`,
-          buildReminderEmail(user.name || 'there', notifMessage)
-        );
+      if (user?.email && sendEmailNotif) {
+        try {
+          await sendEmail(
+            user.email,
+            `Wallo Reminder: ${sub.name}`,
+            buildReminderEmail(user.name || 'there', notifMessage)
+          );
+        } catch (emailErr) {
+          console.error(`Failed to send email to ${user.email}:`, emailErr.message);
+        }
       }
 
       // Mark as sent today
@@ -147,6 +154,9 @@ const processCreditCards = async () => {
 
     if (isSameDay(dueDate, tomorrow)) {
       const user = await User.findById(card.userId).select('email name');
+      const prefs = await UserPreferences.findOne({ userId: card.userId }).lean();
+      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false; // Default true
+      
       const msg = `Your "${card.name}" (****${card.last4Digits}) credit card bill is due tomorrow (${dueDate.toLocaleDateString('en-IN')}).`;
 
       // In-app notification
@@ -159,12 +169,16 @@ const processCreditCards = async () => {
       }).save();
 
       // Email notification
-      if (user?.email) {
-        await sendEmail(
-          user.email,
-          `Wallo Reminder: ${card.name} Bill Due`,
-          buildReminderEmail(user.name || 'there', msg)
-        );
+      if (user?.email && sendEmailNotif) {
+        try {
+          await sendEmail(
+            user.email,
+            `Wallo Reminder: ${card.name} Bill Due`,
+            buildReminderEmail(user.name || 'there', msg)
+          );
+        } catch (emailErr) {
+          console.error(`Failed to send email to ${user.email}:`, emailErr.message);
+        }
       }
 
       // Mark as sent today

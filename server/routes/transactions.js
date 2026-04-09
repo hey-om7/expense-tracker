@@ -8,7 +8,7 @@ router.use(auth);
 
 // Whitelist allowed fields
 const pickFields = (body) => {
-  const allowed = ['type', 'amount', 'title', 'notes', 'categoryId', 'date', 'investmentId', 'subscriptionId', 'shares', 'price'];
+  const allowed = ['type', 'amount', 'title', 'notes', 'categoryId', 'date', 'investmentId', 'subscriptionId'];
   const clean = {};
   for (const key of allowed) {
     if (body[key] !== undefined) clean[key] = body[key];
@@ -72,14 +72,4 @@ router.delete('/:id', validateId, async (req, res) => {
     res.status(500).json({ message: 'Failed to delete transaction' });
   }
 });
-
-router.delete('/investment/:investmentId', validateId, async (req, res) => {
-  try {
-    await Transaction.deleteMany({ investmentId: req.params.investmentId, userId: req.userId });
-    res.json({ message: 'Deleted all trades for investment' });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to delete investment trades' });
-  }
-});
-
 module.exports = router;

@@ -10,6 +10,7 @@ import InvestmentsScreen from './pages/Investments';
 import AnalyticsScreen from './pages/Analytics';
 import CategoriesScreen from './pages/Categories';
 import CyclicScreen from './pages/Cyclic';
+import SettingsScreen from './pages/Settings';
 import LoginScreen from './pages/Login';
 import RegisterScreen from './pages/Register';
 import ToastContainer from './components/ui/ToastContainer';
@@ -37,6 +38,7 @@ function App() {
                       <Route path="/cyclic" element={<CyclicScreen />} />
                       <Route path="/analytics" element={<AnalyticsScreen />} />
                       <Route path="/categories" element={<CategoriesScreen />} />
+                      <Route path="/settings" element={<SettingsScreen />} />
                     </Routes>
                     <ToastContainer />
                   </Layout>

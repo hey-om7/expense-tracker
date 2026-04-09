@@ -8,11 +8,8 @@ const transactionSchema = new mongoose.Schema({
   notes: { type: String, default: '', maxlength: 500 },
   categoryId: { type: String, default: '', maxlength: 50 },
   date: { type: Date, default: Date.now },
-  // Investment-specific fields
   investmentId: { type: String, default: null },
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', default: null },
-  shares: { type: Number, default: null },
-  price: { type: Number, default: null },
 }, { timestamps: true });
 
 // Compound indexes for production query performance

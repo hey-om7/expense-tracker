@@ -16,6 +16,7 @@ const BottomNav = () => {
   const moreItems = [
     { path: '/cyclic', icon: 'autorenew', label: 'Cyclic' },
     { path: '/categories', icon: 'category', label: 'Categories' },
+    { path: '/settings', icon: 'settings', label: 'Settings' },
   ];
 
   return (

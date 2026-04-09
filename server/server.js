@@ -120,6 +120,7 @@ app.use('/api/credit-cards', require('./routes/creditCards'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/stocks', require('./routes/stocks'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/settings', require('./routes/settings'));
 
 // ─── Health check ───
 app.get('/api/health', (_req, res) => {
