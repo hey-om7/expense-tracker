@@ -44,7 +44,8 @@ router.put('/', async (req, res) => {
           emailAlertsEnabled: Boolean(emailAlertsEnabled)
         }
       },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      // CHANGED: new: true is replaced with returnDocument: 'after'
+      { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
     
     res.json(prefs);
