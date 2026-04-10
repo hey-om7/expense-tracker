@@ -5,6 +5,8 @@ import Modal from '../components/ui/Modal';
 import AddInvestmentForm from '../components/forms/AddInvestmentForm';
 import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
 
+import * as api from '../services/api';
+
 const InvestmentsScreen = () => {
   const { investments, updateInvestment } = useAppContext();
 
@@ -35,12 +37,13 @@ const InvestmentsScreen = () => {
               latestPrice = parseFloat(data.data[0].nav);
             }
           } else if (inv.type === 'Stock') {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/stocks/quote/${encodeURIComponent(inv.symbol)}`);
-            if (response.ok) {
-              const data = await response.json();
+            try {
+              const data = await api.fetchStockQuote(inv.symbol);
               if (data && data.price) {
                 latestPrice = parseFloat(data.price);
               }
+            } catch (err) {
+              console.error(`Failed to fetch stock quote for ${inv.symbol}:`, err);
             }
           }
 
