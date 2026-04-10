@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Lock, LogOut, CheckCircle } from 'lucide-react';
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 5 minutes
 
 // --- Bulletproof Storage Helper Functions ---
 let sessionMemoryPin = null; 

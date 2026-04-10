@@ -6,6 +6,7 @@ const SettingsScreen = () => {
   const { addNotification } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [hasPin, setHasPin] = useState(false); // ADDED: State to track if a PIN exists
   const [settings, setSettings] = useState({
     aiEnabled: true,
     aiModel: 'gemini-2.5-flash',
@@ -34,6 +35,14 @@ const SettingsScreen = () => {
       }
     };
     loadSettings();
+
+    // ADDED: Check if PIN exists in LocalStorage or Cookies
+    const checkPinExists = () => {
+      const localPin = localStorage.getItem('wallo_app_pin');
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)wallo_app_pin=([^;]*)/);
+      setHasPin(!!(localPin || (cookieMatch && cookieMatch[1])));
+    };
+    checkPinExists();
   }, []);
 
   const handleChange = (e) => {
@@ -42,6 +51,24 @@ const SettingsScreen = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  // ADDED: Function to handle PIN reset
+  const handleResetPin = () => {
+    if (window.confirm('Are you sure you want to reset your App PIN? You will be prompted to create a new one next time the app locks.')) {
+      // Clear LocalStorage
+      localStorage.removeItem('wallo_app_pin');
+      // Clear Cookie by expiring it
+      document.cookie = "wallo_app_pin=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      // Clear Session Lock State
+      sessionStorage.removeItem('wallo_is_locked');
+      
+      setHasPin(false);
+      addNotification({
+        title: 'PIN Reset',
+        message: 'Your App PIN has been securely removed.'
+      });
+    }
   };
 
   const handleSave = async (e) => {
@@ -133,7 +160,6 @@ const SettingsScreen = () => {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">AI Model</label>
                   <select name="aiModel" value={settings.aiModel} onChange={handleChange} className="w-full bg-surface-container-lowest border border-outline/20 rounded-xl py-3 px-4 text-on-surface text-sm focus:outline-none focus:border-primary appearance-none cursor-pointer">
-                    {/* EDITED: Grouped Gemini and Groq models */}
                     <optgroup label="Google Gemini">
                       <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
                       <option value="gemini-2.5-pro">Gemini 2.5 Pro (Higher Quality)</option>
@@ -141,13 +167,12 @@ const SettingsScreen = () => {
                     </optgroup>
                     <optgroup label="Groq (Ultra-Fast)">
                       <option value="llama-3.1-8b-instant">Llama 3.1 8B (Instant)</option>
-    <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Versatile)</option>
-    <option value="mixtral-8x7b-32768">Mixtral 8x7B (Large Context)</option>
+                      <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Versatile)</option>
+                      <option value="mixtral-8x7b-32768">Mixtral 8x7B (Large Context)</option>
                     </optgroup>
                   </select>
                 </div>
                 
-                {/* EDITED: Dynamic UI for API Key based on selected model */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">
                     {isGroqModel ? 'Groq API Key' : 'Gemini API Key'} <span className="text-error text-[10px] normal-case font-semibold">*Required</span>
@@ -209,6 +234,33 @@ const SettingsScreen = () => {
             </div>
           </label>
           <p className="text-[10px] text-outline mt-3 italic">Note: In-app notifications are always enabled and cannot be turned off.</p>
+        </section>
+
+        {/* ADDED: Security Settings */}
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="material-symbols-outlined text-primary text-3xl">lock_reset</span>
+            <h2 className="font-headline font-bold text-xl text-on-surface">Security Settings</h2>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-bold text-on-surface mb-1">App Lock PIN</span>
+              <span className="block text-xs text-on-surface-variant max-w-md">
+                {hasPin 
+                  ? 'A PIN is currently set to protect your app from unauthorized access.' 
+                  : 'No PIN is currently set. The app will prompt you to create one after inactivity.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetPin}
+              disabled={!hasPin}
+              className="shrink-0 bg-error-container/20 text-error px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-error-container/40 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-error/20"
+            >
+              Reset PIN
+            </button>
+          </div>
         </section>
 
         {/* Save Button */}
