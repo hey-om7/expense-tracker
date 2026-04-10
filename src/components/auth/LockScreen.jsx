@@ -12,7 +12,6 @@ const setSavedPin = (pin) => {
   try {
     localStorage.setItem('wallo_app_pin', pin);
     document.cookie = `wallo_app_pin=${pin}; max-age=31536000; path=/`;
-    console.log('✅ PIN successfully saved to storage.');
   } catch (err) {
     console.error('❌ Browser blocked saving to LocalStorage:', err);
   }
@@ -41,11 +40,23 @@ const getSavedPin = () => {
   return null;
 };
 
+// --- Initial State Helper ---
+// Checks if the user explicitly unlocked the app during this browser session
+const getInitialLockState = () => {
+  const hasPin = !!getSavedPin();
+  if (!hasPin) return false; // If no PIN exists, don't lock on refresh (wait for timer to trigger setup)
+  
+  const sessionLockState = sessionStorage.getItem('wallo_is_locked');
+  if (sessionLockState === 'false') return false; // User already unlocked it in this tab
+  
+  return true; // Default to locked if they have a PIN and haven't unlocked this session
+};
+
 const LockScreen = () => {
   const { logout } = useAuth();
   
-  // FIX: Start locked immediately on refresh if a PIN already exists
-  const [isLocked, setIsLocked] = useState(() => !!getSavedPin());
+  // FIX: Read from sessionStorage on initial load
+  const [isLocked, setIsLocked] = useState(getInitialLockState);
   const [isSetupMode, setIsSetupMode] = useState(false);
   
   const [digits, setDigits] = useState(['', '', '', '']);
@@ -61,8 +72,14 @@ const LockScreen = () => {
   const lockApp = useCallback(() => {
     const hasPin = !!getSavedPin();
     setIsLocked(true);
+    sessionStorage.setItem('wallo_is_locked', 'true'); // Save locked state to session
     setIsSetupMode(!hasPin);
     setStep(1);
+  }, []);
+
+  const unlockApp = useCallback(() => {
+    setIsLocked(false);
+    sessionStorage.setItem('wallo_is_locked', 'false'); // Save unlocked state to session
   }, []);
 
   const resetTimer = useCallback(() => {
@@ -88,7 +105,7 @@ const LockScreen = () => {
 
     const handleResize = () => {
       if (window.innerWidth <= 768 && isLocked) {
-        setIsLocked(false);
+        unlockApp();
         if (timerRef.current) clearTimeout(timerRef.current);
       } else if (window.innerWidth > 768 && !isLocked) {
         resetTimer();
@@ -102,9 +119,8 @@ const LockScreen = () => {
       window.removeEventListener('resize', handleResize);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [resetTimer, isLocked]);
+  }, [resetTimer, isLocked, unlockApp]);
 
-  // FIX: Removed 'step' and 'isSetupMode' from dependencies so it doesn't wipe the PIN during setup!
   useEffect(() => {
     if (isLocked) {
       setDigits(['', '', '', '']);
@@ -125,7 +141,7 @@ const LockScreen = () => {
       } else {
         if (setupFirstPin === enteredPin) {
           setSavedPin(enteredPin);
-          setIsLocked(false);
+          unlockApp();
           resetTimer();
         } else {
           setError('PINs do not match. Try again.');
@@ -139,7 +155,7 @@ const LockScreen = () => {
     } else {
       const storedPin = getSavedPin();
       if (enteredPin === storedPin) {
-        setIsLocked(false);
+        unlockApp();
         resetTimer();
       } else {
         setError('Incorrect PIN');
@@ -183,7 +199,7 @@ const LockScreen = () => {
   };
 
   const handleLogout = () => {
-    setIsLocked(false);
+    unlockApp();
     logout();
   };
 
@@ -191,7 +207,8 @@ const LockScreen = () => {
 
   return (
     <div 
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm text-on-surface transition-transform duration-400 ease-in-out ${
+      // FIX: Increased blur from backdrop-blur-sm to backdrop-blur-xl and lowered background opacity
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/80 backdrop-blur-xl text-on-surface transition-transform duration-400 ease-in-out ${
         isLocked ? 'translate-y-0' : '-translate-y-full'
       }`}
       style={{ pointerEvents: isLocked ? 'auto' : 'none' }}
