@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import LockScreen from './components/auth/LockScreen';
 import Layout from './components/layout/Layout';
 import DashboardScreen from './pages/Dashboard';
 import TransactionsScreen from './pages/Transactions';
@@ -30,6 +31,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppProvider>
+                  <LockScreen />
                   <Layout>
                     <Routes>
                       <Route path="/" element={<DashboardScreen />} />
