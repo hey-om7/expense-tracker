@@ -80,7 +80,7 @@ Here is ${userName || 'the user'}'s current financial data:
 === CATEGORIES ===
 ${cat}
 
-=== TRANSACTIONS (Recent 50) ===
+=== TRANSACTIONS ===
 ${tx}
 
 === INVESTMENTS ===
@@ -102,27 +102,54 @@ function buildCategoriesSummary(categories) {
 
 function buildTransactionSummary(transactions) {
   if (transactions.length === 0) return 'No transactions recorded yet.';
-  const recent = transactions.slice(0, 50);
-  const totalIncome = recent.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = recent.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const lines = recent.map(t =>
-    `- ${new Date(t.date).toLocaleDateString('en-IN')}: ${t.type.toUpperCase()} ₹${t.amount} — ${t.title || 'Untitled'}${t.notes ? ` (${t.notes})` : ''}`
-  );
-  return `Total Income (recent): ₹${totalIncome.toFixed(2)}\nTotal Expenses (recent): ₹${totalExpense.toFixed(2)}\n${lines.join('\n')}`;
+  
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  
+  // Sort chronologically (oldest to newest) so the AI understands time progression
+  const sortedTxs = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const lines = sortedTxs.map(t => {
+    const txDate = t.date ? new Date(t.date).toLocaleDateString('en-IN') : 'Unknown Date';
+    // If you populate categories, this will grab the name, otherwise it falls back to title
+    const categoryInfo = t.category?.name ? ` | Category: ${t.category.name}` : '';
+    const notesInfo = t.notes ? ` | Notes: ${t.notes}` : '';
+    
+    return `- Date: ${txDate} | Type: ${t.type.toUpperCase()} | Amount: ₹${t.amount} | Title: ${t.title || 'Untitled'}${categoryInfo}${notesInfo}`;
+  });
+
+  return `Total Income: ₹${totalIncome.toFixed(2)}\nTotal Expenses: ₹${totalExpense.toFixed(2)}\n\nTransaction History (Chronological):\n${lines.join('\n')}`;
 }
 
 function buildInvestmentSummary(investments) {
   if (investments.length === 0) return 'No investments tracked.';
+  
   return investments.map(i => {
     let quantity = 0;
+    let historyLines = [];
+    
     if (i.holdings && Array.isArray(i.holdings)) {
-      i.holdings.forEach(h => {
+      // 1. Sort holdings strictly by date (oldest first) so AI knows the timeline
+      const sortedHoldings = [...i.holdings].sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      sortedHoldings.forEach(h => {
         if (h.type === 'BUY') quantity += h.quantity || 0;
         if (h.type === 'SELL') quantity -= h.quantity || 0;
+        
+        // 2. Explicitly extract and label the holding's date
+        const txDate = h.date ? new Date(h.date).toLocaleDateString('en-IN') : 'Unknown Date';
+        
+        historyLines.push(`    - ${h.type}: ${h.quantity} units @ ₹${h.price || 0} (Transaction Date: ${txDate})`);
       });
     }
-    return `- ${i.name} (${i.type}): ${quantity} units @ Live Nav ₹${i.currentPrice || 0} | Symbol: ${i.symbol || 'N/A'}`;
-  }).join('\n');
+    
+    let summary = `- ${i.name} (${i.type}): Total ${quantity} units @ Live Nav ₹${i.currentPrice || 0} | Symbol: ${i.symbol || 'N/A'}`;
+    
+    if (historyLines.length > 0) {
+      summary += `\n  History (Chronological):\n${historyLines.join('\n')}`;
+    }
+    return summary;
+  }).join('\n\n');
 }
 
 function buildSubscriptionSummary(subscriptions) {
