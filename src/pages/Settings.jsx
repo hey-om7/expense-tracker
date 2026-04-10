@@ -10,6 +10,7 @@ const SettingsScreen = () => {
     aiEnabled: true,
     aiModel: 'gemini-2.5-flash',
     geminiApiKey: '',
+    groqApiKey: '',
     emailAlertsEnabled: true,
   });
 
@@ -22,6 +23,7 @@ const SettingsScreen = () => {
             aiEnabled: data.aiEnabled,
             aiModel: data.aiModel || 'gemini-2.5-flash',
             geminiApiKey: data.geminiApiKey || '',
+            groqApiKey: data.groqApiKey || '', 
             emailAlertsEnabled: data.emailAlertsEnabled ?? true,
           });
         }
@@ -45,13 +47,24 @@ const SettingsScreen = () => {
   const handleSave = async (e) => {
     e.preventDefault();
 
-    // Validate: if AI is enabled, API key is required
-    if (settings.aiEnabled && !settings.geminiApiKey.trim()) {
-      addNotification({
-        title: 'API Key Required',
-        message: 'Please enter your Gemini API key to enable AI features.'
-      });
-      return;
+    const isGroqModel = settings.aiModel.includes('llama') || settings.aiModel.includes('mixtral');
+
+    // Validate the correct API key based on the selected model
+    if (settings.aiEnabled) {
+      if (isGroqModel && !settings.groqApiKey.trim()) {
+        addNotification({
+          title: 'API Key Required',
+          message: 'Please enter your Groq API key to use Groq models.'
+        });
+        return;
+      }
+      if (!isGroqModel && !settings.geminiApiKey.trim()) {
+        addNotification({
+          title: 'API Key Required',
+          message: 'Please enter your Gemini API key to use Gemini models.'
+        });
+        return;
+      }
     }
 
     setSaving(true);
@@ -85,6 +98,9 @@ const SettingsScreen = () => {
     );
   }
 
+  // Helper to determine which key UI to show
+  const isGroqModel = settings.aiModel.includes('llama') || settings.aiModel.includes('mixtral');
+
   return (
     <main className="pt-24 pb-32 px-6 max-w-3xl mx-auto min-h-screen">
       <h1 className="font-headline font-extrabold text-4xl text-on-surface mb-8">Settings</h1>
@@ -117,25 +133,34 @@ const SettingsScreen = () => {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">AI Model</label>
                   <select name="aiModel" value={settings.aiModel} onChange={handleChange} className="w-full bg-surface-container-lowest border border-outline/20 rounded-xl py-3 px-4 text-on-surface text-sm focus:outline-none focus:border-primary appearance-none cursor-pointer">
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Higher Quality)</option>
-                    <option value="gemini-pro-latest">Gemini Pro Latest (General)</option>
+                    {/* EDITED: Grouped Gemini and Groq models */}
+                    <optgroup label="Google Gemini">
+                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
+                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Higher Quality)</option>
+                      <option value="gemini-pro-latest">Gemini Pro Latest (General)</option>
+                    </optgroup>
+                    <optgroup label="Groq (Ultra-Fast)">
+                      <option value="llama-3.1-8b-instant">Llama 3.1 8B (Instant)</option>
+    <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Versatile)</option>
+    <option value="mixtral-8x7b-32768">Mixtral 8x7B (Large Context)</option>
+                    </optgroup>
                   </select>
                 </div>
                 
+                {/* EDITED: Dynamic UI for API Key based on selected model */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                    Gemini API Key <span className="text-error text-[10px] normal-case font-semibold">*Required</span>
+                    {isGroqModel ? 'Groq API Key' : 'Gemini API Key'} <span className="text-error text-[10px] normal-case font-semibold">*Required</span>
                   </label>
                   <input 
                     type="password" 
-                    name="geminiApiKey" 
-                    value={settings.geminiApiKey} 
+                    name={isGroqModel ? "groqApiKey" : "geminiApiKey"} 
+                    value={isGroqModel ? settings.groqApiKey : settings.geminiApiKey} 
                     onChange={handleChange} 
-                    placeholder="AIzaSy..." 
+                    placeholder={isGroqModel ? "gsk_..." : "AIzaSy..."} 
                     required={settings.aiEnabled}
                     className={`w-full bg-surface-container-lowest border rounded-xl py-3 px-4 text-on-surface text-sm focus:outline-none focus:border-primary ${
-                      settings.aiEnabled && !settings.geminiApiKey.trim() 
+                      settings.aiEnabled && (isGroqModel ? !settings.groqApiKey.trim() : !settings.geminiApiKey.trim())
                         ? 'border-error/40' 
                         : 'border-outline/20'
                     }`}
@@ -143,20 +168,20 @@ const SettingsScreen = () => {
                   <div className="flex items-center justify-between mt-2">
                     <p className="text-[10px] text-on-surface-variant">Your API key is stored securely in your database profile.</p>
                     <a 
-                      href="https://aistudio.google.com/app/api-keys/" 
+                      href={isGroqModel ? "https://console.groq.com/keys" : "https://aistudio.google.com/app/api-keys/"} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors shrink-0"
                     >
                       <span className="material-symbols-outlined text-sm">open_in_new</span>
-                      Get API Key
+                      Get {isGroqModel ? 'Groq' : 'Gemini'} API Key
                     </a>
                   </div>
-                  {settings.aiEnabled && !settings.geminiApiKey.trim() && (
+                  {settings.aiEnabled && (isGroqModel ? !settings.groqApiKey.trim() : !settings.geminiApiKey.trim()) && (
                     <div className="mt-3 flex items-start gap-2 bg-error-container/10 border border-error/15 rounded-lg px-3 py-2.5">
                       <span className="material-symbols-outlined text-error text-base mt-0.5">warning</span>
                       <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                        An API key is required for AI features. Get a free key from <a href="https://ai.google.dev/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ai.google.dev</a>.
+                        An API key is required for AI features. Get a free key from <a href={isGroqModel ? "https://console.groq.com/" : "https://ai.google.dev/"} target="_blank" rel="noopener noreferrer" className="text-primary underline">{isGroqModel ? 'console.groq.com' : 'ai.google.dev'}</a>.
                       </p>
                     </div>
                   )}
@@ -183,7 +208,7 @@ const SettingsScreen = () => {
               <div className="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-on-surface after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-all"></div>
             </div>
           </label>
-          <p className="text-[10px] text-outline mt-3 italice">Note: In-app notifications are always enabled and cannot be turned off.</p>
+          <p className="text-[10px] text-outline mt-3 italic">Note: In-app notifications are always enabled and cannot be turned off.</p>
         </section>
 
         {/* Save Button */}

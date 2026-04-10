@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk'); // ADDED GROQ IMPORT
 
 const getModel = (options = {}) => {
   const apiKey = options.apiKey;
@@ -12,39 +13,19 @@ const getModel = (options = {}) => {
   return ai.getGenerativeModel({ model: modelName });
 };
 
+// --- GEMINI SERVICE ---
 const chatWithGemini = async (userMessage, userData, options = {}) => {
   const model = getModel(options);
 
-  // Build financial context summary
   const catSummary = buildCategoriesSummary(userData.categories || []);
   const txSummary = buildTransactionSummary(userData.transactions || []);
   const invSummary = buildInvestmentSummary(userData.investments || []);
   const subSummary = buildSubscriptionSummary(userData.subscriptions || []);
   const ccSummary = buildCreditCardSummary(userData.creditCards || []);
 
-  const systemPrompt = `You are Wallo AI, a friendly and knowledgeable personal finance assistant embedded in the Wallo expense tracking app. You help users understand their spending, investments, subscriptions, and bills.
+  const systemPrompt = buildSystemPrompt(userData.userName, catSummary, txSummary, invSummary, subSummary, ccSummary);
 
-Always be helpful, concise, and actionable. Use ₹ (Indian Rupees) for currency. If you don't have enough data to answer, say so honestly. NEVER invent data or share other users' information.
-
-Here is ${userData.userName || 'the user'}'s current financial data:
-
-=== CATEGORIES ===
-${catSummary}
-
-=== TRANSACTIONS (Recent 50) ===
-${txSummary}
-
-=== INVESTMENTS ===
-${invSummary}
-
-=== SUBSCRIPTIONS ===
-${subSummary}
-
-=== CREDIT CARDS ===
-${ccSummary}
-
-Answer the user's question based on this data. Keep responses concise (under 300 words) and formatted for readability.`;
-  console.log(`AI Model hit: ${options.model || 'gemini-2.5-flash'}`);
+  console.log(`AI Model hit (Gemini): ${options.model || 'gemini-2.5-flash'}`);
   const result = await model.generateContent({
     contents: [
       { role: 'user', parts: [{ text: systemPrompt + '\n\nUser: ' + userMessage }] },
@@ -54,6 +35,65 @@ Answer the user's question based on this data. Keep responses concise (under 300
   const response = result.response;
   return response.text();
 };
+
+// --- GROQ SERVICE ---
+const chatWithGroq = async (userMessage, userData, options = {}) => {
+  const apiKey = options.apiKey;
+  if (!apiKey) {
+    throw new Error('No Groq API key configured. Please add your API key in Settings.');
+  }
+
+  const groq = new Groq({ apiKey });
+  const modelName = options.model || 'llama-3.1-8b-instant';
+
+  const catSummary = buildCategoriesSummary(userData.categories || []);
+  const txSummary = buildTransactionSummary(userData.transactions || []);
+  const invSummary = buildInvestmentSummary(userData.investments || []);
+  const subSummary = buildSubscriptionSummary(userData.subscriptions || []);
+  const ccSummary = buildCreditCardSummary(userData.creditCards || []);
+
+  const systemPrompt = buildSystemPrompt(userData.userName, catSummary, txSummary, invSummary, subSummary, ccSummary);
+
+  console.log(`AI Model hit (Groq): ${modelName}`);
+  
+  const chatCompletion = await groq.chat.completions.create({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage }
+    ],
+    model: modelName,
+    temperature: 0.7,
+    max_tokens: 1024,
+  });
+
+  return chatCompletion.choices[0]?.message?.content || 'No response from AI.';
+};
+
+// --- HELPER FUNCTIONS ---
+function buildSystemPrompt(userName, cat, tx, inv, sub, cc) {
+  return `You are Wallo AI, a friendly and knowledgeable personal finance assistant embedded in the Wallo expense tracking app. You help users understand their spending, investments, subscriptions, and bills.
+
+Always be helpful, concise, and actionable. Use ₹ (Indian Rupees) for currency. If you don't have enough data to answer, say so honestly. NEVER invent data or share other users' information.
+
+Here is ${userName || 'the user'}'s current financial data:
+
+=== CATEGORIES ===
+${cat}
+
+=== TRANSACTIONS (Recent 50) ===
+${tx}
+
+=== INVESTMENTS ===
+${inv}
+
+=== SUBSCRIPTIONS ===
+${sub}
+
+=== CREDIT CARDS ===
+${cc}
+
+Answer the user's question based on this data. Keep responses concise (under 300 words) and formatted for readability.`;
+}
 
 function buildCategoriesSummary(categories) {
   if (categories.length === 0) return 'No custom categories created.';
@@ -74,7 +114,6 @@ function buildTransactionSummary(transactions) {
 function buildInvestmentSummary(investments) {
   if (investments.length === 0) return 'No investments tracked.';
   return investments.map(i => {
-    // Compute quantity from holdings dynamically for AI representation
     let quantity = 0;
     if (i.holdings && Array.isArray(i.holdings)) {
       i.holdings.forEach(h => {
@@ -100,4 +139,4 @@ function buildCreditCardSummary(creditCards) {
   ).join('\n');
 }
 
-module.exports = { chatWithGemini };
+module.exports = { chatWithGemini, chatWithGroq };

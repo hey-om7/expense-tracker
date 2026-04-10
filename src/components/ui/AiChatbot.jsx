@@ -6,6 +6,8 @@ const AiChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [hasApiKey, setHasApiKey] = useState(true);
+  // State to track which model the user chose
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash'); 
   const [messages, setMessages] = useState([
     { role: 'ai', text: 'Hey! I\'m Wallo AI — your personal finance assistant. Ask me anything about your spending, investments, or subscriptions. 💰' }
   ]);
@@ -20,8 +22,22 @@ const AiChatbot = () => {
         const settings = await fetchSettings();
         if (settings) {
           if (settings.aiEnabled === false) setAiEnabled(false);
-          if (!settings.geminiApiKey || settings.geminiApiKey.trim().length === 0) {
-            setHasApiKey(false);
+          
+          // Save the model to state so we can update the UI
+          const modelName = settings.aiModel || 'gemini-2.5-flash';
+          setSelectedModel(modelName);
+
+          const isGroqModel = modelName.includes('llama') || modelName.includes('mixtral');
+
+          // Check the correct API key based on the model
+          if (isGroqModel) {
+            if (!settings.groqApiKey || settings.groqApiKey.trim().length === 0) {
+              setHasApiKey(false);
+            }
+          } else {
+            if (!settings.geminiApiKey || settings.geminiApiKey.trim().length === 0) {
+              setHasApiKey(false);
+            }
           }
         }
       } catch (err) {}
@@ -65,7 +81,6 @@ const AiChatbot = () => {
   };
 
   const formatMessage = (text) => {
-    // Simple markdown-like formatting
     return text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -74,6 +89,9 @@ const AiChatbot = () => {
   };
 
   if (!aiEnabled) return null;
+
+  // Helper boolean for rendering UI text
+  const isGroq = selectedModel.includes('llama') || selectedModel.includes('mixtral');
 
   return (
     <>
@@ -103,7 +121,6 @@ const AiChatbot = () => {
             ? 'opacity-100 pointer-events-auto translate-y-0' 
             : 'opacity-0 pointer-events-none translate-y-4'
           }
-          /* Mobile: full width bottom sheet */
           bottom-0 left-0 right-0
           md:bottom-24 md:right-8 md:left-auto md:w-[400px]
         `}
@@ -120,7 +137,10 @@ const AiChatbot = () => {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-sm text-on-surface">Wallo AI</h3>
-              <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Powered by Gemini</p>
+              {/*  Dynamic provider text */}
+              <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
+                Powered by {isGroq ? 'Groq' : 'Gemini'}
+              </p>
             </div>
             <button
               onClick={() => setIsOpen(false)}
@@ -138,8 +158,9 @@ const AiChatbot = () => {
               </div>
               <div>
                 <h3 className="font-bold text-base text-on-surface mb-2">API Key Required</h3>
+                {/* Dynamic API Key prompt */}
                 <p className="text-sm text-on-surface-variant leading-relaxed max-w-xs">
-                  Please add your Gemini API key in Settings to use AI features.
+                  Please add your {isGroq ? 'Groq' : 'Gemini'} API key in Settings to use AI features.
                 </p>
               </div>
               <Link

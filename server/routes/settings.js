@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
         aiEnabled: true,
         aiModel: 'gemini-2.5-flash',
         geminiApiKey: '',
+        groqApiKey: '', // Added default
         emailAlertsEnabled: true,
       };
     }
@@ -29,9 +30,14 @@ router.get('/', async (req, res) => {
 // PUT /api/settings - Update user preferences
 router.put('/', async (req, res) => {
   try {
-    const { aiEnabled, aiModel, geminiApiKey, emailAlertsEnabled } = req.body;
+    // Destructure the new groqApiKey
+    const { aiEnabled, aiModel, geminiApiKey, groqApiKey, emailAlertsEnabled } = req.body;
     
-    const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest'];
+    // Updated to include Groq models
+    const allowedModels = [
+      'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest', 
+      'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'
+    ];
     const modelToSave = allowedModels.includes(aiModel) ? aiModel : 'gemini-2.5-flash';
 
     const prefs = await UserPreferences.findOneAndUpdate(
@@ -41,10 +47,10 @@ router.put('/', async (req, res) => {
           aiEnabled: Boolean(aiEnabled),
           aiModel: modelToSave,
           geminiApiKey: geminiApiKey || '',
+          groqApiKey: groqApiKey || '', // Save the Groq Key
           emailAlertsEnabled: Boolean(emailAlertsEnabled)
         }
       },
-      // CHANGED: new: true is replaced with returnDocument: 'after'
       { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
     
