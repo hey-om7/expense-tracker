@@ -5,6 +5,32 @@ import { getContrastingColor } from '../utils/colorUtils'; // Make sure this fil
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 
+// Helper function to cycle recurring dates forward to the next upcoming cycle
+const getNextCycleDate = (startDate, periodString) => {
+  if (!startDate) return null;
+  const d = new Date(startDate);
+  if (isNaN(d.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const period = (periodString || '').toLowerCase();
+  if (period === 'one_time' || period === 'onetime') return d;
+
+  let maxIterations = 1000; // Safeguard against infinite loops
+  // Increment the date until it is today or in the future
+  while (d < today && maxIterations > 0) {
+    if (period === 'monthly') d.setMonth(d.getMonth() + 1);
+    else if (period === 'yearly' || period === 'annually') d.setFullYear(d.getFullYear() + 1);
+    else if (period === 'weekly') d.setDate(d.getDate() + 7);
+    else if (period === 'daily') d.setDate(d.getDate() + 1);
+    else if (period === 'quarterly') d.setMonth(d.getMonth() + 3);
+    else break; 
+    maxIterations--;
+  }
+  return d;
+};
+
 const DashboardScreen = () => {
   const { 
     totalBalance, monthlySpent, totalPortfolioValue, totalRealizedProfit, totalUnrealizedProfit,
@@ -43,27 +69,26 @@ const DashboardScreen = () => {
 
   // --- WIDGET LOGIC 3: Upcoming Bills ---
   const upcomingBills = useMemo(() => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
     let bills = [];
 
     // Add Active Subscriptions
     subscriptions.filter(s => s.isActive).forEach(sub => {
-      const targetDate = sub.period === 'one_time' ? sub.expiryDate : sub.startDate;
-      if (!targetDate) return;
-      const d = new Date(targetDate);
-      if (d >= today || sub.period !== 'one_time') { // Rough assumption for recurring
-        bills.push({ id: `sub-${sub.id}`, title: sub.name, amount: sub.amount, date: d, type: 'Subscription', icon: 'event_repeat', color: '#95CD41' });
+      let targetDate;
+      if (sub.period === 'one_time') {
+        targetDate = sub.expiryDate ? new Date(sub.expiryDate) : null;
+      } else {
+        targetDate = getNextCycleDate(sub.startDate, sub.period);
       }
+
+      if (!targetDate || isNaN(targetDate.getTime())) return;
+      bills.push({ id: `sub-${sub.id}`, title: sub.name, amount: sub.amount, date: targetDate, type: 'Subscription', icon: 'event_repeat', color: '#95CD41' });
     });
 
     // Add Credit Cards
     creditCards.forEach(cc => {
       if (!cc.billDueDate) return;
       const d = new Date(cc.billDueDate);
-      if (d >= today) {
-        bills.push({ id: `cc-${cc.id}`, title: cc.name, amount: 'Pending', date: d, type: 'Credit Card', icon: 'credit_card', color: '#E5BA73' });
-      }
+      bills.push({ id: `cc-${cc.id}`, title: cc.name, amount: 'Pending', date: d, type: 'Credit Card', icon: 'credit_card', color: '#E5BA73' });
     });
 
     // Sort by closest date first and take top 4
@@ -228,6 +253,24 @@ const DashboardScreen = () => {
                    today.setHours(0,0,0,0);
                    const daysLeft = Math.ceil((bill.date - today) / (1000 * 60 * 60 * 24));
                    
+                   // Dynamic Text & Styling based on days
+                   let statusText = '';
+                   let textClass = 'text-on-surface-variant';
+                   
+                   if (daysLeft < 0) {
+                     statusText = `Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? 's' : ''}`;
+                     textClass = 'text-error'; // Solid red for overdue
+                   } else if (daysLeft === 0) {
+                     statusText = 'Due Today';
+                     textClass = 'text-error animate-pulse'; // Flashing red for today
+                   } else if (daysLeft === 1) {
+                     statusText = 'Due Tomorrow';
+                     textClass = 'text-error animate-pulse'; // Flashing red for tomorrow
+                   } else {
+                     statusText = `Due in ${daysLeft} days`;
+                     textClass = daysLeft <= 3 ? 'text-error animate-pulse' : 'text-on-surface-variant'; // Normal text unless due in <= 3 days
+                   }
+
                    return (
                      <div key={`${bill.id}-${idx}`} className="flex justify-between items-center pb-4 border-b border-outline/10 last:border-0 last:pb-0">
                        <div className="flex items-center gap-3">
@@ -236,8 +279,8 @@ const DashboardScreen = () => {
                          </div>
                          <div>
                            <p className="text-sm font-bold text-on-surface">{bill.title}</p>
-                           <p className={`text-[10px] font-bold mt-0.5 ${daysLeft <= 3 ? 'text-error animate-pulse' : 'text-on-surface-variant'}`}>
-                             {daysLeft === 0 ? 'Due Today' : daysLeft === 1 ? 'Due Tomorrow' : `Due in ${daysLeft} days`}
+                           <p className={`text-[10px] font-bold mt-0.5 ${textClass}`}>
+                             {statusText}
                            </p>
                          </div>
                        </div>
