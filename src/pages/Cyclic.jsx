@@ -5,6 +5,19 @@ import Modal from '../components/ui/Modal';
 import AddSubscriptionForm from '../components/forms/AddSubscriptionForm';
 import AddCreditCardForm from '../components/forms/AddCreditCardForm';
 
+// Helper function to force DD/MM/YYYY format
+const formatDateToDDMMYYYY = (dateString) => {
+  if (!dateString) return "—";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return "—";
+  
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const year = d.getFullYear();
+  
+  return `${day}/${month}/${year}`;
+};
+
 const CyclicScreen = () => {
   const { subscriptions, creditCards, updateSubscription } = useAppContext();
   
@@ -105,7 +118,7 @@ const CyclicScreen = () => {
                </div>
             ) : (
                <>
-                 {/* Desktop subscription grid (unchanged) */}
+                 {/* Desktop subscription grid */}
                  <div className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {subscriptions.map(sub => (
                        <div key={sub.id} className="bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex flex-col justify-between h-48 group">
@@ -121,17 +134,13 @@ const CyclicScreen = () => {
                           </div>
                           <div className="flex justify-between items-end">
                              <div>
-                                {/* EDITED: Conditionally show Expiry vs Renewal based on period */}
                                 <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">
                                    {sub.period === 'one_time' ? 'Expiry Date' : 'Next Renewal'}
                                 </span>
                                 <span className="font-body text-sm font-medium">
                                    {(() => {
-                                      // EDITED: Select expiryDate if one_time, else startDate
                                       const targetDate = sub.period === 'one_time' ? sub.expiryDate : sub.startDate;
-                                      if (!targetDate) return "—";
-                                      const d = new Date(targetDate);
-                                      return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+                                      return formatDateToDDMMYYYY(targetDate);
                                    })()}
                                 </span>
                              </div>
@@ -167,9 +176,7 @@ const CyclicScreen = () => {
                                 </span>
                                 {(() => {
                                    const targetDate = sub.period === 'one_time' ? sub.expiryDate : sub.startDate;
-                                   if (!targetDate) return "—";
-                                   const d = new Date(targetDate);
-                                   return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+                                   return formatDateToDDMMYYYY(targetDate);
                                 })()}
                              </span>
                              <span className="font-headline font-extrabold text-base text-on-surface">{formatCurrency(sub.amount)}</span>
@@ -206,7 +213,7 @@ const CyclicScreen = () => {
                     
                     return (
                       <React.Fragment key={cc.id}>
-                        {/* Desktop credit card row (unchanged) */}
+                        {/* Desktop credit card row */}
                         <div className="hidden md:flex group cursor-pointer bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex-col md:flex-row md:items-center justify-between gap-6" onClick={() => setCcModal({ isOpen: true, data: cc })}>
                           <div className="flex items-center gap-4">
                              <div className="w-14 h-10 bg-gradient-to-br from-[#E5BA73] to-[#67490b] rounded-md shadow-md flex items-center justify-end px-2 opacity-90">
@@ -221,7 +228,7 @@ const CyclicScreen = () => {
                              <div className="text-right">
                                 <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Bill Due Date</span>
                                 <span className={`font-body text-sm font-bold ${(warning || past) ? 'text-error animate-pulse' : 'text-on-surface'}`}>
-                                   {new Date(cc.billDueDate).toLocaleDateString()} {past ? '(Past Due)' : warning ? '(Soon)' : ''}
+                                   {formatDateToDDMMYYYY(cc.billDueDate)} {past ? '(Past Due)' : warning ? '(Soon)' : ''}
                                 </span>
                              </div>
                              <div className="text-right border-l border-outline/10 pl-6">
@@ -247,7 +254,7 @@ const CyclicScreen = () => {
                              <div>
                                 <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Due Date</span>
                                 <span className={`text-xs font-bold ${(warning || past) ? 'text-error' : 'text-on-surface'}`}>
-                                   {new Date(cc.billDueDate).toLocaleDateString()} {past ? '· Past Due' : warning ? '· Soon' : ''}
+                                   {formatDateToDDMMYYYY(cc.billDueDate)} {past ? '· Past Due' : warning ? '· Soon' : ''}
                                 </span>
                              </div>
                              <div className="text-right">
