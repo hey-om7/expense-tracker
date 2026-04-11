@@ -10,7 +10,9 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
+  
   const googleBtnRef = useRef(null);
+  const passwordRef = useRef(null); // ADDED: Ref to control password focus
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -113,8 +115,16 @@ const Login = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  // ADDED: Intercept "Enter" / "Next" key and focus password field
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    passwordRef.current?.focus();
+                  }
+                }}
+                enterKeyHint="next" // ADDED: Shows "Next" instead of "Go" on mobile keyboards
                 placeholder=" "
-                className="peer w-full bg-surface-container/60 border border-outline-variant/40 rounded-xl px-4 pt-5 pb-2 text-on-surface text-sm font-inter
+                className="peer w-full bg-surface-container/60 border border-outline-variant/40 rounded-xl px-4 pt-5 pb-2 text-on-surface text-[16px] md:text-sm font-inter
                   focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container/50
                   transition-all duration-200 placeholder-transparent"
                 autoComplete="email"
@@ -122,7 +132,7 @@ const Login = () => {
               <label
                 htmlFor="login-email"
                 className="absolute left-4 top-2 text-[11px] font-medium text-on-surface-variant
-                  peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-on-surface-variant/60
+                  peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-[16px] md:peer-placeholder-shown:text-sm peer-placeholder-shown:text-on-surface-variant/60
                   peer-focus:top-2 peer-focus:text-[11px] peer-focus:text-primary-container
                   transition-all duration-200 pointer-events-none"
               >
@@ -134,11 +144,13 @@ const Login = () => {
             <div className="relative group">
               <input
                 id="login-password"
+                ref={passwordRef} // ADDED: Attach the ref here
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                enterKeyHint="done" // ADDED: Shows "Done" or "Go" for submission
                 placeholder=" "
-                className="peer w-full bg-surface-container/60 border border-outline-variant/40 rounded-xl px-4 pt-5 pb-2 pr-12 text-on-surface text-sm font-inter
+                className="peer w-full bg-surface-container/60 border border-outline-variant/40 rounded-xl px-4 pt-5 pb-2 pr-12 text-on-surface text-[16px] md:text-sm font-inter
                   focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container/50
                   transition-all duration-200 placeholder-transparent"
                 autoComplete="current-password"
@@ -146,7 +158,7 @@ const Login = () => {
               <label
                 htmlFor="login-password"
                 className="absolute left-4 top-2 text-[11px] font-medium text-on-surface-variant
-                  peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-on-surface-variant/60
+                  peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-[16px] md:peer-placeholder-shown:text-sm peer-placeholder-shown:text-on-surface-variant/60
                   peer-focus:top-2 peer-focus:text-[11px] peer-focus:text-primary-container
                   transition-all duration-200 pointer-events-none"
               >

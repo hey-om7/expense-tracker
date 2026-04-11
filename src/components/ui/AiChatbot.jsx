@@ -219,7 +219,7 @@ const AiChatbot = () => {
                     onKeyDown={handleKeyDown}
                     placeholder="Ask about your finances..."
                     disabled={loading}
-                    className="flex-1 bg-transparent text-sm text-on-surface py-2.5 focus:outline-none placeholder:text-on-surface-variant/50 disabled:opacity-50 min-w-0"
+                    className="flex-1 bg-transparent text-[16px] md:text-sm text-on-surface py-2.5 focus:outline-none placeholder:text-on-surface-variant/50 disabled:opacity-50 min-w-0"
                     maxLength={2000}
                   />
                   <button
