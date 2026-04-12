@@ -33,13 +33,44 @@ const alreadySentToday = (lastReminderDate) => {
 };
 
 /**
- * Process subscription reminders
+ * Process subscription reminders and auto-deactivate expired subscriptions
+ * Handles subscriptions that expired long ago (days, months, years back)
  */
 const processSubscriptions = async () => {
   const tomorrow = getTomorrow();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const activeSubs = await Subscription.find({ isActive: true });
 
   for (const sub of activeSubs) {
+
+    // ─── Auto-deactivate expired one_time subscriptions ───
+    // Catches both yesterday and any date in the past (long overdue)
+    if (sub.period === 'one_time' && sub.expiryDate) {
+      const expiry = new Date(sub.expiryDate);
+      expiry.setHours(0, 0, 0, 0);
+
+      if (expiry < today) {
+        sub.isActive = false;
+        await sub.save();
+        console.log(`❌ One-time subscription expired and deactivated: "${sub.name}" (expired: ${expiry.toLocaleDateString('en-IN')})`);
+        continue;
+      }
+    } else if (sub.period !== 'one_time') {
+      // ─── Auto-deactivate recurring subscriptions past their endDate ───
+      // calculateNextRenewal returns null when endDate is in the past
+      const nextRenewal = calculateNextRenewal(sub);
+      if (!nextRenewal) {
+        sub.isActive = false;
+        await sub.save();
+        const endInfo = sub.endDate ? `(ended: ${new Date(sub.endDate).toLocaleDateString('en-IN')})` : '(no future renewal)';
+        console.log(`❌ Recurring subscription expired and deactivated: "${sub.name}" ${endInfo}`);
+        continue;
+      }
+    }
+
+    // ─── Skip reminder if already sent today ───
     if (alreadySentToday(sub.lastReminderSentDate)) continue;
 
     let shouldNotify = false;
@@ -65,7 +96,7 @@ const processSubscriptions = async () => {
     if (shouldNotify) {
       const user = await User.findById(sub.userId).select('email name');
       const prefs = await UserPreferences.findOne({ userId: sub.userId }).lean();
-      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false; // Default true
+      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false;
 
       // In-app notification
       await new Notification({
@@ -123,7 +154,7 @@ const calculateNextRenewal = (sub) => {
     advanceDate(next, sub.period);
   }
 
-  // Check against endDate
+  // Check against endDate — return null if past end (signals expiry to caller)
   if (sub.endDate) {
     const end = new Date(sub.endDate);
     end.setHours(0, 0, 0, 0);
@@ -155,8 +186,8 @@ const processCreditCards = async () => {
     if (isSameDay(dueDate, tomorrow)) {
       const user = await User.findById(card.userId).select('email name');
       const prefs = await UserPreferences.findOne({ userId: card.userId }).lean();
-      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false; // Default true
-      
+      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false;
+
       const msg = `Your "${card.name}" (****${card.last4Digits}) credit card bill is due tomorrow (${dueDate.toLocaleDateString('en-IN')}).`;
 
       // In-app notification
@@ -210,21 +241,33 @@ const buildReminderEmail = (name, message) => {
 };
 
 /**
- * Initialize the cron job - runs every hour
+ * Core check function — extracted so it can be called on startup AND by cron
+ */
+const runReminderCheck = async () => {
+  console.log(`⏰ [${new Date().toISOString()}] Running reminder check...`);
+  try {
+    await processSubscriptions();
+    await processCreditCards();
+    console.log(`✅ Reminder check completed.`);
+  } catch (err) {
+    console.error('❌ Reminder check error:', err.message);
+  }
+};
+
+/**
+ * Initialize the cron job
+ * - Runs immediately on server start to catch any missed/long-expired records
+ * - Then runs every hour on schedule
  */
 const initCronJobs = () => {
-  cron.schedule('0 * * * *', async () => {
-    console.log(`⏰ [${new Date().toISOString()}] Running scheduled reminder check...`);
-    try {
-      await processSubscriptions();
-      await processCreditCards();
-      console.log(`✅ Scheduled reminder check completed.`);
-    } catch (err) {
-      console.error('❌ Cron job error:', err.message);
-    }
-  });
+  // ─── Run immediately on startup ───
+  console.log('🕐 Cron jobs initialized — running startup check...');
+  runReminderCheck();
 
-  console.log('🕐 Cron jobs initialized (hourly reminder checks)');
+  // ─── Then schedule hourly ───
+  cron.schedule('0 * * * *', runReminderCheck);
+
+  console.log('🕐 Hourly reminder checks scheduled.');
 };
 
 module.exports = { initCronJobs };

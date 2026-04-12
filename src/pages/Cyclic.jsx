@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency } from '../utils/currency';
 import Modal from '../components/ui/Modal';
@@ -12,7 +12,7 @@ const formatDateToDDMMYYYY = (dateString) => {
   if (isNaN(d.getTime())) return "—";
   
   const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   
   return `${day}/${month}/${year}`;
@@ -43,10 +43,30 @@ const CyclicScreen = () => {
      return target < today;
   };
 
+  // ─── Sort subscriptions: active first, inactive/expired last ───
+  const sortedSubscriptions = useMemo(() => {
+    return [...subscriptions].sort((a, b) => {
+      const aInactive = !a.isActive;
+      const bInactive = !b.isActive;
+      if (aInactive !== bInactive) return aInactive ? 1 : -1;
+      return 0;
+    });
+  }, [subscriptions]);
+
+  // ─── Sort credit cards: non-past-due first, past due last ───
+  const sortedCreditCards = useMemo(() => {
+    return [...creditCards].sort((a, b) => {
+      const aPast = isPastDue(a.billDueDate);
+      const bPast = isPastDue(b.billDueDate);
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return 0;
+    });
+  }, [creditCards]);
+
   return (
     <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto min-h-screen max-md:px-4 max-md:pb-28">
 
-      {/* ===== DESKTOP HEADER (unchanged) ===== */}
+      {/* ===== DESKTOP HEADER ===== */}
       <div className="hidden md:flex mb-10 flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <span className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-2 block">Automation Engine</span>
@@ -110,7 +130,7 @@ const CyclicScreen = () => {
                </button>
             </div>
             
-            {subscriptions.length === 0 ? (
+            {sortedSubscriptions.length === 0 ? (
                <div className="text-center py-16 bg-surface-container-low rounded-xl border border-dashed border-outline/20 max-md:py-10 max-md:rounded-lg">
                  <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-3 max-md:text-4xl">event_repeat</span>
                  <p className="text-outline max-md:text-sm">No recurring subscriptions tracked.</p>
@@ -120,8 +140,13 @@ const CyclicScreen = () => {
                <>
                  {/* Desktop subscription grid */}
                  <div className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {subscriptions.map(sub => (
-                       <div key={sub.id} className="bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex flex-col justify-between h-48 group">
+                    {sortedSubscriptions.map(sub => (
+                       <div 
+                         key={sub.id} 
+                         className={`bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex flex-col justify-between h-48 group
+                           ${!sub.isActive ? 'opacity-40 grayscale' : ''}
+                         `}
+                       >
                           <div className="flex justify-between items-start">
                              <div>
                                 <h4 className="font-bold text-lg text-on-surface">{sub.name}</h4>
@@ -157,8 +182,14 @@ const CyclicScreen = () => {
 
                  {/* Mobile subscription list */}
                  <div className="md:hidden flex flex-col gap-2.5">
-                    {subscriptions.map(sub => (
-                       <div key={sub.id} onClick={() => setSubModal({isOpen: true, data: sub})} className="bg-surface-container-low rounded-lg p-4 border border-outline/5 active:border-outline/20 transition-all cursor-pointer">
+                    {sortedSubscriptions.map(sub => (
+                       <div 
+                         key={sub.id} 
+                         onClick={() => setSubModal({isOpen: true, data: sub})} 
+                         className={`bg-surface-container-low rounded-lg p-4 border border-outline/5 active:border-outline/20 transition-all cursor-pointer
+                           ${!sub.isActive ? 'opacity-40 grayscale' : ''}
+                         `}
+                       >
                           <div className="flex justify-between items-center mb-2">
                              <div className="flex items-center gap-2 min-w-0">
                                 <h4 className="font-bold text-sm text-on-surface truncate">{sub.name}</h4>
@@ -199,7 +230,7 @@ const CyclicScreen = () => {
                </button>
             </div>
             
-            {creditCards.length === 0 ? (
+            {sortedCreditCards.length === 0 ? (
                <div className="text-center py-16 bg-surface-container-low rounded-xl border border-dashed border-outline/20 max-md:py-10 max-md:rounded-lg">
                  <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-3 max-md:text-4xl">credit_card</span>
                  <p className="text-outline max-md:text-sm">No credit cards tracked.</p>
@@ -207,14 +238,19 @@ const CyclicScreen = () => {
                </div>
             ) : (
                <div className="flex flex-col gap-4 max-md:gap-2.5">
-                  {creditCards.map(cc => {
+                  {sortedCreditCards.map(cc => {
                     const warning = isApproaching(cc.billDueDate, 5);
                     const past = isPastDue(cc.billDueDate);
                     
                     return (
                       <React.Fragment key={cc.id}>
                         {/* Desktop credit card row */}
-                        <div className="hidden md:flex group cursor-pointer bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex-col md:flex-row md:items-center justify-between gap-6" onClick={() => setCcModal({ isOpen: true, data: cc })}>
+                        <div 
+                          className={`hidden md:flex group cursor-pointer bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex-col md:flex-row md:items-center justify-between gap-6
+                            ${past ? 'opacity-40 grayscale' : ''}
+                          `}
+                          onClick={() => setCcModal({ isOpen: true, data: cc })}
+                        >
                           <div className="flex items-center gap-4">
                              <div className="w-14 h-10 bg-gradient-to-br from-[#E5BA73] to-[#67490b] rounded-md shadow-md flex items-center justify-end px-2 opacity-90">
                                 <span className="text-[10px] font-bold text-white tracking-widest">{cc.last4Digits}</span>
@@ -240,7 +276,12 @@ const CyclicScreen = () => {
                         </div>
 
                         {/* Mobile credit card row */}
-                        <div className="md:hidden bg-surface-container-low rounded-lg p-4 border border-outline/5 active:border-outline/20 transition-all cursor-pointer" onClick={() => setCcModal({ isOpen: true, data: cc })}>
+                        <div 
+                          className={`md:hidden bg-surface-container-low rounded-lg p-4 border border-outline/5 active:border-outline/20 transition-all cursor-pointer
+                            ${past ? 'opacity-40 grayscale' : ''}
+                          `}
+                          onClick={() => setCcModal({ isOpen: true, data: cc })}
+                        >
                           <div className="flex items-center gap-3 mb-3">
                              <div className="w-12 h-8 bg-gradient-to-br from-[#E5BA73] to-[#67490b] rounded-md shadow-sm flex items-center justify-end px-1.5 shrink-0">
                                 <span className="text-[9px] font-bold text-white tracking-widest">{cc.last4Digits}</span>
