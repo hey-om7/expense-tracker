@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchSettings, updateSettings } from '../services/api';
 import { useAppContext } from '../context/AppContext';
+import SettingsSkeleton from '../components/ui/skeletons/SettingsSkeleton';
 
 const SettingsScreen = () => {
   const { addNotification } = useAppContext();
@@ -115,14 +116,7 @@ const SettingsScreen = () => {
   };
 
   if (loading) {
-    return (
-      <main className="pt-24 pb-32 px-6 max-w-3xl mx-auto min-h-screen">
-        <div className="animate-pulse flex flex-col gap-4">
-          <div className="h-10 w-48 bg-surface-container-highest rounded-lg mb-8"></div>
-          <div className="h-64 w-full bg-surface-container-lowest rounded-2xl"></div>
-        </div>
-      </main>
-    );
+    return <SettingsSkeleton />;
   }
 
   // Helper to determine which key UI to show
