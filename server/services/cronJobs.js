@@ -112,7 +112,7 @@ const processSubscriptions = async () => {
         try {
           await sendEmail(
             user.email,
-            `Wallo Reminder: ${sub.name}`,
+            `Vestor Reminder: ${sub.name}`,
             buildReminderEmail(user.name || 'there', notifMessage)
           );
         } catch (emailErr) {
@@ -204,7 +204,7 @@ const processCreditCards = async () => {
         try {
           await sendEmail(
             user.email,
-            `Wallo Reminder: ${card.name} Bill Due`,
+            `Vestor Reminder: ${card.name} Bill Due`,
             buildReminderEmail(user.name || 'there', msg)
           );
         } catch (emailErr) {
@@ -228,14 +228,14 @@ const buildReminderEmail = (name, message) => {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #1A120B; color: #F1DFD3; border-radius: 16px;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #E5BA73; font-size: 24px; margin: 0;">Wallo</h1>
+        <h1 style="color: #E5BA73; font-size: 24px; margin: 0;">Vestor</h1>
         <p style="color: #F1DFD3; opacity: 0.6; font-size: 12px; margin: 4px 0 0; text-transform: uppercase; letter-spacing: 2px;">Financial Reminder</p>
       </div>
       <div style="background: #241a12; border-radius: 12px; padding: 20px; border: 1px solid rgba(229,186,115,0.1);">
         <p style="margin: 0 0 12px; font-size: 16px;">Hi ${name},</p>
         <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #F1DFD3; opacity: 0.9;">${message}</p>
       </div>
-      <p style="text-align: center; font-size: 11px; color: #F1DFD3; opacity: 0.4; margin-top: 24px;">Sent by Wallo · Your Personal Finance Tracker</p>
+      <p style="text-align: center; font-size: 11px; color: #F1DFD3; opacity: 0.4; margin-top: 24px;">Sent by Vestor · Your Personal Finance Tracker</p>
     </div>
   `;
 };

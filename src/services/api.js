@@ -1,6 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:5001' : '');
 
-const getToken = () => localStorage.getItem('wallo_token');
+const getToken = () => localStorage.getItem('vestor_token');
 
 const request = async (endpoint, options = {}) => {
   const url = `${API_URL}/api${endpoint}`;
@@ -19,8 +19,8 @@ const request = async (endpoint, options = {}) => {
 
   // Handle 401 — token expired or invalid
   if (response.status === 401) {
-    localStorage.removeItem('wallo_token');
-    localStorage.removeItem('wallo_user');
+    localStorage.removeItem('vestor_token');
+    localStorage.removeItem('vestor_user');
     // Only redirect if not already on auth pages
     if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
       window.location.href = '/login';

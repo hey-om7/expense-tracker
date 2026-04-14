@@ -5,13 +5,13 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('wallo_token'));
+  const [token, setToken] = useState(localStorage.getItem('vestor_token'));
   const [loading, setLoading] = useState(true);
 
   // Validate token on mount
   useEffect(() => {
     const validateToken = async () => {
-      const storedToken = localStorage.getItem('wallo_token');
+      const storedToken = localStorage.getItem('vestor_token');
       if (!storedToken) {
         setLoading(false);
         return;
@@ -22,8 +22,8 @@ export const AuthProvider = ({ children }) => {
         setToken(storedToken);
       } catch (err) {
         console.warn('Token validation failed:', err.message);
-        localStorage.removeItem('wallo_token');
-        localStorage.removeItem('wallo_user');
+        localStorage.removeItem('vestor_token');
+        localStorage.removeItem('vestor_user');
         setUser(null);
         setToken(null);
       } finally {
@@ -35,8 +35,8 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (email, password) => {
     const response = await api.loginUser({ email, password });
-    localStorage.setItem('wallo_token', response.token);
-    localStorage.setItem('wallo_user', JSON.stringify(response.user));
+    localStorage.setItem('vestor_token', response.token);
+    localStorage.setItem('vestor_user', JSON.stringify(response.user));
     setToken(response.token);
     setUser(response.user);
     return response;
@@ -44,8 +44,8 @@ export const AuthProvider = ({ children }) => {
 
   const register = useCallback(async (name, email, password) => {
     const response = await api.registerUser({ name, email, password });
-    localStorage.setItem('wallo_token', response.token);
-    localStorage.setItem('wallo_user', JSON.stringify(response.user));
+    localStorage.setItem('vestor_token', response.token);
+    localStorage.setItem('vestor_user', JSON.stringify(response.user));
     setToken(response.token);
     setUser(response.user);
     return response;
@@ -53,16 +53,16 @@ export const AuthProvider = ({ children }) => {
 
   const googleLogin = useCallback(async (credential) => {
     const response = await api.googleAuth({ credential });
-    localStorage.setItem('wallo_token', response.token);
-    localStorage.setItem('wallo_user', JSON.stringify(response.user));
+    localStorage.setItem('vestor_token', response.token);
+    localStorage.setItem('vestor_user', JSON.stringify(response.user));
     setToken(response.token);
     setUser(response.user);
     return response;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('wallo_token');
-    localStorage.removeItem('wallo_user');
+    localStorage.removeItem('vestor_token');
+    localStorage.removeItem('vestor_user');
     setToken(null);
     setUser(null);
   }, []);

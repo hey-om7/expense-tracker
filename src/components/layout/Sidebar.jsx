@@ -32,7 +32,7 @@ const Sidebar = () => {
   return (
     <aside className="w-64 bg-surface-container-lowest h-screen fixed left-0 top-0 border-r border-outline/10 hidden md:flex flex-col z-40">
       <div className="p-8">
-        <h1 className="text-2xl font-headline font-extrabold tracking-tighter text-on-surface">Wallo</h1>
+        <h1 className="text-2xl font-headline font-extrabold tracking-tighter text-on-surface">Vestor</h1>
         <p className="text-[10px] uppercase tracking-[0.2em] text-[#F1DFD3]/40 mt-1">Premium Wealth Management</p>
       </div>
       <nav className="flex flex-col gap-2 px-4">

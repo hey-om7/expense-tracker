@@ -39,8 +39,8 @@ const SettingsScreen = () => {
 
     // ADDED: Check if PIN exists in LocalStorage or Cookies
     const checkPinExists = () => {
-      const localPin = localStorage.getItem('wallo_app_pin');
-      const cookieMatch = document.cookie.match(/(?:^|;\s*)wallo_app_pin=([^;]*)/);
+      const localPin = localStorage.getItem('vestor_app_pin');
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)vestor_app_pin=([^;]*)/);
       setHasPin(!!(localPin || (cookieMatch && cookieMatch[1])));
     };
     checkPinExists();
@@ -58,11 +58,11 @@ const SettingsScreen = () => {
   const handleResetPin = () => {
     if (window.confirm('Are you sure you want to reset your App PIN? You will be prompted to create a new one next time the app locks.')) {
       // Clear LocalStorage
-      localStorage.removeItem('wallo_app_pin');
+      localStorage.removeItem('vestor_app_pin');
       // Clear Cookie by expiring it
-      document.cookie = "wallo_app_pin=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      document.cookie = "vestor_app_pin=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       // Clear Session Lock State
-      sessionStorage.removeItem('wallo_is_locked');
+      sessionStorage.removeItem('vestor_is_locked');
       
       setHasPin(false);
       addNotification({
@@ -140,7 +140,7 @@ const SettingsScreen = () => {
           <div className="flex flex-col gap-6">
             <label className="flex items-center justify-between cursor-pointer group">
               <div>
-                <span className="block text-sm font-bold text-on-surface mb-1">Enable Wallo AI</span>
+                <span className="block text-sm font-bold text-on-surface mb-1">Enable Vestor AI</span>
                 <span className="block text-xs text-on-surface-variant max-w-md">Provides interactive chat using your financial context. If disabled, the AI chatbot icon is removed.</span>
               </div>
               <div className="relative">

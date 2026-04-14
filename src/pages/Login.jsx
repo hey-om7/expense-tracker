@@ -95,7 +95,7 @@ const Login = () => {
             </span>
           </div>
           <h1 className="text-3xl font-headline font-bold text-on-surface tracking-tight">
-            Wallo
+            Vestor
           </h1>
           <p className="text-on-surface-variant text-sm mt-1 font-inter">
             Your private wealth dashboard

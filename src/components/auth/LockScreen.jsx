@@ -10,8 +10,8 @@ let sessionMemoryPin = null;
 const setSavedPin = (pin) => {
   sessionMemoryPin = pin; 
   try {
-    localStorage.setItem('wallo_app_pin', pin);
-    document.cookie = `wallo_app_pin=${pin}; max-age=31536000; path=/`;
+    localStorage.setItem('vestor_app_pin', pin);
+    document.cookie = `vestor_app_pin=${pin}; max-age=31536000; path=/`;
   } catch (err) {
     console.error('❌ Browser blocked saving to LocalStorage:', err);
   }
@@ -21,15 +21,15 @@ const getSavedPin = () => {
   if (sessionMemoryPin) return sessionMemoryPin;
 
   try {
-    const localPin = localStorage.getItem('wallo_app_pin');
+    const localPin = localStorage.getItem('vestor_app_pin');
     if (localPin) {
       sessionMemoryPin = localPin; 
       return localPin;
     }
 
-    const match = document.cookie.match(/(?:^|;\s*)wallo_app_pin=([^;]*)/);
+    const match = document.cookie.match(/(?:^|;\s*)vestor_app_pin=([^;]*)/);
     if (match && match[1]) {
-      localStorage.setItem('wallo_app_pin', match[1]);
+      localStorage.setItem('vestor_app_pin', match[1]);
       sessionMemoryPin = match[1];
       return match[1];
     }
@@ -46,7 +46,7 @@ const getInitialLockState = () => {
   const hasPin = !!getSavedPin();
   if (!hasPin) return false; // If no PIN exists, don't lock on refresh (wait for timer to trigger setup)
   
-  const sessionLockState = sessionStorage.getItem('wallo_is_locked');
+  const sessionLockState = sessionStorage.getItem('vestor_is_locked');
   if (sessionLockState === 'false') return false; // User already unlocked it in this tab
   
   return true; // Default to locked if they have a PIN and haven't unlocked this session
@@ -72,14 +72,14 @@ const LockScreen = () => {
   const lockApp = useCallback(() => {
     const hasPin = !!getSavedPin();
     setIsLocked(true);
-    sessionStorage.setItem('wallo_is_locked', 'true'); // Save locked state to session
+    sessionStorage.setItem('vestor_is_locked', 'true'); // Save locked state to session
     setIsSetupMode(!hasPin);
     setStep(1);
   }, []);
 
   const unlockApp = useCallback(() => {
     setIsLocked(false);
-    sessionStorage.setItem('wallo_is_locked', 'false'); // Save unlocked state to session
+    sessionStorage.setItem('vestor_is_locked', 'false'); // Save unlocked state to session
   }, []);
 
   const resetTimer = useCallback(() => {

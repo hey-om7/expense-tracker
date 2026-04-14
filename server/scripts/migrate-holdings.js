@@ -21,9 +21,9 @@ const Transaction = require('../models/Transaction');
 const DRY_RUN = process.argv.includes('--dry-run');
 
 async function migrate() {
-  const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/wallo';
+  const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/vestor';
   
-  console.log(`\n🔄 Wallo Holdings Migration ${DRY_RUN ? '(DRY RUN)' : '(LIVE)'}`);
+  console.log(`\n🔄 Vestor Holdings Migration ${DRY_RUN ? '(DRY RUN)' : '(LIVE)'}`);
   console.log(`   Connecting to: ${MONGO_URI.replace(/\/\/.*@/, '//***@')}\n`);
 
   await mongoose.connect(MONGO_URI);

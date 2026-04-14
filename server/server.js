@@ -142,7 +142,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // ─── MongoDB Connection with production pool settings ───
-const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/wallo';
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/vestor';
 const PORT = process.env.PORT || 5000;
 
 mongoose.connect(MONGO_URI, {
@@ -160,7 +160,7 @@ mongoose.connect(MONGO_URI, {
     initCronJobs();
 
     const server = app.listen(PORT, () => {
-      console.log(`🚀 Wallo API server running on port ${PORT}`);
+      console.log(`🚀 Vestor API server running on port ${PORT}`);
     });
 
     // ─── Keep-alive and timeout settings for high traffic ───

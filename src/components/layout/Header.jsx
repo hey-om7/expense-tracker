@@ -31,7 +31,7 @@ const Header = () => {
               {user ? getInitials(user.name) : 'W'}
             </span>
           </div>
-          <h1 className="font-manrope font-bold text-lg tracking-tight text-[#E5BA73]">Wallo</h1>
+          <h1 className="font-manrope font-bold text-lg tracking-tight text-[#E5BA73]">Vestor</h1>
         </div>
         <div className="flex items-center gap-2 relative">
           {/* Notifications */}

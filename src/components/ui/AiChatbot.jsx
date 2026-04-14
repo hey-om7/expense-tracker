@@ -9,7 +9,7 @@ const AiChatbot = () => {
   // State to track which model the user chose
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash'); 
   const [messages, setMessages] = useState([
-    { role: 'ai', text: 'Hey! I\'m Wallo AI — your personal finance assistant. Ask me anything about your spending, investments, or subscriptions. 💰' }
+    { role: 'ai', text: 'Hey! I\'m Vestor AI — your personal finance assistant. Ask me anything about your spending, investments, or subscriptions. 💰' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -136,7 +136,7 @@ const AiChatbot = () => {
               <span className="material-symbols-outlined text-[#1A120B] text-lg">auto_awesome</span>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-sm text-on-surface">Wallo AI</h3>
+              <h3 className="font-bold text-sm text-on-surface">Vestor AI</h3>
               {/*  Dynamic provider text */}
               <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
                 Powered by {isGroq ? 'Groq' : 'Gemini'}

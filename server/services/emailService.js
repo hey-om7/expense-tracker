@@ -37,7 +37,7 @@ const sendEmail = async (to, subject, html) => {
 
   try {
     await t.sendMail({
-      from: process.env.EMAIL_FROM || '"Wallo" <noreply@wallo.app>',
+      from: process.env.EMAIL_FROM || '"Vestor" <noreply@vestor.app>',
       to,
       subject,
       html,
