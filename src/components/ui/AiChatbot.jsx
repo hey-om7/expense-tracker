@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendAiChat, fetchSettings } from '../../services/api';
 import { Link } from 'react-router-dom';
+import { useOnboarding } from '../../context/OnboardingContext';
+import FeatureTour from './FeatureTour';
 
 const AiChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -54,6 +56,16 @@ const AiChatbot = () => {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isOpen]);
+
+  // Trigger AI onboarding on first open
+  const { onboardingData, startOnboarding } = useOnboarding();
+  useEffect(() => {
+    if (isOpen && !onboardingData.aiSeen) {
+      // Small delay to let the chatbot animation finish
+      const timer = setTimeout(() => startOnboarding('ai'), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, onboardingData.aiSeen, startOnboarding]);
 
   const handleSend = async () => {
     const msg = input.trim();
@@ -243,6 +255,8 @@ const AiChatbot = () => {
           onClick={() => setIsOpen(false)}
         />
       )}
+
+      {isOpen && <FeatureTour section="ai" />}
     </>
   );
 };

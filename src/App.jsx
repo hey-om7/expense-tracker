@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
+import { OnboardingProvider } from './context/OnboardingContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import LockScreen from './components/auth/LockScreen';
 import Layout from './components/layout/Layout';
@@ -31,19 +32,21 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppProvider>
-                  <LockScreen />
-                  <Layout>
-                    <Routes>
-                      <Route path="/" element={<DashboardScreen />} />
-                      <Route path="/transactions" element={<TransactionsScreen />} />
-                      <Route path="/investments" element={<InvestmentsScreen />} />
-                      <Route path="/cyclic" element={<CyclicScreen />} />
-                      <Route path="/analytics" element={<AnalyticsScreen />} />
-                      <Route path="/categories" element={<CategoriesScreen />} />
-                      <Route path="/settings" element={<SettingsScreen />} />
-                    </Routes>
-                    <ToastContainer />
-                  </Layout>
+                  <OnboardingProvider>
+                    <LockScreen />
+                    <Layout>
+                      <Routes>
+                        <Route path="/" element={<DashboardScreen />} />
+                        <Route path="/transactions" element={<TransactionsScreen />} />
+                        <Route path="/investments" element={<InvestmentsScreen />} />
+                        <Route path="/cyclic" element={<CyclicScreen />} />
+                        <Route path="/analytics" element={<AnalyticsScreen />} />
+                        <Route path="/categories" element={<CategoriesScreen />} />
+                        <Route path="/settings" element={<SettingsScreen />} />
+                      </Routes>
+                      <ToastContainer />
+                    </Layout>
+                  </OnboardingProvider>
                 </AppProvider>
               </ProtectedRoute>
             }

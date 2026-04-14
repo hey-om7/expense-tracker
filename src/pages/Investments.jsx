@@ -6,6 +6,7 @@ import AddInvestmentForm from '../components/forms/AddInvestmentForm';
 import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
 
 import * as api from '../services/api';
+import FeatureTour from '../components/ui/FeatureTour';
 
 const InvestmentsScreen = () => {
   const { investments, updateInvestment } = useAppContext();
@@ -176,7 +177,7 @@ const InvestmentsScreen = () => {
             </div>
 
             {/* ===== HOLDINGS SECTION ===== */}
-            <div className="mt-10 md:mt-10 max-md:-mx-8 max-md:mt-4 max-md:px-4">
+            <div className="mt-10 md:mt-10 max-md:-mx-8 max-md:mt-4 max-md:px-4" data-onboarding="investments-holdings">
 
               {/* ===== MOBILE: Search + Filters ===== */}
               <div className="md:hidden flex flex-col gap-3 mb-4">
@@ -303,7 +304,7 @@ const InvestmentsScreen = () => {
                             </div>
                             <div className="text-right">
                             </div>
-                            <button onClick={() => setTradeModal({ isOpen: true, data: inv })} className="bg-surface-container-highest hover:bg-primary hover:text-on-primary transition-all px-4 py-2 flex items-center justify-center rounded-lg text-xs font-bold uppercase tracking-wider text-primary shadow-sm active:scale-95">
+                            <button data-onboarding="investments-trade" onClick={() => setTradeModal({ isOpen: true, data: inv })} className="bg-surface-container-highest hover:bg-primary hover:text-on-primary transition-all px-4 py-2 flex items-center justify-center rounded-lg text-xs font-bold uppercase tracking-wider text-primary shadow-sm active:scale-95">
                               Trade
                             </button>
                           </div>
@@ -365,6 +366,8 @@ const InvestmentsScreen = () => {
       <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({ isOpen: false, data: null })} title={`Execute Trade: ${tradeModal.data?.name}`}>
         {tradeModal.data && <InvestmentTradeForm investment={tradeModal.data} onClose={() => setTradeModal({ isOpen: false, data: null })} />}
       </Modal>
+
+      <FeatureTour section="investments" />
     </main>
   );
 };

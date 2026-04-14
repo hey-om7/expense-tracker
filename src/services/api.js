@@ -94,3 +94,8 @@ export const fetchStockQuote = (symbol) => request(`/stocks/quote/${encodeURICom
 
 // ─── AI Chat (Gemini) ───
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
+
+// ─── Onboarding ───
+export const fetchOnboarding = () => request('/onboarding');
+export const updateOnboarding = (data) => request('/onboarding', { method: 'PUT', body: data });
+export const resetOnboarding = () => request('/onboarding/reset', { method: 'POST' });

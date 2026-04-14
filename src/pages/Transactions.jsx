@@ -5,6 +5,7 @@ import { getContrastingColor } from '../utils/colorUtils';
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
+import FeatureTour from '../components/ui/FeatureTour';
 
 const TransactionsScreen = () => {
   const { transactions, monthlySpent, getCategory, categories, investments } = useAppContext();
@@ -192,7 +193,7 @@ const TransactionsScreen = () => {
       </div>
 
       {/* ===== DESKTOP: Unified filter bar ===== */}
-      <section className="hidden md:block mb-8">
+      <section className="hidden md:block mb-8" data-onboarding="history-filters">
         <div className="bg-surface-container-lowest rounded-2xl border border-outline/5 overflow-hidden">
           {/* Top row: Search + Primary filters */}
           <div className="p-5 flex items-center gap-4">
@@ -257,7 +258,7 @@ const TransactionsScreen = () => {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
-        <div className="lg:col-span-8 flex flex-col gap-6">
+        <div className="lg:col-span-8 flex flex-col gap-6" data-onboarding="history-list">
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-headline font-bold text-lg text-on-surface-variant">
@@ -318,6 +319,8 @@ const TransactionsScreen = () => {
       <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({isOpen: false, data: null})} title="Edit Trade">
          {tradeModal.data && <InvestmentTradeForm initialTradeData={tradeModal.data} investment={tradeModal.investment} onClose={() => setTradeModal({isOpen: false, data: null})} />}
       </Modal>
+
+      <FeatureTour section="history" />
 
       <style>{`
         @keyframes slideDown {

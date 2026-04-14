@@ -121,6 +121,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/stocks', require('./routes/stocks'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/onboarding', require('./routes/onboarding'));
 
 // ─── Health check ───
 app.get('/api/health', (_req, res) => {

@@ -18,6 +18,14 @@ const userPreferencesSchema = new mongoose.Schema({
   geminiApiKey: { type: String, default: '' },
   groqApiKey: { type: String, default: '' }, // ADDED GROQ API KEY
   emailAlertsEnabled: { type: Boolean, default: true },
+  onboarding: {
+    dashboardSeen: { type: Boolean, default: false },
+    historySeen: { type: Boolean, default: false },
+    investmentsSeen: { type: Boolean, default: false },
+    cyclicSeen: { type: Boolean, default: false },
+    aiSeen: { type: Boolean, default: false },
+    settingsSeen: { type: Boolean, default: false },
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('UserPreferences', userPreferencesSchema);

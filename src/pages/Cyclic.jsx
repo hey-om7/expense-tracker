@@ -4,6 +4,7 @@ import { formatCurrency } from '../utils/currency';
 import Modal from '../components/ui/Modal';
 import AddSubscriptionForm from '../components/forms/AddSubscriptionForm';
 import AddCreditCardForm from '../components/forms/AddCreditCardForm';
+import FeatureTour from '../components/ui/FeatureTour';
 
 // Helper function to force DD/MM/YYYY format
 const formatDateToDDMMYYYY = (dateString) => {
@@ -122,7 +123,7 @@ const CyclicScreen = () => {
 
       {/* ===== SUBSCRIPTIONS TAB ===== */}
       {activeTab === 'SUBSCRIPTIONS' && (
-         <section className="animate-[slideUp_0.3s_ease-out]">
+         <section className="animate-[slideUp_0.3s_ease-out]" data-onboarding="cyclic-subs">
             <div className="flex justify-between items-center mb-6 max-md:mb-4">
                <h3 className="font-headline font-bold text-xl max-md:text-base">Subscriptions ({subscriptions.length})</h3>
                <button onClick={() => setSubModal({isOpen: true, data: null})} className="text-sm font-bold text-primary flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs">
@@ -222,7 +223,7 @@ const CyclicScreen = () => {
 
       {/* ===== BILLS TAB ===== */}
       {activeTab === 'BILLS' && (
-         <section className="animate-[slideUp_0.3s_ease-out]">
+         <section className="animate-[slideUp_0.3s_ease-out]" data-onboarding="cyclic-bills">
             <div className="flex justify-between items-center mb-6 max-md:mb-4">
                <h3 className="font-headline font-bold text-xl max-md:text-base">Credit Cards ({creditCards.length})</h3>
                <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs">
@@ -319,6 +320,8 @@ const CyclicScreen = () => {
       <Modal isOpen={ccModal.isOpen} onClose={() => setCcModal({ isOpen: false, data: null})} title={ccModal.data ? "Edit Credit Card" : "Track Credit Card"}>
          <AddCreditCardForm initialData={ccModal.data} onClose={() => setCcModal({isOpen: false, data: null})} />
       </Modal>
+
+      <FeatureTour section="cyclic" />
     </main>
   );
 };

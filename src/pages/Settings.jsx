@@ -1,7 +1,105 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchSettings, updateSettings } from '../services/api';
 import { useAppContext } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import SettingsSkeleton from '../components/ui/skeletons/SettingsSkeleton';
+import FeatureTour from '../components/ui/FeatureTour';
+
+// ─── Tutorial & Help Section (extracted for clarity) ───
+const TutorialSection = () => {
+  const { replayTutorial, resetTutorial, onboardingData } = useOnboarding();
+  const { addNotification } = useAppContext();
+  const navigate = useNavigate();
+  const [resetting, setResetting] = useState(false);
+
+  const allSeen = onboardingData.dashboardSeen && onboardingData.historySeen && 
+    onboardingData.investmentsSeen && onboardingData.cyclicSeen && 
+    onboardingData.aiSeen && onboardingData.settingsSeen;
+
+  const handleReplay = () => {
+    replayTutorial();
+    addNotification({
+      title: 'Tutorial Restarted',
+      message: 'The onboarding tutorial will guide you through the app again.'
+    });
+    navigate('/');
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm('Reset all tutorial progress? You will see the onboarding guides again on each page.')) return;
+    setResetting(true);
+    try {
+      await resetTutorial();
+      addNotification({
+        title: 'Tutorial Reset',
+        message: 'All onboarding progress has been cleared.'
+      });
+    } catch (err) {
+      console.error('Failed to reset tutorial:', err);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8 mt-8" data-onboarding="settings-tutorial">
+      <div className="flex items-center gap-3 mb-6">
+        <span className="material-symbols-outlined text-primary text-3xl">school</span>
+        <h2 className="font-headline font-bold text-xl text-on-surface">Tutorial & Help</h2>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        {/* Replay Tutorial */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <span className="block text-sm font-bold text-on-surface mb-1">Replay Tutorial</span>
+            <span className="block text-xs text-on-surface-variant max-w-md">
+              Re-watch the onboarding guides from the beginning. You'll be taken to the Dashboard to start.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleReplay}
+            className="shrink-0 bg-primary/10 text-primary px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/20 active:scale-95 transition-all border border-primary/15 flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-base">replay</span>
+            Replay
+          </button>
+        </div>
+
+        <div className="h-px bg-outline/10" />
+
+        {/* Reset Tutorial Progress */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <span className="block text-sm font-bold text-on-surface mb-1">Reset Tutorial Progress</span>
+            <span className="block text-xs text-on-surface-variant max-w-md">
+              {allSeen 
+                ? 'All sections have been completed. Reset to see the guides again on each page visit.'
+                : 'Clear your progress and the tutorial will appear again as you visit each section.'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={resetting}
+            className="shrink-0 bg-error-container/20 text-error px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-error-container/40 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-error/20 flex items-center gap-2"
+          >
+            {resetting ? (
+              <span className="w-4 h-4 border-2 border-error border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-base">restart_alt</span>
+                Reset
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const SettingsScreen = () => {
   const { addNotification } = useAppContext();
@@ -129,7 +227,7 @@ const SettingsScreen = () => {
       <form onSubmit={handleSave} className="flex flex-col gap-8">
         
         {/* Generative AI Settings */}
-        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8 relative overflow-hidden">
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8 relative overflow-hidden" data-onboarding="settings-ai">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full"></div>
           
           <div className="flex items-center gap-3 mb-6">
@@ -271,6 +369,11 @@ const SettingsScreen = () => {
         </div>
 
       </form>
+
+      {/* Tutorial & Help Section — outside form since it has its own actions */}
+      <TutorialSection />
+
+      <FeatureTour section="settings" />
     </main>
   );
 };

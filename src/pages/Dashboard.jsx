@@ -4,6 +4,7 @@ import { formatCurrency } from '../utils/currency';
 import { getContrastingColor } from '../utils/colorUtils'; // Make sure this file exists from previous screens!
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
+import FeatureTour from '../components/ui/FeatureTour';
 
 // Helper function to cycle recurring dates forward to the next upcoming cycle
 const getNextCycleDate = (startDate, periodString) => {
@@ -104,7 +105,7 @@ const DashboardScreen = () => {
       {/* Header Section */}
       <section className="mb-10">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 max-md:gap-4">
-          <div className="min-w-0">
+          <div className="min-w-0" data-onboarding="dashboard-balance">
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#F1DFD3]/40 font-semibold mb-2 block">Available Liquidity</span>
             <h2 className="hidden md:block text-5xl md:text-7xl font-manrope font-extrabold text-on-surface tracking-tighter">
               {formatCurrency(totalBalance)}
@@ -115,7 +116,7 @@ const DashboardScreen = () => {
               {formatCurrency(totalBalance)}
             </h2>
           </div>
-          <div className="flex gap-3 max-md:gap-2">
+          <div className="flex gap-3 max-md:gap-2" data-onboarding="dashboard-actions">
             <button onClick={() => setIsQuickAddOpen(true)} className="bg-[#E5BA73]/10 text-[#E5BA73] p-4 rounded-xl flex items-center gap-2 font-manrope font-bold text-sm hover:bg-[#E5BA73]/20 transition-all active:scale-95 max-md:p-3 max-md:text-xs max-md:rounded-lg">
               <span className="material-symbols-outlined max-md:text-lg">add_circle</span> Quick Add
             </button>
@@ -300,6 +301,8 @@ const DashboardScreen = () => {
       <Modal isOpen={isQuickAddOpen} onClose={() => setIsQuickAddOpen(false)} title="New Transaction">
         <AddTransactionForm onClose={() => setIsQuickAddOpen(false)} />
       </Modal>
+
+      <FeatureTour section="dashboard" />
     </main>
   );
 };
