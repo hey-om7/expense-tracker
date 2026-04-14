@@ -73,6 +73,24 @@ const FeatureTour = ({ section }) => {
     setTargetRect(null);
   }, [isActive, currentStep, steps]);
 
+  // Handle adding/removing the highlight class to elements
+  useEffect(() => {
+    if (!isActive || currentStep >= steps.length) return;
+    
+    const step = steps[currentStep];
+    const el = step.targetSelector ? document.querySelector(step.targetSelector) : null;
+    
+    if (el) {
+      el.classList.add("onboarding-highlight");
+    }
+    
+    return () => {
+      if (el) {
+        el.classList.remove("onboarding-highlight");
+      }
+    };
+  }, [isActive, currentStep, steps]);
+
   useEffect(() => {
     updateTargetRect();
     setAnimKey(prev => prev + 1);
@@ -113,7 +131,7 @@ const FeatureTour = ({ section }) => {
   const currentStepData = steps[currentStep];
 
   return (
-    <div className="feature-tour-overlay" key={`tour-${section}`}>
+    <React.Fragment key={`tour-${section}`}>
       {/* Semi-transparent backdrop */}
       <div className="feature-tour-backdrop" onClick={handleSkip} />
 
@@ -145,7 +163,7 @@ const FeatureTour = ({ section }) => {
           onDone={handleDone}
         />
       </div>
-    </div>
+    </React.Fragment>
   );
 };
 
