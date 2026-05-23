@@ -4,6 +4,7 @@ import { formatCurrency } from '../utils/currency';
 import Modal from '../components/ui/Modal';
 import AddInvestmentForm from '../components/forms/AddInvestmentForm';
 import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
+import InvestmentAnalytics from '../components/ui/InvestmentAnalytics';
 
 import * as api from '../services/api';
 import FeatureTour from '../components/ui/FeatureTour';
@@ -13,6 +14,7 @@ const InvestmentsScreen = () => {
 
   const [profileModal, setProfileModal] = useState({ isOpen: false, data: null });
   const [tradeModal, setTradeModal] = useState({ isOpen: false, data: null });
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -142,9 +144,15 @@ const InvestmentsScreen = () => {
                   </div>
                 </div>
               </div>
-              <button onClick={() => setProfileModal({ isOpen: true, data: null })} className="bg-primary-container text-on-primary py-2 px-4 rounded-lg font-manrope font-bold text-sm shadow-xl shadow-[#E5BA73]/10 hover:brightness-110 transition-all active:scale-95">
-                + New Profile
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAnalyticsOpen(true)} className="flex items-center gap-1.5 bg-surface-container-highest text-on-surface-variant border border-outline/20 py-2 px-4 rounded-lg font-manrope font-bold text-sm hover:text-on-surface hover:border-outline/40 transition-all active:scale-95">
+                  <span className="material-symbols-outlined text-base">bar_chart</span>
+                  Analytics
+                </button>
+                <button onClick={() => setProfileModal({ isOpen: true, data: null })} className="bg-primary-container text-on-primary py-2 px-4 rounded-lg font-manrope font-bold text-sm shadow-xl shadow-[#E5BA73]/10 hover:brightness-110 transition-all active:scale-95">
+                  + New Profile
+                </button>
+              </div>
             </div>
 
             {/* ===== MOBILE HERO ===== */}
@@ -153,9 +161,14 @@ const InvestmentsScreen = () => {
                 <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
                   {activeFilter === 'All' ? 'Portfolio (Live)' : `${activeFilter} (Live)`}
                 </span>
-                <button onClick={() => setProfileModal({ isOpen: true, data: null })} className="bg-primary-container text-on-primary py-1.5 px-3 rounded-lg font-manrope font-bold text-xs shadow-lg shadow-[#E5BA73]/10 active:scale-95">
-                  + New
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setAnalyticsOpen(true)} className="flex items-center gap-1 bg-surface-container-highest text-on-surface-variant border border-outline/20 py-1.5 px-2.5 rounded-lg font-manrope font-bold text-xs active:scale-95 transition-all">
+                    <span className="material-symbols-outlined text-sm">bar_chart</span>
+                  </button>
+                  <button onClick={() => setProfileModal({ isOpen: true, data: null })} className="bg-primary-container text-on-primary py-1.5 px-3 rounded-lg font-manrope font-bold text-xs shadow-lg shadow-[#E5BA73]/10 active:scale-95">
+                    + New
+                  </button>
+                </div>
               </div>
               <h2 className="font-headline font-extrabold text-3xl text-primary tracking-tighter mb-3">
                 {formatCurrency(visiblePortfolioValue)}
@@ -366,6 +379,12 @@ const InvestmentsScreen = () => {
       <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({ isOpen: false, data: null })} title={`Execute Trade: ${tradeModal.data?.name}`}>
         {tradeModal.data && <InvestmentTradeForm investment={tradeModal.data} onClose={() => setTradeModal({ isOpen: false, data: null })} />}
       </Modal>
+
+      <InvestmentAnalytics
+        isOpen={analyticsOpen}
+        onClose={() => setAnalyticsOpen(false)}
+        investments={investments}
+      />
 
       <FeatureTour section="investments" />
     </main>

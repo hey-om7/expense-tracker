@@ -91,6 +91,7 @@ export const clearAllNotifications = () => request('/notifications', { method: '
 // ─── Stocks (Yahoo Finance) ───
 export const searchStocks = (query) => request(`/stocks/search?q=${encodeURIComponent(query)}`);
 export const fetchStockQuote = (symbol) => request(`/stocks/quote/${encodeURIComponent(symbol)}`);
+export const fetchStockHistory = (symbol, range) => request(`/stocks/history/${encodeURIComponent(symbol)}?range=${range}`);
 
 // ─── AI Chat (Gemini) ───
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
