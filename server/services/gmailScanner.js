@@ -4,7 +4,7 @@
  * extracts bill amount + due date, and returns structured results.
  *
  * Requires: imapflow, mailparser
- * Env vars: EMAIL_USER, EMAIL_PASS (Gmail App Password)
+ * Env vars: GMAIL_INBOX_USER, GMAIL_INBOX_PASS (Gmail App Password for the inbox account)
  */
 
 const { ImapFlow } = require('imapflow');
@@ -169,11 +169,11 @@ const isBillEmail = (subject = '', from = '') => {
  * @returns {Promise<Array<{subject, from, date, amount, dueDate, last4, rawSnippet}>>}
  */
 const scanGmailForBills = async (since = null) => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+  const user = process.env.GMAIL_INBOX_USER;
+  const pass = process.env.GMAIL_INBOX_PASS;
 
   if (!user || !pass) {
-    throw new Error('Gmail credentials not configured (EMAIL_USER / EMAIL_PASS)');
+    throw new Error('Gmail inbox credentials not configured (GMAIL_INBOX_USER / GMAIL_INBOX_PASS)');
   }
 
   // Default: look back 45 days on first scan, otherwise use the provided cutoff

@@ -262,7 +262,7 @@ const runReminderCheck = async () => {
  * Uses GmailScanState to track the last processed email date per user,
  * so each run only processes genuinely new emails — never duplicates.
  *
- * NOTE: All users share the same Gmail inbox (EMAIL_USER / EMAIL_PASS from .env).
+ * NOTE: All users share the same Gmail inbox (GMAIL_INBOX_USER / GMAIL_INBOX_PASS from .env).
  * The scan runs once globally, then matches found bills to each user's cards.
  */
 const processGmailBillScans = async () => {
