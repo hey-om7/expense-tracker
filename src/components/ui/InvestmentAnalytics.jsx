@@ -44,7 +44,6 @@ const PriceChart = ({ investment }) => {
     setError(null);
     try {
       if (investment.type === 'Mutual Fund') {
-        // Use mfapi.in for MF historical NAV
         const days = range === '7D' ? 7 : range === '1M' ? 30 : 365;
         const res = await fetch(`https://api.mfapi.in/mf/${investment.symbol}`);
         const json = await res.json();
@@ -97,7 +96,7 @@ const PriceChart = ({ investment }) => {
   };
 
   return (
-    <div className="bg-surface-container-low rounded-xl p-5 border border-outline/5">
+    <div className="bg-surface-container-low rounded-xl p-5 border border-outline/5 w-full">
       <div className="flex items-start justify-between mb-4">
         <div>
           <h4 className="font-bold text-on-surface text-sm">{investment.name}</h4>
@@ -117,8 +116,7 @@ const PriceChart = ({ investment }) => {
         </div>
       </div>
 
-      {/* Range tabs */}
-      <div className="flex gap-1 mb-4">
+      <div className="flex gap-1 mb-6">
         {RANGES.map(r => (
           <button
             key={r}
@@ -135,19 +133,19 @@ const PriceChart = ({ investment }) => {
       </div>
 
       {loading ? (
-        <div className="h-[180px] flex items-center justify-center">
+        <div className="h-[220px] w-full flex items-center justify-center">
           <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : error ? (
-        <div className="h-[180px] flex items-center justify-center text-outline text-xs">{error}</div>
+        <div className="h-[220px] w-full flex items-center justify-center text-outline text-xs">{error}</div>
       ) : data.length === 0 ? (
-        <div className="h-[180px] flex items-center justify-center text-outline text-xs">
+        <div className="h-[220px] w-full flex items-center justify-center text-outline text-xs">
           No historical data available for this asset type.
         </div>
       ) : (
-        <div className="h-[180px]">
+        <div className="h-[220px] min-h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={strokeColor} stopOpacity={0.25} />
@@ -163,44 +161,27 @@ const PriceChart = ({ investment }) => {
                 tick={{ fontSize: 10 }}
                 tickFormatter={formatDate}
                 interval="preserveStartEnd"
+                minTickGap={20}
               />
               <YAxis
                 stroke="#9a8f80"
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10 }}
-                width={55}
+                width={65}
                 domain={[minVal * 0.995, maxVal * 1.005]}
                 tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0)}`}
               />
-              <Tooltip
-                formatter={(v) => [formatCurrency(v), 'Price']}
-                labelFormatter={formatDate}
-                {...tooltipStyle}
-              />
-              <ReferenceLine
-                y={data[0]?.close}
-                stroke={strokeColor}
-                strokeDasharray="4 4"
-                strokeOpacity={0.4}
-              />
-              <Area
-                type="monotone"
-                dataKey="close"
-                stroke={strokeColor}
-                strokeWidth={2}
-                fill={`url(#${gradientId})`}
-                dot={false}
-                activeDot={{ r: 4, fill: strokeColor }}
-              />
+              <Tooltip formatter={(v) => [formatCurrency(v), 'Price']} labelFormatter={formatDate} {...tooltipStyle} />
+              <ReferenceLine y={data[0]?.close} stroke={strokeColor} strokeDasharray="4 4" strokeOpacity={0.4} />
+              <Area type="monotone" dataKey="close" stroke={strokeColor} strokeWidth={2} fill={`url(#${gradientId})`} dot={false} activeDot={{ r: 4, fill: strokeColor }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Buy price reference */}
       {investment.avgCost > 0 && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-on-surface-variant">
+        <div className="mt-4 flex items-center gap-2 text-xs text-on-surface-variant">
           <span className="w-4 border-t-2 border-dashed border-primary/40" />
           <span>Avg buy: <span className="font-bold text-on-surface">{formatCurrency(investment.avgCost)}</span></span>
           <span className="ml-auto font-bold" style={{ color: investment.currentPrice >= investment.avgCost ? '#95CD41' : '#ef4444' }}>
@@ -219,7 +200,6 @@ const PriceChart = ({ investment }) => {
 const PortfolioCharts = ({ investments }) => {
   const { totalPortfolioValue, totalInvested, totalUnrealizedProfit, totalRealizedProfit } = useAppContext();
 
-  // Allocation by type
   const allocationData = useMemo(() => {
     const typeMap = {};
     investments.forEach(inv => {
@@ -231,21 +211,26 @@ const PortfolioCharts = ({ investments }) => {
       .sort((a, b) => b.value - a.value);
   }, [investments]);
 
-  // P/L per holding bar chart
   const plData = useMemo(() => {
     return investments
       .filter(inv => inv.shares > 0)
-      .map(inv => ({
-        name: inv.symbol || inv.name.slice(0, 8),
-        fullName: inv.name,
-        unrealized: parseFloat(((inv.currentPrice - inv.avgCost) * inv.shares).toFixed(2)),
-        realized: parseFloat((inv.realizedProfit || 0).toFixed(2)),
-        color: TYPE_COLORS[inv.type] || '#9a8f80',
-      }))
+      .map(inv => {
+        // Smart slicing: Use symbol, or gracefully truncate long names
+        let displayName = inv.symbol || inv.name;
+        if (!inv.symbol && displayName.length > 14) {
+          displayName = displayName.slice(0, 13) + '…';
+        }
+        return {
+          name: displayName,
+          fullName: inv.name,
+          unrealized: parseFloat(((inv.currentPrice - inv.avgCost) * inv.shares).toFixed(2)),
+          realized: parseFloat((inv.realizedProfit || 0).toFixed(2)),
+          color: TYPE_COLORS[inv.type] || '#9a8f80',
+        };
+      })
       .sort((a, b) => b.unrealized - a.unrealized);
   }, [investments]);
 
-  // Trade activity over time (monthly buy/sell volumes)
   const tradeActivityData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const map = {};
@@ -270,9 +255,9 @@ const PortfolioCharts = ({ investments }) => {
   }, [investments]);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Portfolio Value', value: totalPortfolioValue, color: 'text-primary' },
           { label: 'Total Invested', value: totalInvested, color: 'text-[#E5BA73]' },
@@ -288,103 +273,114 @@ const PortfolioCharts = ({ investments }) => {
         ))}
       </div>
 
-      {/* Allocation Pie + P/L Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Allocation */}
-        <div className="bg-surface-container-low rounded-xl p-5 border border-outline/5">
-          <h4 className="font-bold text-sm text-on-surface mb-4">Allocation by Type</h4>
-          {allocationData.length === 0 ? (
-            <div className="h-[180px] flex items-center justify-center text-outline text-xs">No active holdings</div>
-          ) : (
-            <>
-              <div className="h-[160px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={allocationData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={4} dataKey="value">
-                      {allocationData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => formatCurrency(v)} {...tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-3 space-y-2">
-                {allocationData.map((e, i) => (
-                  <div key={i} className="flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
-                      <span className="text-on-surface-variant truncate">{e.fullName}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-[10px] text-on-surface-variant">
-                        {totalPortfolioValue > 0 ? ((e.value / totalPortfolioValue) * 100).toFixed(1) : 0}%
-                      </span>
-                      <span className="font-bold">{formatCurrency(e.value)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* P/L per holding */}
-        <div className="bg-surface-container-low rounded-xl p-5 border border-outline/5">
-          <h4 className="font-bold text-sm text-on-surface mb-4">Unrealized P/L by Holding</h4>
-          {plData.length === 0 ? (
-            <div className="h-[220px] flex items-center justify-center text-outline text-xs">No active holdings</div>
-          ) : (
-            <div className="h-[220px]">
+      {/* Allocation Pie */}
+      <div className="bg-surface-container-low rounded-xl p-6 border border-outline/5">
+        <h4 className="font-bold text-sm text-on-surface mb-5">Allocation by Type</h4>
+        {allocationData.length === 0 ? (
+          <div className="h-[180px] flex items-center justify-center text-outline text-xs">No active holdings</div>
+        ) : (
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            <div className="h-[180px] w-full md:w-[220px] shrink-0 min-h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={plData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#4e4539" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    stroke="#9a8f80"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v) => `${v >= 0 ? '+' : ''}${v >= 1000 || v <= -1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0)}`}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    stroke="#9a8f80"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                    width={45}
-                  />
-                  <Tooltip
-                    formatter={(v, name, props) => [formatCurrency(v), props.payload.fullName]}
-                    {...tooltipStyle}
-                  />
-                  <ReferenceLine x={0} stroke="#4e4539" />
-                  <Bar dataKey="unrealized" radius={[0, 4, 4, 0]}>
-                    {plData.map((entry, i) => (
-                      <Cell key={i} fill={entry.unrealized >= 0 ? '#95CD41' : '#ef4444'} />
-                    ))}
-                  </Bar>
-                </BarChart>
+                <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <Pie data={allocationData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value">
+                    {allocationData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => formatCurrency(v)} {...tooltipStyle} />
+                </PieChart>
               </ResponsiveContainer>
             </div>
-          )}
-        </div>
+            <div className="flex-1 w-full space-y-3">
+              {allocationData.map((e, i) => (
+                <div key={i} className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
+                    <span className="text-on-surface-variant truncate">{e.fullName}</span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-2">
+                    <span className="text-[10px] text-on-surface-variant w-8 text-right">
+                      {totalPortfolioValue > 0 ? ((e.value / totalPortfolioValue) * 100).toFixed(1) : 0}%
+                    </span>
+                    <span className="font-bold w-24 text-right">{formatCurrency(e.value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* P/L per holding - Labels strictly enforced & given space */}
+      <div className="bg-surface-container-low rounded-xl p-6 border border-outline/5 w-full">
+        <h4 className="font-bold text-sm text-on-surface mb-5">Unrealized P/L by Holding</h4>
+        {plData.length === 0 ? (
+          <div className="h-[130px] flex items-center justify-center text-outline text-xs">No active holdings</div>
+        ) : (
+          <div style={{ height: Math.max(130, plData.length * 18 + 35) }} className="w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              {/* Reset left margin to 0, because YAxis width handles the left side layout */}
+              <BarChart data={plData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#4e4539" horizontal={false} />
+                <XAxis
+                  type="number"
+                  stroke="#9a8f80"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => `${v >= 0 ? '+' : ''}${Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0)}`}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke="#9a8f80"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#9a8f80' }} // added explicit fill to ensure text color applies
+                  width={120} // Increased from 85 to 120 to guarantee space for the company name
+                  interval={0} // CRITICAL FIX: Forces every single label to render despite tight row heights
+                />
+                <Tooltip 
+                  formatter={(v, name, props) => [formatCurrency(v), props.payload.fullName]} 
+                  {...tooltipStyle} 
+                  cursor={{ 
+                    fill: 'rgba(255, 255, 255, 0.03)', 
+                    style: { transition: 'all 500ms ease' } 
+                  }}
+                />
+                <ReferenceLine x={0} stroke="#4e4539" strokeWidth={1.5} />
+                <Bar dataKey="unrealized" radius={[0, 4, 4, 0]} barSize={10}>
+                  {plData.map((entry, i) => (
+                    <Cell key={i} fill={entry.unrealized >= 0 ? '#95CD41' : '#ef4444'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Trade Activity */}
-      <div className="bg-surface-container-low rounded-xl p-5 border border-outline/5">
-        <h4 className="font-bold text-sm text-on-surface mb-4">Trade Activity (12 Months)</h4>
-        <div className="h-[200px]">
+      <div className="bg-surface-container-low rounded-xl p-6 border border-outline/5 w-full">
+        <h4 className="font-bold text-sm text-on-surface mb-5">Trade Activity (12 Months)</h4>
+        <div className="h-[250px] min-h-[250px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={tradeActivityData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <BarChart data={tradeActivityData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#4e4539" vertical={false} />
-              <XAxis dataKey="name" stroke="#9a8f80" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+              <XAxis 
+                dataKey="name" 
+                stroke="#9a8f80" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10 }} 
+                minTickGap={15} 
+                interval="preserveStartEnd"
+              />
               <YAxis
                 stroke="#9a8f80"
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10 }}
-                width={40}
+                width={55}
                 tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
               />
               <Tooltip formatter={(v) => formatCurrency(v)} {...tooltipStyle} cursor={{ fill: 'rgba(229,186,115,0.05)' }} />
@@ -393,9 +389,9 @@ const PortfolioCharts = ({ investments }) => {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex gap-4 mt-2 text-[10px] font-bold text-on-surface-variant">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#95CD41]" />Bought</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#E5BA73]" />Sold</span>
+        <div className="flex justify-center gap-6 mt-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#95CD41]" />Bought</span>
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#E5BA73]" />Sold</span>
         </div>
       </div>
     </div>
@@ -406,7 +402,6 @@ const PortfolioCharts = ({ investments }) => {
 const InvestmentAnalytics = ({ isOpen, onClose, investments }) => {
   const [activeTab, setActiveTab] = useState('overview');
 
-  // Only show price charts for Stock and MF types
   const chartableInvestments = useMemo(
     () => investments.filter(inv => inv.type === 'Stock' || inv.type === 'Mutual Fund'),
     [investments]
@@ -416,21 +411,9 @@ const InvestmentAnalytics = ({ isOpen, onClose, investments }) => {
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} aria-hidden="true" />
 
-      {/* Panel */}
-      <div
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-surface-container shadow-2xl flex flex-col"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Investment Analytics"
-      >
-        {/* Header */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl bg-surface-container shadow-2xl flex flex-col" role="dialog" aria-modal="true" aria-label="Investment Analytics">
         <div className="flex items-center justify-between px-6 py-5 border-b border-outline/10 shrink-0">
           <div>
             <h2 className="font-headline font-bold text-lg text-on-surface">Investment Analytics</h2>
@@ -438,57 +421,30 @@ const InvestmentAnalytics = ({ isOpen, onClose, investments }) => {
               Portfolio performance & charts
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label="Close analytics"
-          >
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors" aria-label="Close analytics">
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-outline/10 px-6 shrink-0">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-3 px-1 mr-6 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${
-              activeTab === 'overview'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
+          <button onClick={() => setActiveTab('overview')} className={`py-3 px-1 mr-6 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${activeTab === 'overview' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
             Overview
           </button>
           {chartableInvestments.length > 0 && (
-            <button
-              onClick={() => setActiveTab('charts')}
-              className={`py-3 px-1 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${
-                activeTab === 'charts'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
+            <button onClick={() => setActiveTab('charts')} className={`py-3 px-1 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${activeTab === 'charts' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
               Price Charts
             </button>
           )}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar p-6">
-          {activeTab === 'overview' && (
-            <PortfolioCharts investments={investments} />
-          )}
-
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar p-6">
+          {activeTab === 'overview' && <PortfolioCharts investments={investments} />}
           {activeTab === 'charts' && (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-6">
               {chartableInvestments.length === 0 ? (
-                <div className="flex items-center justify-center h-40 text-outline text-sm">
-                  No Stocks or Mutual Funds to chart.
-                </div>
+                <div className="flex items-center justify-center h-40 text-outline text-sm">No Stocks or Mutual Funds to chart.</div>
               ) : (
-                chartableInvestments.map(inv => (
-                  <PriceChart key={inv.id} investment={inv} />
-                ))
+                chartableInvestments.map(inv => <PriceChart key={inv.id} investment={inv} />)
               )}
             </div>
           )}
