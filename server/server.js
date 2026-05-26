@@ -122,6 +122,7 @@ app.use('/api/stocks', require('./routes/stocks'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/onboarding', require('./routes/onboarding'));
+app.use('/api/gmail', require('./routes/gmailScan'));
 
 // ─── Health check ───
 app.get('/api/health', (_req, res) => {

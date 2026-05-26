@@ -254,6 +254,15 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
+  const refetchInvestments = useCallback(async () => {
+    try {
+      const fresh = await api.fetchInvestments();
+      setInvestments(normalizeList(fresh));
+    } catch (err) {
+      console.error('Failed to refetch investments:', err);
+    }
+  }, []);
+
   const executeTradeOnInvestment = useCallback(async (investmentId, tradeData) => {
     try {
       const updatedInv = await api.executeInvestmentTrade(investmentId, {
@@ -353,6 +362,15 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
+  const refetchCreditCards = useCallback(async () => {
+    try {
+      const fresh = await api.fetchCreditCards();
+      setCreditCards(normalizeList(fresh));
+    } catch (err) {
+      console.error('Failed to refetch credit cards:', err);
+    }
+  }, []);
+
 
 
   // ─── Loading / Error States ───
@@ -384,9 +402,9 @@ export const AppProvider = ({ children }) => {
       totalBalance, monthlySpent, totalPortfolioValue, totalInvested, totalRealizedProfit, totalUnrealizedProfit,
       addTransaction, updateTransaction, deleteTransaction,
       addCategory, updateCategory, deleteCategory, getCategory,
-      addInvestment, updateInvestment, deleteInvestment, executeTradeOnInvestment, deleteHolding,
+      addInvestment, updateInvestment, deleteInvestment, refetchInvestments, executeTradeOnInvestment, deleteHolding,
       addSubscription, updateSubscription, deleteSubscription,
-      addCreditCard, updateCreditCard, deleteCreditCard,
+      addCreditCard, updateCreditCard, deleteCreditCard, refetchCreditCards,
       addNotification, markAsRead, markAllAsRead, clearNotifications
     }}>
       {children}

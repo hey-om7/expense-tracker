@@ -93,7 +93,8 @@ export const searchStocks = (query) => request(`/stocks/search?q=${encodeURIComp
 export const fetchStockQuote = (symbol) => request(`/stocks/quote/${encodeURIComponent(symbol)}`);
 export const fetchStockHistory = (symbol, range) => request(`/stocks/history/${encodeURIComponent(symbol)}?range=${range}`);
 
-// ─── AI Chat (Gemini) ───
+// ─── Gmail Bill Scanner ───
+export const scanGmailBills = () => request('/gmail/scan-bills', { method: 'POST' });
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
 
 // ─── Onboarding ───

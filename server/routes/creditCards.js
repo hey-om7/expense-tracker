@@ -11,6 +11,7 @@ const pickFields = (body) => {
   if (body.name !== undefined) clean.name = String(body.name).slice(0, 100);
   if (body.last4Digits !== undefined) clean.last4Digits = String(body.last4Digits).replace(/\D/g, '').slice(0, 4);
   if (body.billDueDate !== undefined) clean.billDueDate = body.billDueDate;
+  if (body.billAmount !== undefined) clean.billAmount = body.billAmount != null ? Number(body.billAmount) : null;
   if (body.totalLimit !== undefined) {
     clean.totalLimit = Number(body.totalLimit);
     if (isNaN(clean.totalLimit) || clean.totalLimit < 0) clean.totalLimit = 0;

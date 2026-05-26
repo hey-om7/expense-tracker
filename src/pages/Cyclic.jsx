@@ -5,6 +5,7 @@ import Modal from '../components/ui/Modal';
 import AddSubscriptionForm from '../components/forms/AddSubscriptionForm';
 import AddCreditCardForm from '../components/forms/AddCreditCardForm';
 import FeatureTour from '../components/ui/FeatureTour';
+import * as api from '../services/api';
 
 // Helper function to force DD/MM/YYYY format
 const formatDateToDDMMYYYY = (dateString) => {
@@ -20,11 +21,29 @@ const formatDateToDDMMYYYY = (dateString) => {
 };
 
 const CyclicScreen = () => {
-  const { subscriptions, creditCards, updateSubscription } = useAppContext();
+  const { subscriptions, creditCards, updateSubscription, refetchCreditCards } = useAppContext();
   
   const [activeTab, setActiveTab] = useState('SUBSCRIPTIONS');
   const [subModal, setSubModal] = useState({ isOpen: false, data: null });
   const [ccModal, setCcModal] = useState({ isOpen: false, data: null });
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+
+  const handleGmailScan = async () => {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const result = await api.scanGmailBills();
+      setScanResult(result);
+      if (result.matched > 0) {
+        await refetchCreditCards();
+      }
+    } catch (err) {
+      setScanResult({ error: err.message || 'Scan failed. Check server logs.' });
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const isApproaching = (dateString, daysThreshold = 5) => {
      const today = new Date();
@@ -224,12 +243,65 @@ const CyclicScreen = () => {
       {/* ===== BILLS TAB ===== */}
       {activeTab === 'BILLS' && (
          <section className="animate-[slideUp_0.3s_ease-out]" data-onboarding="cyclic-bills">
-            <div className="flex justify-between items-center mb-6 max-md:mb-4">
+            <div className="flex justify-between items-center mb-4 max-md:mb-3">
                <h3 className="font-headline font-bold text-xl max-md:text-base">Credit Cards ({creditCards.length})</h3>
-               <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs">
-                 <span className="material-symbols-outlined text-sm">add</span> Add Card
-               </button>
+               <div className="flex items-center gap-2">
+                 <button
+                   onClick={handleGmailScan}
+                   disabled={scanning}
+                   className="flex items-center gap-1.5 text-sm font-bold text-primary border border-primary/30 bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed max-md:text-xs max-md:px-2.5 max-md:py-1"
+                 >
+                   {scanning ? (
+                     <>
+                       <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                       Scanning...
+                     </>
+                   ) : (
+                     <>
+                       <span className="material-symbols-outlined text-sm">mark_email_read</span>
+                       Scan Gmail
+                     </>
+                   )}
+                 </button>
+                 <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs">
+                   <span className="material-symbols-outlined text-sm">add</span> Add Card
+                 </button>
+               </div>
             </div>
+
+            {/* Scan result banner */}
+            {scanResult && (
+              <div className={`mb-4 p-4 rounded-xl border text-sm max-md:text-xs ${
+                scanResult.error
+                  ? 'bg-error/10 border-error/20 text-error'
+                  : scanResult.matched > 0
+                    ? 'bg-[#95CD41]/10 border-[#95CD41]/20 text-[#95CD41]'
+                    : 'bg-surface-container-highest border-outline/10 text-on-surface-variant'
+              }`}>
+                {scanResult.error ? (
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">error</span>
+                    {scanResult.error}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 font-bold">
+                      <span className="material-symbols-outlined text-base">
+                        {scanResult.matched > 0 ? 'check_circle' : 'info'}
+                      </span>
+                      {scanResult.matched > 0
+                        ? `Updated ${scanResult.matched} card${scanResult.matched !== 1 ? 's' : ''} from Gmail — summary email sent.`
+                        : scanResult.message || 'No matching bill emails found.'}
+                    </div>
+                    {scanResult.unmatched > 0 && (
+                      <p className="text-on-surface-variant text-xs ml-6">
+                        {scanResult.unmatched} bill email{scanResult.unmatched !== 1 ? 's' : ''} found but couldn't be matched to a tracked card.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             
             {sortedCreditCards.length === 0 ? (
                <div className="text-center py-16 bg-surface-container-low rounded-xl border border-dashed border-outline/20 max-md:py-10 max-md:rounded-lg">
@@ -270,7 +342,14 @@ const CyclicScreen = () => {
                              </div>
                              <div className="text-right border-l border-outline/10 pl-6">
                                 <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Amount Pending</span>
-                                <span className="font-headline font-extrabold text-xl text-outline">N/A</span>
+                                <span className={`font-headline font-extrabold text-xl ${cc.billAmount ? 'text-error' : 'text-outline'}`}>
+                                  {cc.billAmount ? formatCurrency(cc.billAmount) : 'N/A'}
+                                </span>
+                                {cc.billGeneratedDate && (
+                                  <span className="block text-[9px] text-on-surface-variant mt-0.5">
+                                    Bill of {new Date(cc.billGeneratedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                )}
                              </div>
                              <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100 hidden md:block">edit</span>
                           </div>
@@ -301,7 +380,9 @@ const CyclicScreen = () => {
                              </div>
                              <div className="text-right">
                                 <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Pending</span>
-                                <span className="font-headline font-extrabold text-sm text-outline">N/A</span>
+                                <span className={`font-headline font-extrabold text-sm ${cc.billAmount ? 'text-error' : 'text-outline'}`}>
+                                  {cc.billAmount ? formatCurrency(cc.billAmount) : 'N/A'}
+                                </span>
                              </div>
                           </div>
                         </div>

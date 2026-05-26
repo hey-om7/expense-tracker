@@ -5,6 +5,8 @@ const creditCardSchema = new mongoose.Schema({
   name: { type: String, required: true, maxlength: 100 },
   last4Digits: { type: String, required: true, maxlength: 4 },
   billDueDate: { type: Date, required: true },
+  billAmount: { type: Number, default: null },          // populated by Gmail scan
+  billGeneratedDate: { type: Date, default: null },     // date the bill email was received
   totalLimit: { type: Number, default: 0, min: 0 },
   notes: { type: String, default: '', maxlength: 500 },
   lastReminderSentDate: { type: Date, default: null },
