@@ -234,7 +234,10 @@ export const AppProvider = ({ children }) => {
   const updateInvestment = useCallback(async (id, updatedI) => {
     try {
       const saved = await api.updateInvestment(id, updatedI);
-      setInvestments(prev => prev.map(i => i.id === id ? normalize(saved) : i));
+      // Merge the response back — the PUT now returns computed fields (totalQuantity,
+      // avgBuyPrice, realizedProfit) so a full replace is safe. But as a belt-and-
+      // suspenders guard, we also preserve any fields the server didn't echo back.
+      setInvestments(prev => prev.map(i => i.id === id ? { ...i, ...normalize(saved) } : i));
     } catch (err) {
       console.error('Failed to update investment:', err);
     }
