@@ -162,19 +162,26 @@ const isBillEmail = (subject = '', from = '') => {
 
 // ─── Main scanner function ────────────────────────────────────────────────
 /**
- * Scans Gmail inbox for CC bill emails from the last `daysBack` days.
- * Returns an array of parsed bill objects.
+ * Scans Gmail inbox for CC bill emails.
  *
- * @param {number} daysBack - How many days back to search (default 45)
- * @returns {Promise<Array<{subject, from, date, amount, dueDate, last4, rawText}>>}
+ * @param {Date|null} since - Only fetch emails received after this date.
+ *                            If null, defaults to 45 days ago (for manual/first scans).
+ * @returns {Promise<Array<{subject, from, date, amount, dueDate, last4, rawSnippet}>>}
  */
-const scanGmailForBills = async (daysBack = 45) => {
+const scanGmailForBills = async (since = null) => {
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS;
 
   if (!user || !pass) {
     throw new Error('Gmail credentials not configured (EMAIL_USER / EMAIL_PASS)');
   }
+
+  // Default: look back 45 days on first scan, otherwise use the provided cutoff
+  const sinceDate = since instanceof Date ? since : (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 45);
+    return d;
+  })();
 
   const client = new ImapFlow({
     host: 'imap.gmail.com',
@@ -191,18 +198,14 @@ const scanGmailForBills = async (daysBack = 45) => {
 
     const lock = await client.getMailboxLock('INBOX');
     try {
-      // Search for emails from the last N days
-      const since = new Date();
-      since.setDate(since.getDate() - daysBack);
-
-      const uids = await client.search({ since });
+      const uids = await client.search({ since: sinceDate });
       if (!uids || uids.length === 0) {
         return results;
       }
 
-      // Fetch in batches to avoid memory issues with large inboxes
+      // Cap at 200 most recent to avoid memory issues on large inboxes
       const BATCH_SIZE = 50;
-      const recentUids = uids.slice(-Math.min(uids.length, 200)); // last 200 emails max
+      const recentUids = uids.slice(-Math.min(uids.length, 200));
 
       for (let i = 0; i < recentUids.length; i += BATCH_SIZE) {
         const batch = recentUids.slice(i, i + BATCH_SIZE);
@@ -213,6 +216,9 @@ const scanGmailForBills = async (daysBack = 45) => {
             const from = msg.envelope?.from?.[0]?.address || '';
             const fromName = msg.envelope?.from?.[0]?.name || '';
             const emailDate = msg.envelope?.date || new Date();
+
+            // Strict date guard — IMAP SINCE is date-only (no time), so re-check here
+            if (emailDate <= sinceDate) continue;
 
             // Quick filter before full parse
             if (!isBillEmail(subject, `${from} ${fromName}`)) continue;
@@ -237,7 +243,7 @@ const scanGmailForBills = async (daysBack = 45) => {
               last4,
               rawSnippet: bodyText.slice(0, 500).replace(/\s+/g, ' ').trim(),
             });
-          } catch (msgErr) {
+          } catch {
             // Skip malformed messages silently
           }
         }

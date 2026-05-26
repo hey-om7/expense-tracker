@@ -10,12 +10,12 @@ const auth = require('../middleware/authMiddleware');
 const CreditCard = require('../models/CreditCard');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const GmailScanState = require('../models/GmailScanState');
 const { scanGmailForBills } = require('../services/gmailScanner');
 const { sendEmail } = require('../services/emailService');
 
 router.use(auth);
 
-// In-flight lock per user to prevent double-scans
 const scanLocks = new Set();
 
 router.post('/scan-bills', async (req, res) => {
@@ -25,52 +25,55 @@ router.post('/scan-bills', async (req, res) => {
   scanLocks.add(req.userId);
 
   try {
-    // 1. Scan Gmail
-    const bills = await scanGmailForBills(45);
+    // Load this user's scan state to get the cutoff date
+    const state = await GmailScanState.findOne({ userId: req.userId }).lean();
+    const since = state?.lastEmailDate || null; // null = first scan, defaults to 45 days back
+
+    // Scan Gmail from the cutoff onwards
+    const bills = await scanGmailForBills(since);
 
     if (bills.length === 0) {
+      // Still update lastScannedAt so we know the scan ran
+      await GmailScanState.findOneAndUpdate(
+        { userId: req.userId },
+        { $set: { lastScannedAt: new Date() } },
+        { upsert: true }
+      );
       return res.json({
         matched: 0,
         unmatched: 0,
         bills: [],
-        message: 'No credit card bill emails found in the last 45 days.',
+        message: since
+          ? 'No new bill emails since your last scan.'
+          : 'No credit card bill emails found in the last 45 days.',
       });
     }
 
-    // 2. Load user's tracked credit cards
     const cards = await CreditCard.find({ userId: req.userId });
-
     const matched = [];
     const unmatched = [];
 
     for (const bill of bills) {
       let card = null;
 
-      // Try to match by last 4 digits first
       if (bill.last4) {
         card = cards.find(c => c.last4Digits === bill.last4);
       }
-
-      // Fallback: match by card name keywords in email subject/from
       if (!card) {
-        card = cards.find(c => {
-          const cardNameLower = c.name.toLowerCase();
-          const subjectLower = bill.subject.toLowerCase();
-          const fromLower = bill.from.toLowerCase();
-          // Check if any word from the card name appears in subject or sender
-          return cardNameLower.split(/\s+/).some(word =>
-            word.length > 3 && (subjectLower.includes(word) || fromLower.includes(word))
-          );
-        });
+        card = cards.find(c =>
+          c.name.toLowerCase().split(/\s+/).some(word =>
+            word.length > 3 && (
+              bill.subject.toLowerCase().includes(word) ||
+              bill.from.toLowerCase().includes(word)
+            )
+          )
+        );
       }
 
       if (card) {
-        // Update the card with bill details
-        const updateData = {};
+        const updateData = { billGeneratedDate: bill.date };
         if (bill.amount) updateData.billAmount = bill.amount;
         if (bill.dueDate) updateData.billDueDate = bill.dueDate;
-        updateData.billGeneratedDate = bill.date;
-
         await CreditCard.findByIdAndUpdate(card._id, updateData);
 
         matched.push({
@@ -95,19 +98,19 @@ router.post('/scan-bills', async (req, res) => {
       }
     }
 
-    // 3. Send summary notification in-app
+    // In-app notification
     if (matched.length > 0) {
       const cardNames = matched.map(m => m.cardName).join(', ');
       await Notification.create({
         userId: req.userId,
-        title: 'Credit Card Bills Updated',
+        title: '💳 Credit Card Bills Updated',
         message: `Found and updated bills for: ${cardNames}`,
         isRead: false,
         date: new Date(),
       });
     }
 
-    // 4. Send summary email to the user
+    // Summary email
     const user = await User.findById(req.userId).select('email name').lean();
     const userEmail = user?.email || process.env.EMAIL_USER;
     const userName = user?.name || 'there';
@@ -120,6 +123,23 @@ router.post('/scan-bills', async (req, res) => {
         emailHtml
       );
     }
+
+    // Advance the watermark to the most recent email we processed
+    const latestDate = bills.reduce(
+      (max, b) => (new Date(b.date) > max ? new Date(b.date) : max),
+      new Date(0)
+    );
+    await GmailScanState.findOneAndUpdate(
+      { userId: req.userId },
+      {
+        $set: {
+          lastEmailDate: latestDate,
+          lastScannedAt: new Date(),
+          lastScanCount: matched.length,
+        },
+      },
+      { upsert: true }
+    );
 
     res.json({
       matched: matched.length,
