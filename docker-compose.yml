@@ -5,8 +5,10 @@ services:
       dockerfile: backend/Dockerfile
     container_name: vestor-backend
     restart: unless-stopped
-    ports:
-      - "5001:5001"
+    # Not published to the host: only nginx (frontend) can reach it. Publishing
+    # it would let clients bypass nginx and spoof X-Forwarded-For to evade rate limits.
+    expose:
+      - "5001"
     env_file:
       - .env
     networks:

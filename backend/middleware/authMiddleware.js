@@ -27,20 +27,20 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    // Check user existence with cache
-    const cached = userCache.get(decoded.userId);
-    if (cached && (Date.now() - cached.checkedAt) < CACHE_TTL) {
-      if (!cached.valid) {
-        return res.status(401).json({ message: 'Account no longer exists' });
-      }
-    } else {
-      // Verify user still exists in DB
+    // Check user existence + token version with cache
+    let cached = userCache.get(decoded.userId);
+    if (!cached || (Date.now() - cached.checkedAt) >= CACHE_TTL) {
       const User = mongoose.model('User');
-      const userExists = await User.exists({ _id: decoded.userId });
-      userCache.set(decoded.userId, { valid: !!userExists, checkedAt: Date.now() });
-      if (!userExists) {
-        return res.status(401).json({ message: 'Account no longer exists' });
-      }
+      const user = await User.findById(decoded.userId).select('tokenVersion').lean();
+      cached = { valid: !!user, tokenVersion: user?.tokenVersion || 0, checkedAt: Date.now() };
+      userCache.set(decoded.userId, cached);
+    }
+    if (!cached.valid) {
+      return res.status(401).json({ message: 'Account no longer exists' });
+    }
+    // Reject tokens issued before the last password reset / revocation
+    if ((decoded.tv || 0) !== cached.tokenVersion) {
+      return res.status(401).json({ message: 'Session revoked, please login again' });
     }
 
     // Evict old cache entries periodically
@@ -64,4 +64,8 @@ const auth = async (req, res, next) => {
   }
 };
 
+// Drop the cached entry so revocations take effect immediately in this process.
+const invalidateUserCache = (userId) => userCache.delete(String(userId));
+
 module.exports = auth;
+module.exports.invalidateUserCache = invalidateUserCache;

@@ -9,6 +9,14 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env'
 
 const app = express();
 
+// ─── Refuse to start with a missing or guessable JWT secret ───
+// A weak secret lets anyone forge a token for any userId.
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('❌ JWT_SECRET must be set and at least 32 characters. Generate one with: openssl rand -hex 48');
+  process.exit(1);
+}
+app.disable('x-powered-by');
+
 // ─── Trust proxy (required behind load balancers / reverse proxies) ───
 app.set('trust proxy', 1);
 

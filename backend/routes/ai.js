@@ -93,8 +93,8 @@ router.post('/chat', async (req, res) => {
     
   } catch (err) {
     console.error('AI Chat Error:', err.message);
-    if (err.message.includes('API key') || err.message.includes('GEMINI') || err.message.includes('GROQ')) {
-      return res.status(503).json({ message: err.message });
+    if (/api key|GEMINI|GROQ/i.test(err.message || '')) {
+      return res.status(503).json({ message: 'The AI provider rejected the request. Check your API key in Settings.' });
     }
     res.status(500).json({ message: 'Failed to get AI response. Please try again.' });
   }

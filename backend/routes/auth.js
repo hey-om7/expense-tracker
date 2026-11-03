@@ -1,17 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
+const { invalidateUserCache } = require('../middleware/authMiddleware');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  });
-};
+const bcrypt = require('bcryptjs');
+const { signToken, DUMMY_BCRYPT_HASH } = require('../utils/security');
+
+const generateToken = (user) => signToken(user);
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -19,7 +18,8 @@ router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
 
     // Validate inputs
-    if (!name || !email || !password) {
+    if (!name || !email || !password ||
+        typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ message: 'All fields are required' });
     }
     // Sanitize name — strip HTML tags
@@ -33,8 +33,8 @@ router.post('/register', async (req, res) => {
     if (String(email).length > 254) {
       return res.status(400).json({ message: 'Email address is too long' });
     }
-    if (password.length < 6 || password.length > 128) {
-      return res.status(400).json({ message: 'Password must be 6-128 characters' });
+    if (password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
+      return res.status(400).json({ message: 'Password must be 8-72 characters' });
     }
 
     // Check duplicate email
@@ -48,14 +48,14 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     res.status(201).json({
       token,
       user: user.toJSON(),
     });
   } catch (err) {
-    console.error('Register error:', err);
+    console.error('Register error:', err.message);
     res.status(500).json({ message: 'Registration failed. Please try again.' });
   }
 });
@@ -65,19 +65,18 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string' || password.length > 128) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
     // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
-    // Reject Google-only users from password login
-    if (user.authProvider === 'google' && !user.password) {
-      return res.status(401).json({ message: 'This account uses Google Sign-In. Please sign in with Google.' });
+    // Same bcrypt cost and same message whether or not the account exists,
+    // so response time/text cannot be used to discover registered emails.
+    if (!user || !user.password) {
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Verify password
@@ -87,14 +86,14 @@ router.post('/login', async (req, res) => {
     }
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     res.json({
       token,
       user: user.toJSON(),
     });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('Login error:', err.message);
     res.status(500).json({ message: 'Login failed. Please try again.' });
   }
 });
@@ -117,7 +116,7 @@ router.get('/me', auth, async (req, res) => {
 router.post('/google', async (req, res) => {
   try {
     const { credential } = req.body;
-    if (!credential) {
+    if (!credential || typeof credential !== 'string') {
       return res.status(400).json({ message: 'Google credential is required' });
     }
 
@@ -127,10 +126,10 @@ router.post('/google', async (req, res) => {
       audience: process.env.GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
-    const { sub: googleId, email, name, picture } = payload;
+    const { sub: googleId, email, name, email_verified } = payload;
 
-    if (!email) {
-      return res.status(400).json({ message: 'Google account must have an email' });
+    if (!email || email_verified !== true) {
+      return res.status(400).json({ message: 'Google account must have a verified email' });
     }
 
     // Check if user exists by googleId or email
@@ -138,10 +137,19 @@ router.post('/google', async (req, res) => {
 
     if (user) {
       // Link Google ID if user exists by email but hasn't linked Google yet
+      if (user.googleId && user.googleId !== googleId) {
+        return res.status(401).json({ message: 'This email is linked to a different Google account.' });
+      }
       if (!user.googleId) {
+        // Google just proved ownership of this email. Anyone could have
+        // registered it earlier with a password ("pre-account hijacking"),
+        // so drop that password and revoke every existing session.
         user.googleId = googleId;
         user.authProvider = 'google';
+        user.password = undefined;
+        user.tokenVersion = (user.tokenVersion || 0) + 1;
         await user.save();
+        invalidateUserCache(user._id);
       }
     } else {
       // Create new user
@@ -154,14 +162,14 @@ router.post('/google', async (req, res) => {
       await user.save();
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     res.json({
       token,
       user: user.toJSON(),
     });
   } catch (err) {
-    console.error('Google auth error:', err);
+    console.error('Google auth error:', err.message);
     if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
       return res.status(401).json({ message: 'Google token is invalid or expired. Please try again.' });
     }

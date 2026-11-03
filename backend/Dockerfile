@@ -18,5 +18,10 @@ WORKDIR /app/backend
 # Expose the backend port
 EXPOSE 5001
 
+ENV NODE_ENV=production
+
+# Drop root privileges
+USER node
+
 # Start the application
 CMD ["node", "server.js"]

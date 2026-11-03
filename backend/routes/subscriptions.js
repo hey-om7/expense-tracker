@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     // FIXED: Expose the actual mongoose validation error so you can debug
     console.error('Save Subscription Error:', err.message);
-    res.status(400).json({ message: 'Failed to create subscription', error: err.message });
+    res.status(400).json({ message: 'Failed to create subscription' });
   }
 });
 
@@ -68,7 +68,7 @@ router.put('/:id', validateId, async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('Update Subscription Error:', err.message);
-    res.status(400).json({ message: 'Failed to update subscription', error: err.message });
+    res.status(400).json({ message: 'Failed to update subscription' });
   }
 });
 

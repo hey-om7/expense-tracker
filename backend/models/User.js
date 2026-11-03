@@ -31,6 +31,16 @@ const userSchema = new mongoose.Schema({
     enum: ['local', 'google'],
     default: 'local',
   },
+  // Incremented to revoke every issued JWT (password reset, account takeover recovery).
+  tokenVersion: {
+    type: Number,
+    default: 0,
+  },
+  resetPasswordRequestedAt: {
+    type: Date,
+    default: null,
+    select: false,
+  },
   resetPasswordToken: {
     type: String,
     default: null,
@@ -61,6 +71,10 @@ userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
   delete obj.googleId;
+  delete obj.tokenVersion;
+  delete obj.resetPasswordToken;
+  delete obj.resetPasswordExpires;
+  delete obj.resetPasswordRequestedAt;
   delete obj.__v;
   return obj;
 };

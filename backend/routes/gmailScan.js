@@ -13,50 +13,24 @@ const User = require('../models/User');
 const GmailScanState = require('../models/GmailScanState');
 const { scanGmailForBills } = require('../services/gmailScanner');
 const { sendEmail } = require('../services/emailService');
+const { escapeHtml, canUseGmailScan } = require('../utils/security');
 
 router.use(auth);
 
 const scanLocks = new Set();
 
-// ─── DEBUG endpoint — returns raw parsed data, touches nothing in DB ───────
-// Hit POST /api/gmail/debug-scan to see exactly what the scanner extracts.
-router.post('/debug-scan', async (req, res) => {
-  try {
-    console.log('\n🔍 DEBUG SCAN STARTED\n');
-    const bills = await scanGmailForBills(null); // always scan full 45 days
-
-    const debug = bills.map(b => ({
-      subject: b.subject,
-      from: b.from,
-      emailDate: b.date,
-      last4: b.last4,
-      amount: b.amount,
-      dueDate: b.dueDate,
-      dueDateISO: b.dueDate instanceof Date ? b.dueDate.toISOString() : null,
-      dueDateValid: b.dueDate instanceof Date && !isNaN(b.dueDate),
-      rawSnippet: b.rawSnippet,
-    }));
-
-    console.log('\n🔍 DEBUG SCAN RESULTS:');
-    debug.forEach((b, i) => {
-      console.log(`\n[${i + 1}] ${b.subject}`);
-      console.log(`    from     : ${b.from}`);
-      console.log(`    emailDate: ${b.emailDate}`);
-      console.log(`    last4    : ${b.last4}`);
-      console.log(`    amount   : ${b.amount}`);
-      console.log(`    dueDate  : ${b.dueDate}`);
-      console.log(`    dueDateISO: ${b.dueDateISO}`);
-      console.log(`    dueDateValid: ${b.dueDateValid}`);
-    });
-
-    res.json({ count: debug.length, bills: debug });
-  } catch (err) {
-    console.error('Debug scan error:', err.message);
-    res.status(500).json({ message: err.message });
+// The scanner reads ONE shared inbox (GMAIL_INBOX_USER). Only allow-listed
+// owners may trigger it, otherwise any registered user could pull the
+// owner's bill amounts, due dates and email subjects into their account.
+const requireGmailOwner = async (req, res, next) => {
+  const user = await User.findById(req.userId).select('email').lean();
+  if (!canUseGmailScan(user?.email)) {
+    return res.status(403).json({ message: 'Gmail bill scanning is not enabled for this account.' });
   }
-});
+  next();
+};
 
-router.post('/scan-bills', async (req, res) => {
+router.post('/scan-bills', requireGmailOwner, async (req, res) => {
   if (scanLocks.has(req.userId)) {
     return res.status(429).json({ message: 'Scan already in progress. Please wait.' });
   }
@@ -160,7 +134,7 @@ router.post('/scan-bills', async (req, res) => {
 
     // Summary email
     const user = await User.findById(req.userId).select('email name').lean();
-    const userEmail = user?.email || process.env.EMAIL_USER;
+    const userEmail = user?.email;
     const userName = user?.name || 'there';
 
     if (userEmail) {
@@ -200,7 +174,7 @@ router.post('/scan-bills', async (req, res) => {
     });
   } catch (err) {
     console.error('Gmail scan error:', err.message);
-    res.status(500).json({ message: `Scan failed: ${err.message}` });
+    res.status(500).json({ message: 'Scan failed. Please try again later.' });
   } finally {
     scanLocks.delete(req.userId);
   }
@@ -221,8 +195,8 @@ const buildSummaryEmail = (userName, matched, unmatched) => {
   const matchedRows = matched.map(m => `
     <tr>
       <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;">
-        <strong style="color:#E5BA73;">${m.cardName}</strong>
-        <span style="color:#9a8f80;font-size:11px;margin-left:8px;">····${m.last4}</span>
+        <strong style="color:#E5BA73;">${escapeHtml(m.cardName)}</strong>
+        <span style="color:#9a8f80;font-size:11px;margin-left:8px;">····${escapeHtml(m.last4)}</span>
       </td>
       <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;text-align:right;">
         <strong style="color:#f1dfd3;font-size:16px;">${formatCurrency(m.amount)}</strong>
@@ -234,7 +208,7 @@ const buildSummaryEmail = (userName, matched, unmatched) => {
         </span>
       </td>
       <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;color:#9a8f80;font-size:11px;">
-        ${m.emailSubject}
+        ${escapeHtml(m.emailSubject)}
       </td>
     </tr>
   `).join('');
@@ -248,10 +222,10 @@ const buildSummaryEmail = (userName, matched, unmatched) => {
       </p>
       ${unmatched.map(u => `
         <div style="padding:10px 0;border-bottom:1px solid #2a1f15;">
-          <div style="color:#f1dfd3;font-size:13px;">${u.emailSubject}</div>
+          <div style="color:#f1dfd3;font-size:13px;">${escapeHtml(u.emailSubject)}</div>
           <div style="color:#9a8f80;font-size:11px;margin-top:4px;">
-            From: ${u.emailFrom} · Amount: ${formatCurrency(u.amount)} · Due: ${formatDate(u.dueDate)}
-            ${u.last4 ? ` · Card ending ····${u.last4}` : ''}
+            From: ${escapeHtml(u.emailFrom)} · Amount: ${formatCurrency(u.amount)} · Due: ${formatDate(u.dueDate)}
+            ${u.last4 ? ` · Card ending ····${escapeHtml(u.last4)}` : ''}
           </div>
         </div>
       `).join('')}
@@ -273,7 +247,7 @@ const buildSummaryEmail = (userName, matched, unmatched) => {
 
     <!-- Greeting -->
     <div style="background:#1a140e;border:1px solid #2a1f15;border-radius:16px;padding:24px;margin-bottom:24px;">
-      <p style="color:#f1dfd3;margin:0 0 8px;font-size:16px;">Hey ${userName} 👋</p>
+      <p style="color:#f1dfd3;margin:0 0 8px;font-size:16px;">Hey ${escapeHtml(userName)} 👋</p>
       <p style="color:#9a8f80;margin:0;font-size:14px;line-height:1.6;">
         We scanned your Gmail inbox and found <strong style="color:#E5BA73;">${matched.length} credit card bill${matched.length !== 1 ? 's' : ''}</strong>.
         Your Wallo dashboard has been updated with the latest due dates and amounts.

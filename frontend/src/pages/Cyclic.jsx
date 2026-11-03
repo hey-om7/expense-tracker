@@ -28,7 +28,6 @@ const CyclicScreen = () => {
   const [ccModal, setCcModal] = useState({ isOpen: false, data: null });
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
-  const [debugging, setDebugging] = useState(false);
 
   const handleGmailScan = async () => {
     setScanning(true);
@@ -43,25 +42,6 @@ const CyclicScreen = () => {
       setScanResult({ error: err.message || 'Scan failed. Check server logs.' });
     } finally {
       setScanning(false);
-    }
-  };
-
-  const handleDebugScan = async () => {
-    setDebugging(true);
-    setScanResult(null);
-    try {
-      const result = await api.debugGmailScan();
-      // Show raw debug info in the result banner
-      setScanResult({
-        debug: true,
-        matched: result.count,
-        bills: result.bills,
-        message: `Debug: found ${result.count} bill email(s). Check server console for full body logs.`,
-      });
-    } catch (err) {
-      setScanResult({ error: err.message || 'Debug scan failed.' });
-    } finally {
-      setDebugging(false);
     }
   };
 
@@ -267,20 +247,8 @@ const CyclicScreen = () => {
                <h3 className="font-headline font-bold text-xl max-md:text-base">Credit Cards ({creditCards.length})</h3>
                <div className="flex items-center gap-2">
                  <button
-                   onClick={handleDebugScan}
-                   disabled={debugging || scanning}
-                   className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant border border-outline/20 bg-surface-container-highest px-3 py-1.5 rounded-lg hover:bg-surface-container transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed max-md:text-xs max-md:px-2.5 max-md:py-1"
-                   title="Debug: scan without updating DB"
-                 >
-                   {debugging ? (
-                     <span className="w-3.5 h-3.5 border-2 border-on-surface-variant border-t-transparent rounded-full animate-spin" />
-                   ) : (
-                     <span className="material-symbols-outlined text-sm">bug_report</span>
-                   )}
-                 </button>
-                 <button
                    onClick={handleGmailScan}
-                   disabled={scanning || debugging}
+                   disabled={scanning}
                    className="flex items-center gap-1.5 text-sm font-bold text-primary border border-primary/30 bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed max-md:text-xs max-md:px-2.5 max-md:py-1"
                  >
                    {scanning ? (

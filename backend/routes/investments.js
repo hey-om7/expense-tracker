@@ -180,9 +180,13 @@ router.post('/refresh-sectors', async (req, res) => {
 // ─── POST /:id/trade ───
 router.post('/:id/trade', validateId, async (req, res) => {
   try {
-    const { type, quantity, price, date } = req.body;
+    const { type, date } = req.body;
+    const quantity = Number(req.body.quantity);
+    const price = Number(req.body.price);
 
-    if (!['BUY', 'SELL'].includes(type) || !quantity || quantity <= 0 || price < 0) {
+    if (!['BUY', 'SELL'].includes(type) ||
+        !Number.isFinite(quantity) || quantity <= 0 || quantity > 1e9 ||
+        !Number.isFinite(price) || price < 0 || price > 1e9) {
       return res.status(400).json({ message: 'Invalid trade parameters' });
     }
 
@@ -190,6 +194,9 @@ router.post('/:id/trade', validateId, async (req, res) => {
     if (!investment) return res.status(404).json({ message: 'Investment not found' });
 
     const tradeDate = date ? new Date(date) : new Date();
+    if (isNaN(tradeDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid trade date' });
+    }
 
     const tx = new Transaction({
       userId: req.userId,
@@ -222,7 +229,7 @@ router.delete('/:id/holdings/:holdingId', validateId, async (req, res) => {
     if (!holding) return res.status(404).json({ message: 'Holding not found' });
 
     if (holding.transactionId) {
-      await Transaction.findByIdAndDelete(holding.transactionId);
+      await Transaction.findOneAndDelete({ _id: holding.transactionId, userId: req.userId });
     }
 
     investment.holdings.pull(req.params.holdingId);

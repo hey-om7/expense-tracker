@@ -7,6 +7,7 @@ const UserPreferences = require('../models/UserPreferences');
 const GmailScanState = require('../models/GmailScanState');
 const { sendEmail } = require('./emailService');
 const { scanGmailForBills } = require('./gmailScanner');
+const { escapeHtml, gmailScanAllowedEmails } = require('../utils/security');
 
 /**
  * Get tomorrow's date at midnight (UTC) for comparison
@@ -234,8 +235,8 @@ const buildReminderEmail = (name, message) => {
         <p style="color: #F1DFD3; opacity: 0.6; font-size: 12px; margin: 4px 0 0; text-transform: uppercase; letter-spacing: 2px;">Financial Reminder</p>
       </div>
       <div style="background: #241a12; border-radius: 12px; padding: 20px; border: 1px solid rgba(229,186,115,0.1);">
-        <p style="margin: 0 0 12px; font-size: 16px;">Hi ${name},</p>
-        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #F1DFD3; opacity: 0.9;">${message}</p>
+        <p style="margin: 0 0 12px; font-size: 16px;">Hi ${escapeHtml(name)},</p>
+        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #F1DFD3; opacity: 0.9;">${escapeHtml(message)}</p>
       </div>
       <p style="text-align: center; font-size: 11px; color: #F1DFD3; opacity: 0.4; margin-top: 24px;">Sent by Vestor · Your Personal Finance Tracker</p>
     </div>
@@ -270,7 +271,9 @@ const processGmailBillScans = async () => {
 
   try {
     // Find all users who have at least one credit card tracked
-    const usersWithCards = await CreditCard.distinct('userId');
+    // Only the owner(s) of the shared inbox may receive data parsed from it.
+    const allowedUsers = await User.find({ email: { $in: gmailScanAllowedEmails() } }).select('_id').lean();
+    const usersWithCards = await CreditCard.distinct('userId', { userId: { $in: allowedUsers.map(u => u._id) } });
     if (usersWithCards.length === 0) {
       console.log('📧 No users with credit cards — skipping Gmail scan.');
       return;
@@ -440,8 +443,8 @@ const buildBillSummaryEmail = (userName, matched, totalDue) => {
   const rows = matched.map(m => `
     <tr>
       <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;">
-        <strong style="color:#E5BA73;">${m.cardName}</strong>
-        <span style="color:#9a8f80;font-size:11px;margin-left:8px;">····${m.last4}</span>
+        <strong style="color:#E5BA73;">${escapeHtml(m.cardName)}</strong>
+        <span style="color:#9a8f80;font-size:11px;margin-left:8px;">····${escapeHtml(m.last4)}</span>
       </td>
       <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;text-align:right;">
         <strong style="color:#f1dfd3;">${fmt(m.amount)}</strong>
@@ -465,7 +468,7 @@ const buildBillSummaryEmail = (userName, matched, totalDue) => {
       <div style="color:#9a8f80;font-size:11px;text-transform:uppercase;letter-spacing:3px;margin-top:4px;">New Bill Alert</div>
     </div>
     <div style="background:#1a140e;border:1px solid #2a1f15;border-radius:16px;padding:20px;margin-bottom:20px;">
-      <p style="color:#f1dfd3;margin:0 0 8px;font-size:15px;">Hey ${userName} 👋</p>
+      <p style="color:#f1dfd3;margin:0 0 8px;font-size:15px;">Hey ${escapeHtml(userName)} 👋</p>
       <p style="color:#9a8f80;margin:0;font-size:13px;line-height:1.6;">
         Wallo auto-scanned your Gmail and found <strong style="color:#E5BA73;">${matched.length} new credit card bill${matched.length !== 1 ? 's' : ''}</strong>.
         Your dashboard has been updated automatically.

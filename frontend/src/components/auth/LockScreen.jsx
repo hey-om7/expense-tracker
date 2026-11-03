@@ -4,40 +4,56 @@ import { Lock, LogOut, CheckCircle } from 'lucide-react';
 
 const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 5 minutes
 
-// --- Bulletproof Storage Helper Functions ---
-let sessionMemoryPin = null; 
+// --- PIN storage ---
+// The PIN is stored only as a salted SHA-256 hash in localStorage. It is never
+// written to a cookie (cookies are sent to the server on every request).
+const PIN_KEY = 'vestor_app_pin';
+const MAX_PIN_ATTEMPTS = 5;
 
-const setSavedPin = (pin) => {
-  sessionMemoryPin = pin; 
+const toHex = (buf) => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+const hashPin = async (pin, salt) => {
+  const data = new TextEncoder().encode(`${salt}:${pin}`);
+  return toHex(await crypto.subtle.digest('SHA-256', data));
+};
+
+const setSavedPin = async (pin) => {
   try {
-    localStorage.setItem('vestor_app_pin', pin);
-    document.cookie = `vestor_app_pin=${pin}; max-age=31536000; path=/`;
+    const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
+    localStorage.setItem(PIN_KEY, `v1:${salt}:${await hashPin(pin, salt)}`);
+    // Remove the legacy plaintext cookie if present
+    document.cookie = 'vestor_app_pin=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
   } catch (err) {
-    console.error('❌ Browser blocked saving to LocalStorage:', err);
+    console.error('Browser blocked saving the PIN:', err);
   }
 };
 
 const getSavedPin = () => {
-  if (sessionMemoryPin) return sessionMemoryPin;
-
   try {
-    const localPin = localStorage.getItem('vestor_app_pin');
-    if (localPin) {
-      sessionMemoryPin = localPin; 
-      return localPin;
-    }
-
+    const stored = localStorage.getItem(PIN_KEY);
+    if (stored) return stored;
+    // Legacy: PIN previously kept in plaintext in a cookie
     const match = document.cookie.match(/(?:^|;\s*)vestor_app_pin=([^;]*)/);
-    if (match && match[1]) {
-      localStorage.setItem('vestor_app_pin', match[1]);
-      sessionMemoryPin = match[1];
-      return match[1];
-    }
+    if (match && match[1]) return match[1];
   } catch (err) {
-    console.error('❌ Browser blocked reading from LocalStorage:', err);
+    console.error('Browser blocked reading the PIN:', err);
   }
-  
   return null;
+};
+
+const verifyPin = async (pin) => {
+  const stored = getSavedPin();
+  if (!stored) return false;
+  if (stored.startsWith('v1:')) {
+    const [, salt, hash] = stored.split(':');
+    return (await hashPin(pin, salt)) === hash;
+  }
+  // Legacy plaintext PIN: compare, then upgrade to hashed storage
+  if (stored === pin) {
+    await setSavedPin(pin);
+    return true;
+  }
+  return false;
 };
 
 // --- Initial State Helper ---
@@ -131,7 +147,7 @@ const LockScreen = () => {
     }
   }, [isLocked]); 
 
-  const handleValidation = (enteredPin) => {
+  const handleValidation = async (enteredPin) => {
     if (isSetupMode) {
       if (step === 1) {
         setSetupFirstPin(enteredPin);
@@ -140,7 +156,8 @@ const LockScreen = () => {
         setTimeout(() => inputRefs.current[0]?.focus(), 50);
       } else {
         if (setupFirstPin === enteredPin) {
-          setSavedPin(enteredPin);
+          await setSavedPin(enteredPin);
+          sessionStorage.removeItem('vestor_pin_attempts');
           unlockApp();
           resetTimer();
         } else {
@@ -153,12 +170,21 @@ const LockScreen = () => {
         }
       }
     } else {
-      const storedPin = getSavedPin();
-      if (enteredPin === storedPin) {
+      if (await verifyPin(enteredPin)) {
+        sessionStorage.removeItem('vestor_pin_attempts');
         unlockApp();
         resetTimer();
       } else {
-        setError('Incorrect PIN');
+        const attempts = Number(sessionStorage.getItem('vestor_pin_attempts') || 0) + 1;
+        sessionStorage.setItem('vestor_pin_attempts', String(attempts));
+        if (attempts >= MAX_PIN_ATTEMPTS) {
+          // Too many wrong guesses: end the session so the PIN can't be brute-forced.
+          sessionStorage.removeItem('vestor_pin_attempts');
+          sessionStorage.removeItem('vestor_is_locked');
+          logout();
+          return;
+        }
+        setError(`Incorrect PIN (${MAX_PIN_ATTEMPTS - attempts} attempts left)`);
         setDigits(['', '', '', '']);
         setTimeout(() => inputRefs.current[0]?.focus(), 50);
       }

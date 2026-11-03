@@ -93,7 +93,15 @@ const AiChatbot = () => {
   };
 
   const formatMessage = (text) => {
-    return text
+    // Escape first: AI replies can echo attacker-controlled text (prompt
+    // injection), and this string is rendered as HTML.
+    const safe = String(text ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    return safe
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/`(.*?)`/g, '<code style="background:rgba(229,186,115,0.15);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>')
