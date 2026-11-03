@@ -349,9 +349,11 @@ const processGmailBillScans = async () => {
 
         if (card) {
           const updateData = { billGeneratedDate: bill.date };
-          if (bill.amount) updateData.billAmount = bill.amount;
-          if (bill.dueDate) updateData.billDueDate = bill.dueDate;
-          await CreditCard.findByIdAndUpdate(card._id, updateData);
+          if (bill.amount != null) updateData.billAmount = bill.amount;
+          if (bill.dueDate instanceof Date && !isNaN(bill.dueDate)) {
+            updateData.billDueDate = bill.dueDate;
+          }
+          await CreditCard.findByIdAndUpdate(card._id, updateData, { new: true });
 
           matched.push({
             cardName: card.name,
@@ -391,17 +393,18 @@ const processGmailBillScans = async () => {
         );
       }
 
-      // Advance this user's lastEmailDate to the most recent bill we processed
+      // Advance this user's lastEmailDate to 1ms after the most recent bill we processed
       const latestBillDate = newBills.reduce(
         (max, b) => (new Date(b.date) > max ? new Date(b.date) : max),
         new Date(0)
       );
+      const watermark = new Date(latestBillDate.getTime() + 1);
 
       await GmailScanState.findOneAndUpdate(
         { userId },
         {
           $set: {
-            lastEmailDate: latestBillDate,
+            lastEmailDate: watermark,
             lastScannedAt: new Date(),
             lastScanCount: matched.length,
           },

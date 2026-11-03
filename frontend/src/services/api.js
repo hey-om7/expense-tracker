@@ -95,6 +95,7 @@ export const fetchStockHistory = (symbol, range) => request(`/stocks/history/${e
 
 // ─── Gmail Bill Scanner ───
 export const scanGmailBills = () => request('/gmail/scan-bills', { method: 'POST' });
+export const debugGmailScan = () => request('/gmail/debug-scan', { method: 'POST' });
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
 
 // ─── Onboarding ───

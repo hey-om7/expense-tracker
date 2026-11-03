@@ -39,13 +39,11 @@ const BANK_SENDER_PATTERNS = [
 // We use [^\d\n]*? to seamlessly skip over things like ":", "INR", "Rs.", "₹", or spaces 
 // until it hits the very first digit.
 const AMOUNT_PATTERNS = [
-  // 1. AXIS BANK SPECIFIC: Their emails flatten the table into "(DD-MM-YYYY)1633 Dr100 Dr"
-  // This jumps over the "(DD-MM-YYYY)" text directly to the first number (Total Amount)
-  /\(DD-MM-YYYY\)[^\d]{0,15}?([0-9,]+(?:\.[0-9]{1,2})?)/i,
+  // 1. AXIS BANK SPECIFIC: Jumps over up to 80 non-digit characters (spaces, newlines)
+  // to get from "(DD-MM-YYYY)" straight to the first number ("1633")
+  /\(DD-MM-YYYY\)[^\d]{0,80}?([0-9,]+(?:\.[0-9]{1,2})?)/i,
 
-  // 2. TOTAL AMOUNT DUE (Prioritized first so it ignores the "Minimum" amount)
-  // The [^\d]{0,80}? trick jumps across up to 80 characters of newlines, "INR", "₹", or spaces
-  // ICICI Example: "Total Amount Due\n₹8,885.00"
+  // 2. TOTAL AMOUNT DUE 
   /total\s+(?:amount\s+)?due[^\d]{0,80}?([0-9,]+(?:\.[0-9]{1,2})?)/i,
 
   // 3. STATEMENT / OUTSTANDING BALANCE
@@ -57,30 +55,31 @@ const AMOUNT_PATTERNS = [
   /amount\s+due[^\d]{0,80}?([0-9,]+(?:\.[0-9]{1,2})?)/i,
   /bill\s+amount[^\d]{0,80}?([0-9,]+(?:\.[0-9]{1,2})?)/i,
 
-  // 5. MINIMUM AMOUNT DUE (Only triggers if the Total Amount regex fails)
+  // 5. MINIMUM AMOUNT DUE 
   /minimum\s+(?:amount\s+)?due[^\d]{0,80}?([0-9,]+(?:\.[0-9]{1,2})?)/i,
 
-  // 6. GENERIC FALLBACK: Finds the first rupee value in the email if all labels fail
+  // 6. GENERIC FALLBACK
   /(?:₹|Rs\.?)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
 ];
 
 // ─── Due date extraction patterns ─────────────────────────────────────────
 const DUE_DATE_PATTERNS = [
-  // Format 1: DD MMM YYYY (e.g., 15 Jan 2025, 15-01-2025)
-  /(?:payment\s+)?due\s*(?:date|on|by)?[\s\S]{0,60}?(\d{1,2}[\s\-\/]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{2,4})/i,
-  
-  // Format 2: MMM DD, YYYY (e.g., April 30, 2026) -> Solves ICICI Bank
-  /(?:payment\s+)?due\s*(?:date|on|by)?[\s\S]{0,60}?((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{1,2}(?:st|nd|rd|th)?[\s\-\/,]+\d{2,4})/i,
+  // 1. AXIS BANK SPECIFIC: Jumps over the spaces, "1633 Dr", and "100 Dr" to hit "02/06/2026"
+  /\(DD-MM-YYYY\)[\s\S]{0,150}?(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4})/i,
 
-  // Format 3: DD/MM/YYYY (e.g., 15/01/2025) -> Solves Axis Bank
-  /(?:payment\s+)?due\s*(?:date|on|by)?[\s\S]{0,60}?(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4})/i,
-
-  // Fallbacks for "Pay by" instead of "Due Date"
-  /pay\s*(?:by|before)[\s\S]{0,30}?(\d{1,2}[\s\-\/]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{2,4})/i,
-  /pay\s*(?:by|before)[\s\S]{0,30}?((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{1,2}(?:st|nd|rd|th)?[\s\-\/,]+\d{2,4})/i,
+  // 2. Standard patterns with extended 150 character jump limits
+  /(?:payment\s+)?due\s*(?:date|on|by)?[\s\S]{0,150}?(\d{1,2}[\s\-\/]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{2,4})/i,
   
-  // Fallback for "Last date of payment: 15/01/2025"
-  /last\s+(?:date\s+(?:of|for)\s+)?payment[\s\S]{0,30}?(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4})/i,
+  /(?:payment\s+)?due\s*(?:date|on|by)?[\s\S]{0,150}?((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{1,2}(?:st|nd|rd|th)?[\s\-\/,]+\d{2,4})/i,
+
+  /(?:payment\s+)?due\s*(?:date|on|by)?[\s\S]{0,150}?(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4})/i,
+
+  // 3. Fallbacks for "Pay by" instead of "Due Date"
+  /pay\s*(?:by|before)[\s\S]{0,80}?(\d{1,2}[\s\-\/]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{2,4})/i,
+  /pay\s*(?:by|before)[\s\S]{0,80}?((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/,]+\d{1,2}(?:st|nd|rd|th)?[\s\-\/,]+\d{2,4})/i,
+  
+  // 4. Fallback for "Last date"
+  /last\s+(?:date\s+(?:of|for)\s+)?payment[\s\S]{0,80}?(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4})/i,
 ];
 
 // ─── Card number / last 4 digits extraction ───────────────────────────────
@@ -99,19 +98,31 @@ const CARD_DIGITS_PATTERNS = [
 ];
 
 // ─── Parse a date string into a JS Date ───────────────────────────────────
+// ─── Parse a date string into a JS Date ───────────────────────────────────
 const parseDate = (str) => {
   if (!str) return null;
-  // Normalize separators
-  const cleaned = str.trim().replace(/\s+/g, ' ');
-  const d = new Date(cleaned);
-  if (!isNaN(d.getTime())) return d;
+  
+  // Strip out any hidden characters, zero-width spaces, or weird table formatting
+  const cleaned = str.replace(/[^\w\s\-\/\,]/g, '').trim();
 
-  // Try DD/MM/YYYY or DD-MM-YYYY
-  const dmyMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  // 1. MUST TRY DD/MM/YYYY FIRST (The Indian Format)
+  // We removed the strict ^ and $ so it extracts the date even if garbage is attached.
+  const dmyMatch = cleaned.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (dmyMatch) {
     const [, day, month, year] = dmyMatch;
     const fullYear = year.length === 2 ? `20${year}` : year;
-    return new Date(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+    
+    // CRITICAL FIX: Set time to Noon (T12:00:00Z) UTC.
+    // This prevents the date from shifting backwards a day when JSON is sent to the frontend.
+    return new Date(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`);
+  }
+
+  // 2. Fallback for text dates like "15 Jan 2025" or "April 30, 2026"
+  const d = new Date(cleaned);
+  if (!isNaN(d.getTime())) {
+    // Also force fallback dates to Noon UTC to prevent timezone shifts
+    d.setUTCHours(12, 0, 0, 0);
+    return d;
   }
 
   return null;
@@ -152,14 +163,89 @@ const extractLast4 = (text) => {
   }
   return null;
 };
+// ─── Verified Bank Domains (STRICT WHITELIST) ─────────────────────────────
+// The system will ONLY parse emails originating directly from these domains or their subdomains.
+const OFFICIAL_BANK_DOMAINS = [
+  // ICICI Bank
+  'icicibank.com',
+  'icici.bank.in',        // Used for transactional/statement emails
+  
+  // HDFC Bank
+  'hdfcbank.net',         // Heavily used by HDFC for statements
+  'hdfcbank.com',
+  
+  // Axis Bank
+  'axisbank.com',
+  
+  // SBI Card
+  'sbicard.com',
+  
+  // Kotak Mahindra Bank
+  'kotak.com',
+  
+  // IDFC FIRST Bank
+  'idfcfirstbank.com',
+  
+  // American Express
+  'aexp.com',
+  'americanexpress.com',
+  
+  // IndusInd Bank
+  'indusind.com',
+  
+  // RBL Bank
+  'rblbank.com',
+  
+  // Standard Chartered
+  'sc.com',
+  
+  // Citibank (Legacy/Transitioning, but good to keep)
+  'citi.com',
+  'citibank.com',
+  
+  // HSBC
+  'hsbc.co.in',
+  'hsbc.com',
+  
+  // Yes Bank
+  'yesbank.in',
+  
+  // Modern/Fintech Cards
+  'getonecard.app',       // OneCard
+  'uni.cards',            // Uni Cards
+  'sliceit.com'           // Slice
+];
+
+// Helper: Extracts just the domain from an email string (e.g., "ICICI <statements@icicibank.com>" -> "icicibank.com")
+const extractDomain = (fromStr) => {
+  if (!fromStr) return null;
+  const match = fromStr.match(/@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  return match ? match[1].toLowerCase() : null;
+};
 
 // ─── Check if a subject/sender looks like a CC bill ──────────────────────
 const isBillEmail = (subject = '', from = '') => {
-  const subjectMatch = BILL_SUBJECT_PATTERNS.some(p => p.test(subject));
-  const senderMatch = BANK_SENDER_PATTERNS.some(p => p.test(from));
-  return subjectMatch || senderMatch;
-};
+  const domain = extractDomain(from);
+  
+  // 1. DOMAIN VERIFICATION (The Security Gate)
+  if (!domain) return false;
 
+  // Check if the extracted domain matches exactly, or is a valid subdomain 
+  // (e.g., 'statements.axisbank.com' will pass because it ends with '.axisbank.com')
+  const isVerifiedBank = OFFICIAL_BANK_DOMAINS.some(bankDomain => 
+    domain === bankDomain || domain.endsWith('.' + bankDomain)
+  );
+
+  if (!isVerifiedBank) {
+    return false; // Instantly rejects Wallo summaries, random users, and spam.
+  }
+
+  // 2. CONTEXT VERIFICATION (The Intent Gate)
+  // Even if it's from the bank, it must be a bill, not a marketing email.
+  const isStatementSubject = BILL_SUBJECT_PATTERNS.some(p => p.test(subject));
+  
+  return isStatementSubject;
+};
 // ─── Main scanner function ────────────────────────────────────────────────
 /**
  * Scans Gmail inbox for CC bill emails.
@@ -230,6 +316,21 @@ const scanGmailForBills = async (since = null) => {
             const amount = extractAmount(bodyText) || extractAmount(subject);
             const dueDate = extractDueDate(bodyText) || extractDueDate(subject);
             const last4 = extractLast4(bodyText) || extractLast4(subject);
+
+            // ─── DIAGNOSTIC LOGGING ───────────────────────────────────────
+            console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`📧 BILL EMAIL FOUND`);
+            console.log(`   Subject  : ${subject}`);
+            console.log(`   From     : ${from}`);
+            console.log(`   Date     : ${emailDate}`);
+            console.log(`   Last4    : ${last4 ?? 'NOT FOUND'}`);
+            console.log(`   Amount   : ${amount ?? 'NOT FOUND'}`);
+            console.log(`   DueDate  : ${dueDate ?? 'NOT FOUND'}`);
+            console.log(`   DueDate type: ${dueDate === null ? 'null' : typeof dueDate} | isDate: ${dueDate instanceof Date} | valid: ${dueDate instanceof Date ? !isNaN(dueDate) : 'N/A'}`);
+            console.log(`   Body snippet (first 800 chars):`);
+            console.log(`   ${bodyText.slice(0, 800).replace(/\n/g, ' ↵ ')}`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+            // ─────────────────────────────────────────────────────────────
 
             // Only include if we got at least an amount or a due date
             if (!amount && !dueDate) continue;

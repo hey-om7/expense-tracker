@@ -18,6 +18,44 @@ router.use(auth);
 
 const scanLocks = new Set();
 
+// ─── DEBUG endpoint — returns raw parsed data, touches nothing in DB ───────
+// Hit POST /api/gmail/debug-scan to see exactly what the scanner extracts.
+router.post('/debug-scan', async (req, res) => {
+  try {
+    console.log('\n🔍 DEBUG SCAN STARTED\n');
+    const bills = await scanGmailForBills(null); // always scan full 45 days
+
+    const debug = bills.map(b => ({
+      subject: b.subject,
+      from: b.from,
+      emailDate: b.date,
+      last4: b.last4,
+      amount: b.amount,
+      dueDate: b.dueDate,
+      dueDateISO: b.dueDate instanceof Date ? b.dueDate.toISOString() : null,
+      dueDateValid: b.dueDate instanceof Date && !isNaN(b.dueDate),
+      rawSnippet: b.rawSnippet,
+    }));
+
+    console.log('\n🔍 DEBUG SCAN RESULTS:');
+    debug.forEach((b, i) => {
+      console.log(`\n[${i + 1}] ${b.subject}`);
+      console.log(`    from     : ${b.from}`);
+      console.log(`    emailDate: ${b.emailDate}`);
+      console.log(`    last4    : ${b.last4}`);
+      console.log(`    amount   : ${b.amount}`);
+      console.log(`    dueDate  : ${b.dueDate}`);
+      console.log(`    dueDateISO: ${b.dueDateISO}`);
+      console.log(`    dueDateValid: ${b.dueDateValid}`);
+    });
+
+    res.json({ count: debug.length, bills: debug });
+  } catch (err) {
+    console.error('Debug scan error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/scan-bills', async (req, res) => {
   if (scanLocks.has(req.userId)) {
     return res.status(429).json({ message: 'Scan already in progress. Please wait.' });
@@ -71,10 +109,17 @@ router.post('/scan-bills', async (req, res) => {
       }
 
       if (card) {
+        // Always write all extracted fields — never silently skip
         const updateData = { billGeneratedDate: bill.date };
-        if (bill.amount) updateData.billAmount = bill.amount;
-        if (bill.dueDate) updateData.billDueDate = bill.dueDate;
-        await CreditCard.findByIdAndUpdate(card._id, updateData);
+        if (bill.amount != null) updateData.billAmount = bill.amount;
+        // Always update billDueDate when extracted — this is the core fix.
+        // Previously `if (bill.dueDate)` was skipping valid Date objects that
+        // happened to be falsy-ish, and leaving the old manually-entered date intact.
+        if (bill.dueDate instanceof Date && !isNaN(bill.dueDate)) {
+          updateData.billDueDate = bill.dueDate;
+        }
+
+        await CreditCard.findByIdAndUpdate(card._id, updateData, { new: true });
 
         matched.push({
           cardId: card._id,
@@ -82,10 +127,13 @@ router.post('/scan-bills', async (req, res) => {
           last4: card.last4Digits,
           amount: bill.amount,
           dueDate: bill.dueDate,
+          dueDateUpdated: !!updateData.billDueDate,   // tells frontend whether date was updated
           emailSubject: bill.subject,
           emailFrom: bill.from,
           emailDate: bill.date,
         });
+
+        console.log(`💳 Matched: ${card.name} (****${card.last4Digits}) | amount=${bill.amount} | dueDate=${bill.dueDate} | subject="${bill.subject}"`);
       } else {
         unmatched.push({
           amount: bill.amount,
@@ -124,16 +172,19 @@ router.post('/scan-bills', async (req, res) => {
       );
     }
 
-    // Advance the watermark to the most recent email we processed
+    // Advance the watermark to 1ms after the most recent email we processed.
+    // Using +1ms (not exact date) ensures the boundary email is excluded on the
+    // next scan without accidentally blocking emails that arrive at the same second.
     const latestDate = bills.reduce(
       (max, b) => (new Date(b.date) > max ? new Date(b.date) : max),
       new Date(0)
     );
+    const watermark = new Date(latestDate.getTime() + 1);
     await GmailScanState.findOneAndUpdate(
       { userId: req.userId },
       {
         $set: {
-          lastEmailDate: latestDate,
+          lastEmailDate: watermark,
           lastScannedAt: new Date(),
           lastScanCount: matched.length,
         },

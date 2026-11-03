@@ -3,14 +3,16 @@ FROM node:18 AS build
 
 WORKDIR /app
 
-# Copy package files first (for Docker layer caching)
+# Copy workspace manifests first (for Docker layer caching)
 COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/
+COPY backend/package.json backend/
 
-# Install all dependencies (including devDependencies needed for build)
-RUN npm ci
+# Install frontend workspace dependencies (including devDependencies needed for build)
+RUN npm ci -w frontend
 
-# Copy the rest of the source code
-COPY . .
+# Copy the frontend source code
+COPY frontend/ frontend/
 
 # Accept the API URL as a build argument
 # In production with nginx proxy, this should be empty string ""
@@ -19,7 +21,7 @@ ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the Vite app
-RUN npm run build
+RUN npm run build -w frontend
 
 # ── Stage 2: Serve with Nginx ──
 FROM nginx:alpine
@@ -28,10 +30,10 @@ FROM nginx:alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy our custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy the built React app from the build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80
 

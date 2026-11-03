@@ -28,6 +28,7 @@ const CyclicScreen = () => {
   const [ccModal, setCcModal] = useState({ isOpen: false, data: null });
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [debugging, setDebugging] = useState(false);
 
   const handleGmailScan = async () => {
     setScanning(true);
@@ -42,6 +43,25 @@ const CyclicScreen = () => {
       setScanResult({ error: err.message || 'Scan failed. Check server logs.' });
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleDebugScan = async () => {
+    setDebugging(true);
+    setScanResult(null);
+    try {
+      const result = await api.debugGmailScan();
+      // Show raw debug info in the result banner
+      setScanResult({
+        debug: true,
+        matched: result.count,
+        bills: result.bills,
+        message: `Debug: found ${result.count} bill email(s). Check server console for full body logs.`,
+      });
+    } catch (err) {
+      setScanResult({ error: err.message || 'Debug scan failed.' });
+    } finally {
+      setDebugging(false);
     }
   };
 
@@ -247,8 +267,20 @@ const CyclicScreen = () => {
                <h3 className="font-headline font-bold text-xl max-md:text-base">Credit Cards ({creditCards.length})</h3>
                <div className="flex items-center gap-2">
                  <button
+                   onClick={handleDebugScan}
+                   disabled={debugging || scanning}
+                   className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant border border-outline/20 bg-surface-container-highest px-3 py-1.5 rounded-lg hover:bg-surface-container transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed max-md:text-xs max-md:px-2.5 max-md:py-1"
+                   title="Debug: scan without updating DB"
+                 >
+                   {debugging ? (
+                     <span className="w-3.5 h-3.5 border-2 border-on-surface-variant border-t-transparent rounded-full animate-spin" />
+                   ) : (
+                     <span className="material-symbols-outlined text-sm">bug_report</span>
+                   )}
+                 </button>
+                 <button
                    onClick={handleGmailScan}
-                   disabled={scanning}
+                   disabled={scanning || debugging}
                    className="flex items-center gap-1.5 text-sm font-bold text-primary border border-primary/30 bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed max-md:text-xs max-md:px-2.5 max-md:py-1"
                  >
                    {scanning ? (
@@ -274,14 +306,39 @@ const CyclicScreen = () => {
               <div className={`mb-4 p-4 rounded-xl border text-sm max-md:text-xs ${
                 scanResult.error
                   ? 'bg-error/10 border-error/20 text-error'
-                  : scanResult.matched > 0
-                    ? 'bg-[#95CD41]/10 border-[#95CD41]/20 text-[#95CD41]'
-                    : 'bg-surface-container-highest border-outline/10 text-on-surface-variant'
+                  : scanResult.debug
+                    ? 'bg-surface-container-highest border-outline/20 text-on-surface-variant'
+                    : scanResult.matched > 0
+                      ? 'bg-[#95CD41]/10 border-[#95CD41]/20 text-[#95CD41]'
+                      : 'bg-surface-container-highest border-outline/10 text-on-surface-variant'
               }`}>
                 {scanResult.error ? (
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-base">error</span>
                     {scanResult.error}
+                  </div>
+                ) : scanResult.debug ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 font-bold">
+                      <span className="material-symbols-outlined text-base">bug_report</span>
+                      {scanResult.message}
+                    </div>
+                    {scanResult.bills?.length > 0 && (
+                      <div className="mt-1 flex flex-col gap-1.5 text-[11px]">
+                        {scanResult.bills.map((b, i) => (
+                          <div key={i} className="bg-surface-container-low rounded-lg p-2.5 border border-outline/10">
+                            <p className="font-bold text-on-surface truncate">{b.subject}</p>
+                            <p className="text-on-surface-variant mt-0.5">
+                              last4: <span className="text-primary font-bold">{b.last4 ?? '—'}</span>
+                              {' · '}amount: <span className="text-[#95CD41] font-bold">{b.amount ?? '—'}</span>
+                              {' · '}dueDate: <span className={`font-bold ${b.dueDateValid ? 'text-[#95CD41]' : 'text-error'}`}>
+                                {b.dueDateISO ? new Date(b.dueDateISO).toLocaleDateString('en-IN') : 'NOT EXTRACTED'}
+                              </span>
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1">
@@ -293,6 +350,20 @@ const CyclicScreen = () => {
                         ? `Updated ${scanResult.matched} card${scanResult.matched !== 1 ? 's' : ''} from Gmail — summary email sent.`
                         : scanResult.message || 'No matching bill emails found.'}
                     </div>
+                    {scanResult.bills?.length > 0 && (
+                      <div className="mt-1 flex flex-col gap-1 text-[11px] ml-6">
+                        {scanResult.bills.map((b, i) => (
+                          <p key={i} className="text-on-surface-variant">
+                            <span className="font-bold text-on-surface">{b.cardName}</span>
+                            {' · '}₹{b.amount?.toLocaleString('en-IN') ?? '—'}
+                            {' · '}Due: <span className={b.dueDateUpdated ? 'text-[#95CD41] font-bold' : 'text-error font-bold'}>
+                              {b.dueDate ? new Date(b.dueDate).toLocaleDateString('en-IN') : 'not extracted'}
+                            </span>
+                            {!b.dueDateUpdated && <span className="text-error"> ⚠ date not updated</span>}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     {scanResult.unmatched > 0 && (
                       <p className="text-on-surface-variant text-xs ml-6">
                         {scanResult.unmatched} bill email{scanResult.unmatched !== 1 ? 's' : ''} found but couldn't be matched to a tracked card.

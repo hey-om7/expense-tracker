@@ -1,4 +1,4 @@
-const yahooFinance = require('./server/node_modules/yahoo-finance2').default;
+const yahooFinance = require('yahoo-finance2').default;
 yahooFinance.suppressNotices(['yahooSurvey']);
 async function run() {
   try {
