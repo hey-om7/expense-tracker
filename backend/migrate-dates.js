@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/vestor';
 
@@ -21,7 +21,7 @@ async function migrate() {
       const doc = await cursor.next();
       await subscriptions.updateOne(
         { _id: doc._id },
-        { 
+        {
           $set: { startDate: doc.renewalDate },
           $unset: { renewalDate: "" }
         }

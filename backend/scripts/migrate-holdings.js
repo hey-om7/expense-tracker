@@ -1,10 +1,10 @@
 /**
  * One-time Migration Script: Move shares/price from transactions → investment holdings
- * 
+ *
  * Usage:
  *   node server/scripts/migrate-holdings.js --dry-run    (preview only)
  *   node server/scripts/migrate-holdings.js              (execute migration)
- * 
+ *
  * Safety:
  *   - NEVER deletes transactions
  *   - Only copies data to investment.holdings
@@ -13,7 +13,7 @@
  */
 
 const mongoose = require('mongoose');
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
 
 const Investment = require('../models/Investment');
 const Transaction = require('../models/Transaction');
@@ -22,7 +22,7 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 async function migrate() {
   const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/vestor';
-  
+
   console.log(`\n🔄 Vestor Holdings Migration ${DRY_RUN ? '(DRY RUN)' : '(LIVE)'}`);
   console.log(`   Connecting to: ${MONGO_URI.replace(/\/\/.*@/, '//***@')}\n`);
 
@@ -62,7 +62,7 @@ async function migrate() {
     for (const trade of trades) {
       const quantity = parseFloat(trade.shares || 0);
       const price = parseFloat(trade.price || 0);
-      
+
       if (quantity <= 0) {
         console.log(`   ⚠ Skipping trade ${trade._id} — invalid quantity: ${trade.shares}`);
         continue;
@@ -96,11 +96,11 @@ async function migrate() {
 
   // Phase 2: Strip shares/price from all transactions
   console.log(`\n${'─'.repeat(50)}`);
-  
+
   // Count how many transactions have shares/price set
   const txWithShares = await Transaction.collection.countDocuments({ shares: { $ne: null } });
   const txWithPrice = await Transaction.collection.countDocuments({ price: { $ne: null } });
-  
+
   console.log(`\n📋 Cleanup: ${txWithShares} transactions with 'shares', ${txWithPrice} with 'price'`);
 
   if (!DRY_RUN) {

@@ -1,3 +1,13 @@
+## Environment setup
+
+Backend and frontend share one `.env` file in the repository root.
+
+1. Copy `.template.env` to `.env` in the root and fill in the values.
+2. For local dev, set `VITE_API_PROXY_TARGET` to the backend URL (matching `PORT`) and leave `VITE_API_URL` empty.
+3. Restart `npm run dev` after changing `.env`.
+
+`.env` is gitignored. Only `VITE_`-prefixed variables reach browser code, so never give secrets that prefix. `docker-compose.yml` passes the same root `.env` to the backend container.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
