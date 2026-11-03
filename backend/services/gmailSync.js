@@ -6,6 +6,9 @@
  * Statements for tracked cards are linked and update the card's current bill,
  * which drives the existing "due tomorrow" reminder in cronJobs.processCreditCards.
  * Statements for untracked cards are stored as "pending" until the user decides.
+ * Each email goes through services/emailProcessing: AI or deterministic,
+ * chosen from the user's saved "aiEmailProcessingEnabled" preference.
+ * Emails that can't be reliably parsed are queued for manual review (FinancialEmail).
  */
 const { OAuth2Client } = require('google-auth-library');
 const GmailConnection = require('../models/GmailConnection');
@@ -14,7 +17,11 @@ const CreditCard = require('../models/CreditCard');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const UserPreferences = require('../models/UserPreferences');
-const { parseBillFromRaw, OFFICIAL_BANK_DOMAINS } = require('./gmailScanner');
+const FinancialEmail = require('../models/FinancialEmail');
+const { OFFICIAL_BANK_DOMAINS } = require('./gmailScanner');
+const pipeline = require('./emailProcessing');
+const { rootDomainFor } = require('./emailProcessing/institutions');
+const { applyLatestToCard } = pipeline.sinks;
 const { sendEmail } = require('./emailService');
 const { encrypt, decrypt } = require('../utils/tokenCrypto');
 const { escapeHtml } = require('../utils/security');
@@ -23,25 +30,16 @@ const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const BACKFILL_DAYS = 90;
 const MAX_MESSAGES_PER_SYNC = 500;
+const MAX_AI_CALLS_PER_SYNC = 60;
+const PREF_RECHECK_EVERY = 25;
 
-const BANK_NAMES = {
-  'icicibank.com': 'ICICI Bank', 'icici.bank.in': 'ICICI Bank',
-  'hdfcbank.net': 'HDFC Bank', 'hdfcbank.com': 'HDFC Bank',
-  'axisbank.com': 'Axis Bank', 'sbicard.com': 'SBI Card', 'kotak.com': 'Kotak',
-  'idfcfirstbank.com': 'IDFC FIRST', 'aexp.com': 'American Express',
-  'americanexpress.com': 'American Express', 'indusind.com': 'IndusInd',
-  'rblbank.com': 'RBL Bank', 'sc.com': 'Standard Chartered', 'citi.com': 'Citi',
-  'citibank.com': 'Citi', 'hsbc.co.in': 'HSBC', 'hsbc.com': 'HSBC',
-  'yesbank.in': 'Yes Bank', 'getonecard.app': 'OneCard', 'uni.cards': 'Uni Card',
-  'sliceit.com': 'Slice',
-};
-const bankNameFor = (domain = '') => {
-  const key = Object.keys(BANK_NAMES).find(d => domain === d || domain.endsWith('.' + d));
-  return key ? BANK_NAMES[key] : domain;
-};
-// Root bank domain, so "statements.hdfcbank.net" and "hdfcbank.net" are the same bank.
-const rootDomainFor = (domain = '') =>
-  OFFICIAL_BANK_DOMAINS.find(d => domain === d || domain.endsWith('.' + d)) || domain;
+// The user's saved preference decides the processing method on every job.
+// Read from the database, never from the request.
+const loadProcessingPrefs = (userId) =>
+  UserPreferences.findOne({ userId }).select('aiEmailProcessingEnabled groqApiKey').lean();
+
+// Groq key for AI processing: server key first, else the user's own key from Settings.
+const groqKeyFrom = (prefs) => process.env.GROQ_API_KEY || prefs?.groqApiKey?.trim() || null;
 
 const isOAuthConfigured = () =>
   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GMAIL_OAUTH_REDIRECT_URI);
@@ -123,32 +121,6 @@ const listMessageIds = async (client, since) => {
   return ids.slice(0, MAX_MESSAGES_PER_SYNC);
 };
 
-const matchCard = (cards, bill) => {
-  if (bill.last4 && bill.last4.length >= 2) {
-    const byDigits = cards.filter(c => String(c.last4Digits).endsWith(bill.last4));
-    if (byDigits.length === 1) return byDigits[0];
-    if (byDigits.length > 1) return null; // ambiguous — let the user decide
-  }
-  const haystack = `${bill.subject} ${bill.from} ${bankNameFor(bill.domain)}`.toLowerCase();
-  const byName = cards.filter(c =>
-    c.name.toLowerCase().split(/\s+/).some(w => w.length > 3 && haystack.includes(w)));
-  return byName.length === 1 ? byName[0] : null;
-};
-
-const isIgnored = (conn, domain, last4) =>
-  (conn.ignoredCards || []).some(i =>
-    i.domain === rootDomainFor(domain) && (!i.last4 || !last4 || i.last4 === last4));
-
-// Apply the newest linked statement to its card (drives due-date reminders).
-const applyLatestToCard = async (cardId) => {
-  const latest = await CardStatement.findOne({ cardId, status: 'linked' }).sort({ statementDate: -1 }).lean();
-  if (!latest) return;
-  const update = { billGeneratedDate: latest.statementDate };
-  if (latest.amount != null) update.billAmount = latest.amount;
-  if (latest.dueDate) update.billDueDate = latest.dueDate;
-  await CreditCard.updateOne({ _id: cardId }, { $set: update });
-};
-
 const syncLocks = new Set();
 
 /**
@@ -157,7 +129,7 @@ const syncLocks = new Set();
  */
 const syncConnection = async (connectionId, { backfill = false } = {}) => {
   const key = String(connectionId);
-  if (syncLocks.has(key)) return { linked: [], pending: [], skipped: true };
+  if (syncLocks.has(key)) return { linked: [], pending: [], busy: true };
   syncLocks.add(key);
 
   let conn;
@@ -172,66 +144,93 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     if (backfill) await GmailConnection.updateOne({ _id: conn._id }, { $set: { backfillStatus: 'running' } });
 
     const ids = await listMessageIds(client, since);
-    const known = new Set((await CardStatement.find(
-      { userId: conn.userId, gmailMessageId: { $in: ids } }, { gmailMessageId: 1 },
-    ).lean()).map(s => s.gmailMessageId));
+    // Duplicate detection: a Gmail message is processed once per user, whichever store it ended up in.
+    const [knownStatements, knownOther] = await Promise.all([
+      CardStatement.find({ userId: conn.userId, gmailMessageId: { $in: ids } }, { gmailMessageId: 1 }).lean(),
+      FinancialEmail.find({ userId: conn.userId, gmailMessageId: { $in: ids } }, { gmailMessageId: 1 }).lean(),
+    ]);
+    const known = new Set([...knownStatements, ...knownOther].map(s => s.gmailMessageId));
 
     const cards = await CreditCard.find({ userId: conn.userId }).lean();
+
+    // Resolve the processing method from the saved preference. It is re-read
+    // during long jobs so turning AI off takes effect without waiting for the next job.
+    let method = 'deterministic';
+    let aiSession = null;
+    const refreshMethod = async () => {
+      const prefs = await loadProcessingPrefs(conn.userId);
+      const next = pipeline.methodForPreferences(prefs);
+      if (next !== 'ai') { aiSession = null; method = next; return; }
+      if (method !== 'ai' || !aiSession) {
+        aiSession = pipeline.createAiSession({ apiKey: groqKeyFrom(prefs), maxCalls: MAX_AI_CALLS_PER_SYNC });
+      }
+      method = 'ai';
+    };
+    await refreshMethod();
+    const aiRequested = method === 'ai';
+    const aiAvailable = !!aiSession;
+
+    const counts = {};
+    const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
     const linked = [];
     const pending = [];
     const touchedCards = new Set();
     let newest = conn.lastEmailDate || since;
+    let fetchFailed = false;
+    let processed = 0;
 
     for (const id of ids) {
       if (known.has(id)) continue;
+      if (processed > 0 && processed % PREF_RECHECK_EVERY === 0) await refreshMethod();
+      processed += 1;
+
       let msg;
       try {
         ({ data: msg } = await client.request({ url: `${GMAIL_API}/messages/${id}`, params: { format: 'raw' } }));
       } catch (err) {
         console.warn(`Gmail fetch failed for one message: ${err.message}`);
+        fetchFailed = true; // don't move the cursor past it; it is retried next run
         continue;
       }
       const received = new Date(Number(msg.internalDate));
       if (received > newest) newest = received;
 
-      let bill;
+      const sinkCtx = { userId: conn.userId, conn, cards };
+      let result;
       try {
-        bill = await parseBillFromRaw(Buffer.from(msg.raw, 'base64url'));
-      } catch {
-        continue;
-      }
-      if (!bill) continue;
-
-      const card = matchCard(cards, bill);
-      const status = card ? 'linked' : isIgnored(conn, bill.domain, bill.last4) ? 'dismissed' : 'pending';
-      const doc = {
-        userId: conn.userId,
-        cardId: card?._id || null,
-        status,
-        gmailMessageId: id,
-        bankName: bankNameFor(bill.domain),
-        senderDomain: rootDomainFor(bill.domain),
-        last4: bill.last4,
-        amount: bill.amount,
-        dueDate: bill.dueDate instanceof Date && !isNaN(bill.dueDate) ? bill.dueDate : null,
-        statementDate: received,
-        subject: bill.subject,
-      };
-      try {
-        await CardStatement.create(doc);
+        let raw = Buffer.from(msg.raw, 'base64url');
+        msg = null; // drop the raw message as early as possible
+        result = await pipeline.processRawEmail(raw, { method, messageId: id, receivedAt: received, aiSession });
+        raw = null;
       } catch (err) {
-        if (err.code === 11000) continue; // stored by a concurrent run
-        throw err;
+        // Unreadable email from a bank sender: keep a review entry rather than dropping it.
+        console.warn(`Email processing failed for one message: ${err.message}`);
+        result = {
+          outcome: pipeline.OUTCOME.REVIEW, category: null, reason: 'parse_error', processor: method, confidence: null,
+          institution: { domain: '', rootDomain: '', name: '', templateId: null },
+          email: { messageId: id, subject: '', from: '', sentAt: received, receivedAt: received },
+          fields: {},
+        };
       }
-      if (status === 'linked') { linked.push({ ...doc, cardName: card.name }); touchedCards.add(String(card._id)); }
-      if (status === 'pending') pending.push(doc);
+      bump(`${result.outcome}:${result.reason}`);
+
+      const saved = await pipeline.sinks.persist(result, sinkCtx);
+      if (saved.action === 'linked') {
+        linked.push({ ...saved.doc, cardName: saved.card.name });
+        touchedCards.add(String(saved.card._id));
+      } else if (saved.action === 'pending') {
+        pending.push(saved.doc);
+      }
     }
 
     for (const cardId of touchedCards) await applyLatestToCard(cardId);
+    console.log(`📧 Gmail sync ${key}: ${ids.length} bank email(s), ${linked.length} linked, ${pending.length} pending, ` +
+      `method ${method}${aiRequested ? `, AI calls ${aiSession?.calls || 0}${aiAvailable ? '' : ' (no Groq key)'}` : ''}, ` +
+      `outcomes ${JSON.stringify(counts)}`);
 
     await GmailConnection.updateOne({ _id: conn._id }, {
       $set: {
-        lastEmailDate: newest,
+        ...(fetchFailed ? {} : { lastEmailDate: newest }),
         lastScannedAt: new Date(),
         lastError: '',
         status: 'active',
@@ -239,8 +238,18 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
       },
     });
 
+    const reviewCount = Object.entries(counts)
+      .filter(([k]) => k.startsWith('review:')).reduce((n, [, v]) => n + v, 0);
+
     await notifyUser(conn.userId, linked, pending, backfill);
-    return { linked, pending };
+    if (reviewCount > 0) {
+      await Notification.create({
+        userId: conn.userId, title: '🔎 Bank emails need review',
+        message: `${reviewCount} bank email(s) couldn't be read reliably, so nothing was recorded from them. Open the Bills tab to review.`,
+        isRead: false, date: new Date(),
+      });
+    }
+    return { linked, pending, review: reviewCount, outcomes: counts, method, aiRequested, aiAvailable };
   } catch (err) {
     const revoked = /invalid_grant/i.test(err.message || '') || err.response?.status === 401;
     console.error(`Gmail sync failed for connection ${key}:`, err.message);

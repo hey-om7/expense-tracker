@@ -112,6 +112,7 @@ const SettingsScreen = () => {
     geminiApiKey: '',
     groqApiKey: '',
     emailAlertsEnabled: true,
+    aiEmailProcessingEnabled: false,
   });
 
   useEffect(() => {
@@ -125,6 +126,7 @@ const SettingsScreen = () => {
             geminiApiKey: data.geminiApiKey || '',
             groqApiKey: data.groqApiKey || '', 
             emailAlertsEnabled: data.emailAlertsEnabled ?? true,
+            aiEmailProcessingEnabled: data.aiEmailProcessingEnabled === true,
           });
         }
       } catch (err) {
@@ -150,6 +152,31 @@ const SettingsScreen = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  // Saved immediately and independently of the form, so the AI chatbot's
+  // API-key validation in handleSave can't block it.
+  const [savingEmailAi, setSavingEmailAi] = useState(false);
+  const handleEmailAiToggle = async (e) => {
+    const enabled = e.target.checked;
+    setSettings(prev => ({ ...prev, aiEmailProcessingEnabled: enabled }));
+    setSavingEmailAi(true);
+    try {
+      const saved = await updateSettings({ aiEmailProcessingEnabled: enabled });
+      setSettings(prev => ({ ...prev, aiEmailProcessingEnabled: saved.aiEmailProcessingEnabled === true }));
+      addNotification({
+        title: enabled ? 'AI email processing on' : 'AI email processing off',
+        message: enabled
+          ? 'Financial emails will be analyzed with AI from the next Gmail scan.'
+          : 'Emails will be read only by built-in rules and not sent to AI.',
+      });
+    } catch (err) {
+      console.error('Failed to save email AI setting:', err);
+      setSettings(prev => ({ ...prev, aiEmailProcessingEnabled: !enabled }));
+      addNotification({ title: 'Error', message: 'Could not save the email AI setting. Please try again.' });
+    } finally {
+      setSavingEmailAi(false);
+    }
   };
 
   // ADDED: Function to handle PIN reset
@@ -326,6 +353,47 @@ const SettingsScreen = () => {
             </div>
           </label>
           <p className="text-[10px] text-outline mt-3 italic">Note: In-app notifications are always enabled and cannot be turned off.</p>
+        </section>
+
+        {/* Email Processing (Gmail) */}
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="material-symbols-outlined text-primary text-3xl">mail_lock</span>
+            <h2 className="font-headline font-bold text-xl text-on-surface">Email Processing</h2>
+          </div>
+
+          <label htmlFor="aiEmailProcessingEnabled" className="flex items-center justify-between gap-4 cursor-pointer group">
+            <div>
+              <span className="block text-sm font-bold text-on-surface mb-1">Allow AI to process my emails</span>
+              <span id="aiEmailProcessingHelp" className="block text-xs text-on-surface-variant max-w-md">
+                When on, financial emails from your connected Gmail are analyzed with AI (Groq) for better classification
+                and transaction extraction. Card and account numbers are masked first. When off, emails are read only
+                by Wallo&apos;s built-in rules and never sent to an AI service.
+              </span>
+            </div>
+            <div className="relative shrink-0">
+              <input
+                type="checkbox"
+                role="switch"
+                id="aiEmailProcessingEnabled"
+                name="aiEmailProcessingEnabled"
+                aria-describedby="aiEmailProcessingHelp"
+                aria-checked={settings.aiEmailProcessingEnabled}
+                checked={settings.aiEmailProcessingEnabled}
+                disabled={savingEmailAi}
+                onChange={handleEmailAiToggle}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-on-surface after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary transition-all"></div>
+            </div>
+          </label>
+          {settings.aiEmailProcessingEnabled && !settings.groqApiKey.trim() && (
+            <p className="text-[11px] text-on-surface-variant mt-3">
+              AI email processing uses a Groq API key. If the server has none configured, add your own Groq key above
+              (choose a Groq model); until then, emails are processed with the built-in rules.
+            </p>
+          )}
+          <p className="text-[10px] text-outline mt-3 italic">Applies from the next Gmail scan and saves as soon as you switch it. Emails that can&apos;t be read reliably are listed for review in the Bills tab instead of being recorded.</p>
         </section>
 
         {/* ADDED: Security Settings */}

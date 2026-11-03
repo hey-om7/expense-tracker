@@ -9,6 +9,9 @@
  *  GET  /api/gmail/statements?status=&cardId=   → saved statements
  *  POST /api/gmail/statements/:id/add-card      → track this untracked card from now on
  *  POST /api/gmail/statements/:id/ignore        → don't track this card, ignore its future statements
+ *  GET  /api/gmail/emails?status=review|recorded → other financial emails (review queue, transaction alerts)
+ *  POST /api/gmail/emails/:id/dismiss           → dismiss one review item
+ *  POST /api/gmail/emails/dismiss-all           → dismiss every review item
  */
 const express = require('express');
 const crypto = require('crypto');
@@ -20,6 +23,7 @@ const validateId = require('../middleware/validateId');
 const GmailConnection = require('../models/GmailConnection');
 const CardStatement = require('../models/CardStatement');
 const CreditCard = require('../models/CreditCard');
+const FinancialEmail = require('../models/FinancialEmail');
 const gmail = require('../services/gmailSync');
 const { isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 
@@ -82,8 +86,11 @@ const publicStatus = (conn) => (conn
 router.get('/status', async (req, res) => {
   try {
     const conn = await GmailConnection.findOne({ userId: req.userId }).lean();
-    const pendingCount = await CardStatement.countDocuments({ userId: req.userId, status: 'pending' });
-    res.json({ ...publicStatus(conn), pendingCount, available: gmail.isOAuthConfigured() && isEncryptionConfigured() });
+    const [pendingCount, reviewCount] = await Promise.all([
+      CardStatement.countDocuments({ userId: req.userId, status: 'pending' }),
+      FinancialEmail.countDocuments({ userId: req.userId, status: 'review' }),
+    ]);
+    res.json({ ...publicStatus(conn), pendingCount, reviewCount, available: gmail.isOAuthConfigured() && isEncryptionConfigured() });
   } catch (err) {
     res.status(500).json({ message: 'Failed to load Gmail status' });
   }
@@ -114,9 +121,25 @@ router.post('/scan-bills', async (req, res) => {
     if (conn.backfillStatus === 'running') {
       return res.status(429).json({ message: 'Your first Gmail scan is still running. Please check back shortly.' });
     }
-    const result = await gmail.syncConnection(conn._id, { backfill: conn.backfillStatus !== 'done' });
-    if (result.skipped) return res.status(429).json({ message: 'A scan is already in progress.' });
-    res.json({ linked: result.linked.length, pending: result.pending.length });
+    // full=true re-reads the last 90 days (already-saved statements are skipped),
+    // e.g. after parsing improvements picked up emails that were missed before.
+    const full = req.body?.full === true;
+    if (full || conn.backfillStatus !== 'done') {
+      // Long-running: run in the background; the UI polls /status until done.
+      await GmailConnection.updateOne({ _id: conn._id }, { $set: { backfillStatus: 'pending' } });
+      startBackfill(conn._id);
+      return res.status(202).json({ started: true });
+    }
+    const result = await gmail.syncConnection(conn._id);
+    if (result.busy) return res.status(429).json({ message: 'A scan is already in progress.' });
+    res.json({
+      linked: result.linked.length,
+      pending: result.pending.length,
+      review: result.review,
+      method: result.method,
+      aiRequested: result.aiRequested,
+      aiAvailable: result.aiAvailable,
+    });
   } catch (err) {
     res.status(500).json({ message: 'Gmail scan failed. Please try again later.' });
   }
@@ -196,6 +219,40 @@ router.post('/statements/:id/ignore', validateId, async (req, res) => {
     res.json({ message: 'Ignored. Future statements for this card will be skipped.' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to ignore card' });
+  }
+});
+
+router.get('/emails', async (req, res) => {
+  try {
+    const status = ['review', 'recorded', 'dismissed'].includes(req.query.status) ? req.query.status : 'review';
+    const emails = await FinancialEmail.find({ userId: req.userId, status })
+      .select('-gmailMessageId -userId -__v')
+      .sort({ receivedAt: -1 })
+      .limit(200)
+      .lean();
+    res.json(emails);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load emails' });
+  }
+});
+
+router.post('/emails/dismiss-all', async (req, res) => {
+  try {
+    const r = await FinancialEmail.updateMany({ userId: req.userId, status: 'review' }, { $set: { status: 'dismissed' } });
+    res.json({ dismissed: r.modifiedCount });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to dismiss' });
+  }
+});
+
+router.post('/emails/:id/dismiss', validateId, async (req, res) => {
+  try {
+    const r = await FinancialEmail.updateOne(
+      { _id: req.params.id, userId: req.userId, status: 'review' }, { $set: { status: 'dismissed' } });
+    if (!r.matchedCount) return res.status(404).json({ message: 'Email not found' });
+    res.json({ message: 'Dismissed' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to dismiss' });
   }
 });
 

@@ -9,6 +9,7 @@ const toPublic = (prefs) => ({
   aiEnabled: prefs.aiEnabled,
   aiModel: prefs.aiModel,
   emailAlertsEnabled: prefs.emailAlertsEnabled,
+  aiEmailProcessingEnabled: prefs.aiEmailProcessingEnabled === true,
   geminiApiKey: maskKey(prefs.geminiApiKey),
   groqApiKey: maskKey(prefs.groqApiKey),
 });
@@ -35,6 +36,7 @@ router.get('/', async (req, res) => {
         geminiApiKey: '',
         groqApiKey: '', // Added default
         emailAlertsEnabled: true,
+        aiEmailProcessingEnabled: false,
       };
     }
     
@@ -48,7 +50,7 @@ router.get('/', async (req, res) => {
 router.put('/', async (req, res) => {
   try {
     // Destructure the new groqApiKey
-    const { aiEnabled, aiModel, geminiApiKey, groqApiKey, emailAlertsEnabled } = req.body;
+    const { aiEnabled, aiModel, geminiApiKey, groqApiKey, emailAlertsEnabled, aiEmailProcessingEnabled } = req.body;
     
     // Updated to include Groq models
     const allowedModels = [
@@ -57,11 +59,13 @@ router.put('/', async (req, res) => {
     ];
     const modelToSave = allowedModels.includes(aiModel) ? aiModel : 'gemini-2.5-flash';
 
-    const update = {
-      aiEnabled: Boolean(aiEnabled),
-      aiModel: modelToSave,
-      emailAlertsEnabled: Boolean(emailAlertsEnabled),
-    };
+    const update = {};
+    // Partial updates: only fields present in the body change.
+    if (aiEnabled !== undefined) update.aiEnabled = Boolean(aiEnabled);
+    if (aiModel !== undefined) update.aiModel = modelToSave;
+    if (emailAlertsEnabled !== undefined) update.emailAlertsEnabled = Boolean(emailAlertsEnabled);
+    // Only an explicit boolean changes the email-AI opt-in; anything else leaves it as saved.
+    if (typeof aiEmailProcessingEnabled === 'boolean') update.aiEmailProcessingEnabled = aiEmailProcessingEnabled;
     const gem = cleanKey(geminiApiKey);
     const groq = cleanKey(groqApiKey);
     if (gem !== undefined) update.geminiApiKey = gem;

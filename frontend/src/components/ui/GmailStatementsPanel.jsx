@@ -35,6 +35,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const [status, setStatus] = useState(null);
   const [pending, setPending] = useState([]);
   const [history, setHistory] = useState([]);
+  const [review, setReview] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [busy, setBusy] = useState('');
   const [banner, setBanner] = useState(null);
@@ -44,13 +45,15 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
     try {
       const s = await api.fetchGmailStatus();
       setStatus(s);
-      if (s.connected || s.pendingCount > 0) {
-        const [p, h] = await Promise.all([
+      if (s.connected || s.pendingCount > 0 || s.reviewCount > 0) {
+        const [p, h, r] = await Promise.all([
           api.fetchCardStatements({ status: 'pending' }),
           api.fetchCardStatements({ status: 'linked' }),
+          api.fetchFinancialEmails('review'),
         ]);
         setPending(p);
         setHistory(h);
+        setReview(r);
       }
       return s;
     } catch {
@@ -96,13 +99,22 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
     window.location.assign(url);
   });
 
-  const handleScan = () => run('scan', async () => {
-    const r = await api.scanGmailBills();
+  const handleScan = (full = false) => run(full ? 'rescan' : 'scan', async () => {
+    const r = await api.scanGmailBills(full);
+    if (r.started) {
+      setBanner({ ok: true, text: 'Rescanning the last 90 days in the background. New statements will appear here when it finishes.' });
+      await load();
+      return;
+    }
     setBanner({
       ok: true,
       text: r.linked || r.pending
         ? `Found ${r.linked} statement(s) for tracked cards and ${r.pending} for untracked cards.`
         : 'No new statements since the last scan.',
+      detail: [
+        r.review ? `${r.review} bank email(s) couldn't be read reliably and are listed below for review.` : '',
+        r.aiRequested && !r.aiAvailable ? 'AI email processing is on, but no Groq API key is set, so built-in rules were used.' : '',
+      ].filter(Boolean).join(' '),
     });
     await load();
     if (r.linked) onCardsChanged?.();
@@ -121,6 +133,19 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
     await api.ignoreStatementCard(g.latest._id);
     await load();
   });
+
+  const handleDismissReview = (id) => run(`dismiss-${id}`, async () => {
+    await api.dismissFinancialEmail(id);
+    await load();
+  });
+
+  const handleDismissAllReview = () => {
+    if (!window.confirm('Dismiss all emails waiting for review?')) return;
+    run('dismiss-all', async () => {
+      await api.dismissAllFinancialEmails();
+      await load();
+    });
+  };
 
   const handleAddSubmit = (e) => {
     e.preventDefault();
@@ -144,7 +169,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
       {banner && (
         <div className={`p-3 rounded-xl border text-sm max-md:text-xs flex items-start gap-2 ${banner.ok ? 'bg-[#95CD41]/10 border-[#95CD41]/20 text-[#95CD41]' : 'bg-error/10 border-error/20 text-error'}`}>
           <span className="material-symbols-outlined text-base">{banner.ok ? 'check_circle' : 'error'}</span>
-          <span className="flex-1">{banner.text}</span>
+          <span className="flex-1">{banner.text}{banner.detail && <span className="block mt-1 opacity-80">{banner.detail}</span>}</span>
           <button onClick={() => setBanner(null)} className="opacity-70 hover:opacity-100" aria-label="Dismiss">
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -160,6 +185,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
               <p className="text-xs text-on-surface-variant mt-1">
                 With your permission, Wallo reads (never sends or deletes) credit card statement emails from known banks:
                 the last 90 days now, then new ones every day at 6 AM. You get an email one day before each due date.
+                Emails are read by built-in rules unless you turn on &quot;Allow AI to process my emails&quot; in Settings.
               </p>
             </div>
             <button onClick={handleConnect} disabled={!status.available || busy === 'connect'}
@@ -185,12 +211,19 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
               {status.status === 'revoked' ? (
                 <button onClick={handleConnect} disabled={busy === 'connect'} className={`${btn} text-primary border border-primary/30 bg-primary/10`}>Reconnect</button>
               ) : (
-                <button onClick={handleScan} disabled={!!busy || ['pending', 'running'].includes(status.backfillStatus)}
+                <button onClick={() => handleScan(false)} disabled={!!busy || ['pending', 'running'].includes(status.backfillStatus)}
                   className={`${btn} text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20`}>
                   {busy === 'scan'
                     ? <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     : <span className="material-symbols-outlined text-sm">sync</span>}
                   Scan now
+                </button>
+              )}
+              {status.status !== 'revoked' && (
+                <button onClick={() => handleScan(true)} disabled={!!busy || ['pending', 'running'].includes(status.backfillStatus)}
+                  title="Re-read the last 90 days. Statements already saved are not duplicated."
+                  className={`${btn} text-on-surface-variant border border-outline/20`}>
+                  {busy === 'rescan' ? 'Rescanning…' : 'Rescan 90 days'}
                 </button>
               )}
               <button onClick={handleDisconnect} disabled={!!busy} className={`${btn} text-on-surface-variant border border-outline/20`}>
@@ -228,6 +261,38 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                     Ignore
                   </button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Emails that couldn't be read reliably */}
+      {review.length > 0 && (
+        <div className="bg-surface-container-low rounded-xl border border-outline/10 p-4 max-md:p-3">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="font-bold text-sm text-on-surface">Bank emails to review ({review.length})</p>
+              <p className="text-xs text-on-surface-variant mt-1">Wallo couldn&apos;t read these reliably, so nothing was recorded from them. Check them in Gmail and add anything relevant by hand.</p>
+            </div>
+            <button disabled={!!busy} onClick={handleDismissAllReview} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
+              Dismiss all
+            </button>
+          </div>
+          <div className="flex flex-col divide-y divide-outline/10">
+            {review.map((e) => (
+              <div key={e._id} className="py-2 flex items-center justify-between gap-3 text-xs">
+                <div className="min-w-0">
+                  <p className="font-bold text-on-surface truncate">{e.subject || '(unreadable email)'}</p>
+                  <p className="text-on-surface-variant">
+                    {e.institutionName || e.senderDomain || 'Unknown sender'} · {fmtDate(e.receivedAt)}
+                    {e.fields?.amount != null ? ` · ${formatCurrency(e.fields.amount)}?` : ''}
+                    {e.reason === 'unauthenticated_sender' ? ' · sender not verified' : ''}
+                  </p>
+                </div>
+                <button disabled={!!busy} onClick={() => handleDismissReview(e._id)} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
+                  Dismiss
+                </button>
               </div>
             ))}
           </div>

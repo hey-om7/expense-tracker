@@ -18,6 +18,7 @@ const cardStatementSchema = new mongoose.Schema({
   dueDate: { type: Date, default: null },
   statementDate: { type: Date, required: true },
   subject: { type: String, default: '' },
+  source: { type: String, enum: ['regex', 'ai'], default: 'regex' },
 }, { timestamps: true });
 
 // The same email is never stored twice for a user.

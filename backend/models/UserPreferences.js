@@ -18,6 +18,9 @@ const userPreferencesSchema = new mongoose.Schema({
   geminiApiKey: { type: String, default: '' },
   groqApiKey: { type: String, default: '' }, // ADDED GROQ API KEY
   emailAlertsEnabled: { type: Boolean, default: true },
+  // Opt-in: when false (default), Gmail emails are processed only by local rules
+  // and their content is never sent to an AI service.
+  aiEmailProcessingEnabled: { type: Boolean, default: false },
   onboarding: {
     dashboardSeen: { type: Boolean, default: false },
     historySeen: { type: Boolean, default: false },

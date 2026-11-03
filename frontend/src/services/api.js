@@ -101,13 +101,17 @@ export const fetchGmailStatus = () => request('/gmail/status');
 // the API is on another origin (e.g. VITE_API_URL=http://localhost:5001).
 export const connectGmail = () => request('/gmail/connect', { method: 'POST', credentials: 'include' });
 export const disconnectGmail = () => request('/gmail/disconnect', { method: 'POST' });
-export const scanGmailBills = () => request('/gmail/scan-bills', { method: 'POST' });
+export const scanGmailBills = (full = false) => request('/gmail/scan-bills', { method: 'POST', body: { full } });
 export const fetchCardStatements = (params = {}) =>
   request(`/gmail/statements?${new URLSearchParams(params).toString()}`);
 export const addCardFromStatement = (id, data) =>
   request(`/gmail/statements/${id}/add-card`, { method: 'POST', body: data });
 export const ignoreStatementCard = (id) =>
   request(`/gmail/statements/${id}/ignore`, { method: 'POST' });
+export const fetchFinancialEmails = (status = 'review') =>
+  request(`/gmail/emails?${new URLSearchParams({ status }).toString()}`);
+export const dismissFinancialEmail = (id) => request(`/gmail/emails/${id}/dismiss`, { method: 'POST' });
+export const dismissAllFinancialEmails = () => request('/gmail/emails/dismiss-all', { method: 'POST' });
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
 
 // ─── Onboarding ───
