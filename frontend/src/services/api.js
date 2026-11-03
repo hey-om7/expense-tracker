@@ -95,8 +95,19 @@ export const searchStocks = (query) => request(`/stocks/search?q=${encodeURIComp
 export const fetchStockQuote = (symbol) => request(`/stocks/quote/${encodeURIComponent(symbol)}`);
 export const fetchStockHistory = (symbol, range) => request(`/stocks/history/${encodeURIComponent(symbol)}?range=${range}`);
 
-// ─── Gmail Bill Scanner ───
+// ─── Gmail statements (per-user Google OAuth) ───
+export const fetchGmailStatus = () => request('/gmail/status');
+// credentials: 'include' so the browser keeps the OAuth nonce cookie even when
+// the API is on another origin (e.g. VITE_API_URL=http://localhost:5001).
+export const connectGmail = () => request('/gmail/connect', { method: 'POST', credentials: 'include' });
+export const disconnectGmail = () => request('/gmail/disconnect', { method: 'POST' });
 export const scanGmailBills = () => request('/gmail/scan-bills', { method: 'POST' });
+export const fetchCardStatements = (params = {}) =>
+  request(`/gmail/statements?${new URLSearchParams(params).toString()}`);
+export const addCardFromStatement = (id, data) =>
+  request(`/gmail/statements/${id}/add-card`, { method: 'POST', body: data });
+export const ignoreStatementCard = (id) =>
+  request(`/gmail/statements/${id}/ignore`, { method: 'POST' });
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
 
 // ─── Onboarding ───

@@ -1,314 +1,202 @@
 /**
- * POST /api/gmail/scan-bills
- * Scans Gmail inbox for CC bill emails, matches them to tracked credit cards,
- * updates billDueDate + billAmount, and sends a summary email to the user.
+ * Per-user Gmail statement scanning (Google OAuth, gmail.readonly).
+ *
+ *  POST /api/gmail/connect                      → returns Google consent URL
+ *  GET  /api/gmail/oauth/callback               → Google redirects here (no Bearer token)
+ *  GET  /api/gmail/status                       → connection state
+ *  POST /api/gmail/scan-bills                   → manual "scan now" (new emails only)
+ *  POST /api/gmail/disconnect                   → revoke access + delete token
+ *  GET  /api/gmail/statements?status=&cardId=   → saved statements
+ *  POST /api/gmail/statements/:id/add-card      → track this untracked card from now on
+ *  POST /api/gmail/statements/:id/ignore        → don't track this card, ignore its future statements
  */
-
 const express = require('express');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
+const validateId = require('../middleware/validateId');
+const GmailConnection = require('../models/GmailConnection');
+const CardStatement = require('../models/CardStatement');
 const CreditCard = require('../models/CreditCard');
-const Notification = require('../models/Notification');
-const User = require('../models/User');
-const GmailScanState = require('../models/GmailScanState');
-const { scanGmailForBills } = require('../services/gmailScanner');
-const { sendEmail } = require('../services/emailService');
-const { escapeHtml, canUseGmailScan } = require('../utils/security');
+const gmail = require('../services/gmailSync');
+const { isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 
-router.use(auth);
+const NONCE_COOKIE = 'wallo_gmail_oauth';
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const frontendUrl = (query) => `${(process.env.FRONTEND_URL || '').replace(/\/$/, '')}/cyclic?gmail=${query}`;
 
-const scanLocks = new Set();
-
-// The scanner reads ONE shared inbox (GMAIL_INBOX_USER). Only allow-listed
-// owners may trigger it, otherwise any registered user could pull the
-// owner's bill amounts, due dates and email subjects into their account.
-const requireGmailOwner = async (req, res, next) => {
-  const user = await User.findById(req.userId).select('email').lean();
-  if (!canUseGmailScan(user?.email)) {
-    return res.status(403).json({ message: 'Gmail bill scanning is not enabled for this account.' });
-  }
-  next();
+const readCookie = (req, name) => {
+  const match = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
 };
 
-router.post('/scan-bills', requireGmailOwner, async (req, res) => {
-  if (scanLocks.has(req.userId)) {
-    return res.status(429).json({ message: 'Scan already in progress. Please wait.' });
-  }
-  scanLocks.add(req.userId);
+const startBackfill = (connectionId) => {
+  setImmediate(() => {
+    gmail.syncConnection(connectionId, { backfill: true }).catch(() => { /* logged in service */ });
+  });
+};
 
+// ─── OAuth callback (browser redirect from Google; authenticated via signed state + cookie) ───
+router.get('/oauth/callback', async (req, res) => {
+  const clearCookie = () => res.clearCookie(NONCE_COOKIE, { path: '/api/gmail/oauth' });
   try {
-    // Load this user's scan state to get the cutoff date
-    const state = await GmailScanState.findOne({ userId: req.userId }).lean();
-    const since = state?.lastEmailDate || null; // null = first scan, defaults to 45 days back
+    const { code, state, error } = req.query;
+    if (error) { clearCookie(); return res.redirect(frontendUrl('denied')); }
+    if (typeof code !== 'string' || typeof state !== 'string') throw new Error('Missing code/state');
 
-    // Scan Gmail from the cutoff onwards
-    const bills = await scanGmailForBills(since);
-
-    if (bills.length === 0) {
-      // Still update lastScannedAt so we know the scan ran
-      await GmailScanState.findOneAndUpdate(
-        { userId: req.userId },
-        { $set: { lastScannedAt: new Date() } },
-        { upsert: true }
-      );
-      return res.json({
-        matched: 0,
-        unmatched: 0,
-        bills: [],
-        message: since
-          ? 'No new bill emails since your last scan.'
-          : 'No credit card bill emails found in the last 45 days.',
-      });
+    const payload = jwt.verify(state, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    const nonce = readCookie(req, NONCE_COOKIE);
+    // The nonce cookie ties the callback to the browser that started the flow,
+    // so nobody can trick a victim into connecting their Gmail to another account.
+    if (payload.p !== 'gmail_connect' || !nonce || sha256(nonce) !== payload.n ||
+        !mongoose.Types.ObjectId.isValid(payload.uid)) {
+      throw new Error('Invalid OAuth state');
     }
+    clearCookie();
 
-    const cards = await CreditCard.find({ userId: req.userId });
-    const matched = [];
-    const unmatched = [];
-
-    for (const bill of bills) {
-      let card = null;
-
-      if (bill.last4) {
-        card = cards.find(c => c.last4Digits === bill.last4);
-      }
-      if (!card) {
-        card = cards.find(c =>
-          c.name.toLowerCase().split(/\s+/).some(word =>
-            word.length > 3 && (
-              bill.subject.toLowerCase().includes(word) ||
-              bill.from.toLowerCase().includes(word)
-            )
-          )
-        );
-      }
-
-      if (card) {
-        // Always write all extracted fields — never silently skip
-        const updateData = { billGeneratedDate: bill.date };
-        if (bill.amount != null) updateData.billAmount = bill.amount;
-        // Always update billDueDate when extracted — this is the core fix.
-        // Previously `if (bill.dueDate)` was skipping valid Date objects that
-        // happened to be falsy-ish, and leaving the old manually-entered date intact.
-        if (bill.dueDate instanceof Date && !isNaN(bill.dueDate)) {
-          updateData.billDueDate = bill.dueDate;
-        }
-
-        await CreditCard.findByIdAndUpdate(card._id, updateData, { new: true });
-
-        matched.push({
-          cardId: card._id,
-          cardName: card.name,
-          last4: card.last4Digits,
-          amount: bill.amount,
-          dueDate: bill.dueDate,
-          dueDateUpdated: !!updateData.billDueDate,   // tells frontend whether date was updated
-          emailSubject: bill.subject,
-          emailFrom: bill.from,
-          emailDate: bill.date,
-        });
-
-        console.log(`💳 Matched: ${card.name} (****${card.last4Digits}) | amount=${bill.amount} | dueDate=${bill.dueDate} | subject="${bill.subject}"`);
-      } else {
-        unmatched.push({
-          amount: bill.amount,
-          dueDate: bill.dueDate,
-          last4: bill.last4,
-          emailSubject: bill.subject,
-          emailFrom: bill.from,
-          emailDate: bill.date,
-        });
-      }
-    }
-
-    // In-app notification
-    if (matched.length > 0) {
-      const cardNames = matched.map(m => m.cardName).join(', ');
-      await Notification.create({
-        userId: req.userId,
-        title: '💳 Credit Card Bills Updated',
-        message: `Found and updated bills for: ${cardNames}`,
-        isRead: false,
-        date: new Date(),
-      });
-    }
-
-    // Summary email
-    const user = await User.findById(req.userId).select('email name').lean();
-    const userEmail = user?.email;
-    const userName = user?.name || 'there';
-
-    if (userEmail) {
-      const emailHtml = buildSummaryEmail(userName, matched, unmatched);
-      await sendEmail(
-        userEmail,
-        `💳 Credit Card Bills Summary — ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-        emailHtml
-      );
-    }
-
-    // Advance the watermark to 1ms after the most recent email we processed.
-    // Using +1ms (not exact date) ensures the boundary email is excluded on the
-    // next scan without accidentally blocking emails that arrive at the same second.
-    const latestDate = bills.reduce(
-      (max, b) => (new Date(b.date) > max ? new Date(b.date) : max),
-      new Date(0)
-    );
-    const watermark = new Date(latestDate.getTime() + 1);
-    await GmailScanState.findOneAndUpdate(
-      { userId: req.userId },
-      {
-        $set: {
-          lastEmailDate: watermark,
-          lastScannedAt: new Date(),
-          lastScanCount: matched.length,
-        },
-      },
-      { upsert: true }
-    );
-
-    res.json({
-      matched: matched.length,
-      unmatched: unmatched.length,
-      bills: matched,
-      unmatchedBills: unmatched,
-    });
+    const conn = await gmail.completeConnection(payload.uid, code);
+    startBackfill(conn._id);
+    return res.redirect(frontendUrl('connected'));
   } catch (err) {
-    console.error('Gmail scan error:', err.message);
-    res.status(500).json({ message: 'Scan failed. Please try again later.' });
-  } finally {
-    scanLocks.delete(req.userId);
+    console.error('Gmail OAuth callback failed:', err.message);
+    clearCookie();
+    return res.redirect(frontendUrl('error'));
   }
 });
 
-// ─── Email template ───────────────────────────────────────────────────────
-const buildSummaryEmail = (userName, matched, unmatched) => {
-  const formatCurrency = (n) =>
-    n != null
-      ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
-      : 'N/A';
+router.use(auth);
 
-  const formatDate = (d) =>
-    d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
+const publicStatus = (conn) => (conn
+  ? {
+      connected: true,
+      gmailAddress: conn.gmailAddress,
+      status: conn.status,
+      backfillStatus: conn.backfillStatus,
+      lastScannedAt: conn.lastScannedAt,
+      lastError: conn.lastError,
+    }
+  : { connected: false });
 
-  const totalDue = matched.reduce((sum, m) => sum + (m.amount || 0), 0);
+router.get('/status', async (req, res) => {
+  try {
+    const conn = await GmailConnection.findOne({ userId: req.userId }).lean();
+    const pendingCount = await CardStatement.countDocuments({ userId: req.userId, status: 'pending' });
+    res.json({ ...publicStatus(conn), pendingCount, available: gmail.isOAuthConfigured() && isEncryptionConfigured() });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load Gmail status' });
+  }
+});
 
-  const matchedRows = matched.map(m => `
-    <tr>
-      <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;">
-        <strong style="color:#E5BA73;">${escapeHtml(m.cardName)}</strong>
-        <span style="color:#9a8f80;font-size:11px;margin-left:8px;">····${escapeHtml(m.last4)}</span>
-      </td>
-      <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;text-align:right;">
-        <strong style="color:#f1dfd3;font-size:16px;">${formatCurrency(m.amount)}</strong>
-      </td>
-      <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;text-align:right;">
-        <span style="color:${isDueSoon(m.dueDate) ? '#ef4444' : '#95CD41'};font-weight:bold;">
-          ${formatDate(m.dueDate)}
-          ${isDueSoon(m.dueDate) ? ' ⚠️' : ''}
-        </span>
-      </td>
-      <td style="padding:12px 16px;border-bottom:1px solid #2a1f15;color:#9a8f80;font-size:11px;">
-        ${escapeHtml(m.emailSubject)}
-      </td>
-    </tr>
-  `).join('');
+router.post('/connect', (req, res) => {
+  if (!gmail.isOAuthConfigured() || !isEncryptionConfigured()) {
+    return res.status(503).json({ message: 'Gmail connection is not configured on the server.' });
+  }
+  const nonce = crypto.randomBytes(32).toString('hex');
+  const state = jwt.sign({ uid: req.userId, p: 'gmail_connect', n: sha256(nonce) }, process.env.JWT_SECRET, {
+    algorithm: 'HS256', expiresIn: '10m',
+  });
+  res.cookie(NONCE_COOKIE, nonce, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/gmail/oauth',
+    maxAge: 10 * 60 * 1000,
+  });
+  res.json({ url: gmail.getAuthUrl(state) });
+});
 
-  const unmatchedSection = unmatched.length > 0 ? `
-    <div style="margin-top:32px;padding:16px;background:#1a0f0a;border:1px solid #3d2a1a;border-radius:12px;">
-      <h3 style="color:#F59E0B;margin:0 0 12px;font-size:14px;">⚠️ ${unmatched.length} Bill(s) Could Not Be Matched</h3>
-      <p style="color:#9a8f80;font-size:12px;margin:0 0 12px;">
-        These emails look like credit card bills but couldn't be matched to any of your tracked cards.
-        You may want to add these cards to Wallo.
-      </p>
-      ${unmatched.map(u => `
-        <div style="padding:10px 0;border-bottom:1px solid #2a1f15;">
-          <div style="color:#f1dfd3;font-size:13px;">${escapeHtml(u.emailSubject)}</div>
-          <div style="color:#9a8f80;font-size:11px;margin-top:4px;">
-            From: ${escapeHtml(u.emailFrom)} · Amount: ${formatCurrency(u.amount)} · Due: ${formatDate(u.dueDate)}
-            ${u.last4 ? ` · Card ending ····${escapeHtml(u.last4)}` : ''}
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  ` : '';
+router.post('/scan-bills', async (req, res) => {
+  try {
+    const conn = await GmailConnection.findOne({ userId: req.userId }).lean();
+    if (!conn) return res.status(400).json({ message: 'Connect your Gmail first.' });
+    if (conn.backfillStatus === 'running') {
+      return res.status(429).json({ message: 'Your first Gmail scan is still running. Please check back shortly.' });
+    }
+    const result = await gmail.syncConnection(conn._id, { backfill: conn.backfillStatus !== 'done' });
+    if (result.skipped) return res.status(429).json({ message: 'A scan is already in progress.' });
+    res.json({ linked: result.linked.length, pending: result.pending.length });
+  } catch (err) {
+    res.status(500).json({ message: 'Gmail scan failed. Please try again later.' });
+  }
+});
 
-  return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0d0905;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+router.post('/disconnect', async (req, res) => {
+  try {
+    await gmail.disconnect(req.userId);
+    res.json({ message: 'Gmail disconnected. Wallo can no longer read your email.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to disconnect Gmail' });
+  }
+});
 
-    <!-- Header -->
-    <div style="text-align:center;margin-bottom:32px;">
-      <div style="font-size:28px;font-weight:900;color:#E5BA73;letter-spacing:-1px;">Wallo</div>
-      <div style="color:#9a8f80;font-size:12px;text-transform:uppercase;letter-spacing:3px;margin-top:4px;">Credit Card Bills Summary</div>
-    </div>
+router.get('/statements', async (req, res) => {
+  try {
+    const filter = { userId: req.userId };
+    if (['linked', 'pending', 'dismissed'].includes(req.query.status)) filter.status = req.query.status;
+    if (req.query.cardId) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.cardId)) return res.status(400).json({ message: 'Invalid card ID' });
+      filter.cardId = req.query.cardId;
+    }
+    const statements = await CardStatement.find(filter)
+      .select('-gmailMessageId -userId -__v')
+      .sort({ statementDate: -1 })
+      .limit(200)
+      .lean();
+    res.json(statements);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load statements' });
+  }
+});
 
-    <!-- Greeting -->
-    <div style="background:#1a140e;border:1px solid #2a1f15;border-radius:16px;padding:24px;margin-bottom:24px;">
-      <p style="color:#f1dfd3;margin:0 0 8px;font-size:16px;">Hey ${escapeHtml(userName)} 👋</p>
-      <p style="color:#9a8f80;margin:0;font-size:14px;line-height:1.6;">
-        We scanned your Gmail inbox and found <strong style="color:#E5BA73;">${matched.length} credit card bill${matched.length !== 1 ? 's' : ''}</strong>.
-        Your Wallo dashboard has been updated with the latest due dates and amounts.
-      </p>
-    </div>
+// Statements in the same "pending card" group as this one (same bank + digits).
+const sameCardFilter = (userId, st) => ({
+  userId, status: 'pending', senderDomain: st.senderDomain, last4: st.last4 || null,
+});
 
-    ${matched.length > 0 ? `
-    <!-- Total Due Banner -->
-    <div style="background:linear-gradient(135deg,#2a1a0a,#1a0f05);border:1px solid #E5BA73/20;border-radius:16px;padding:24px;margin-bottom:24px;text-align:center;">
-      <div style="color:#9a8f80;font-size:11px;text-transform:uppercase;letter-spacing:3px;margin-bottom:8px;">Total Amount Due Across All Cards</div>
-      <div style="color:#E5BA73;font-size:36px;font-weight:900;letter-spacing:-1px;">${formatCurrency(totalDue)}</div>
-    </div>
+router.post('/statements/:id/add-card', validateId, async (req, res) => {
+  try {
+    const st = await CardStatement.findOne({ _id: req.params.id, userId: req.userId, status: 'pending' });
+    if (!st) return res.status(404).json({ message: 'Statement not found' });
 
-    <!-- Bills Table -->
-    <div style="background:#1a140e;border:1px solid #2a1f15;border-radius:16px;overflow:hidden;margin-bottom:24px;">
-      <div style="padding:16px 16px 0;border-bottom:1px solid #2a1f15;">
-        <h2 style="color:#f1dfd3;margin:0 0 16px;font-size:16px;">📋 Bill Details</h2>
-      </div>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:#120d08;">
-            <th style="padding:10px 16px;text-align:left;color:#9a8f80;font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Card</th>
-            <th style="padding:10px 16px;text-align:right;color:#9a8f80;font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Amount Due</th>
-            <th style="padding:10px 16px;text-align:right;color:#9a8f80;font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Due Date</th>
-            <th style="padding:10px 16px;text-align:left;color:#9a8f80;font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:600;">Source</th>
-          </tr>
-        </thead>
-        <tbody>${matchedRows}</tbody>
-      </table>
-    </div>
-    ` : ''}
+    const name = String(req.body.name || `${st.bankName} Credit Card`).trim().slice(0, 100);
+    const last4Digits = String(req.body.last4Digits || st.last4 || '').replace(/\D/g, '').slice(-4);
+    if (name.length < 2 || last4Digits.length < 2) {
+      return res.status(400).json({ message: 'Card name and last digits are required' });
+    }
 
-    ${unmatchedSection}
+    const card = await CreditCard.create({
+      userId: req.userId,
+      name,
+      last4Digits,
+      billDueDate: st.dueDate || new Date(),
+      billAmount: st.amount,
+      billGeneratedDate: st.statementDate,
+    });
+    await CardStatement.updateMany(sameCardFilter(req.userId, st), { $set: { status: 'linked', cardId: card._id } });
+    await gmail.applyLatestToCard(card._id);
 
-    <!-- Action CTA -->
-    <div style="text-align:center;margin-top:32px;padding:24px;background:#1a140e;border:1px solid #2a1f15;border-radius:16px;">
-      <p style="color:#9a8f80;font-size:13px;margin:0 0 16px;">
-        Open Wallo to review your bills, mark payments, and stay on top of your finances.
-      </p>
-      <div style="display:inline-block;background:#E5BA73;color:#1a0f05;padding:12px 32px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;">
-        Open Wallo Dashboard
-      </div>
-    </div>
+    res.status(201).json(await CreditCard.findById(card._id));
+  } catch (err) {
+    res.status(400).json({ message: 'Failed to add card' });
+  }
+});
 
-    <!-- Footer -->
-    <div style="text-align:center;margin-top:24px;">
-      <p style="color:#4e4539;font-size:11px;margin:0;">
-        This email was generated automatically by Wallo · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-      </p>
-    </div>
+router.post('/statements/:id/ignore', validateId, async (req, res) => {
+  try {
+    const st = await CardStatement.findOne({ _id: req.params.id, userId: req.userId, status: 'pending' });
+    if (!st) return res.status(404).json({ message: 'Statement not found' });
 
-  </div>
-</body>
-</html>
-  `;
-};
-
-const isDueSoon = (dueDate) => {
-  if (!dueDate) return false;
-  const diff = new Date(dueDate) - new Date();
-  return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
-};
+    await CardStatement.updateMany(sameCardFilter(req.userId, st), { $set: { status: 'dismissed' } });
+    await GmailConnection.updateOne(
+      { userId: req.userId },
+      { $addToSet: { ignoredCards: { domain: st.senderDomain, last4: st.last4 || null } } },
+    );
+    res.json({ message: 'Ignored. Future statements for this card will be skipped.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to ignore card' });
+  }
+});
 
 module.exports = router;

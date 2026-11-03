@@ -369,4 +369,38 @@ const scanGmailForBills = async (since = null) => {
   return Array.from(deduped.values());
 };
 
-module.exports = { scanGmailForBills };
+/**
+ * Parse one raw RFC822 email. Returns structured bill data, or null if it is
+ * not a credit card statement from a whitelisted bank domain.
+ */
+const parseBillFromRaw = async (raw) => {
+  const parsed = await simpleParser(raw);
+  const subject = parsed.subject || '';
+  const fromAddr = parsed.from?.value?.[0]?.address || '';
+  const fromName = parsed.from?.value?.[0]?.name || '';
+  if (!isBillEmail(subject, fromAddr)) return null;
+
+  // Anti-spoofing: Gmail stamps every message with Authentication-Results.
+  // Require DMARC or DKIM to pass so a forged "From: x@hdfcbank.com" email
+  // can't plant fake bills or due dates.
+  const authResults = [].concat(parsed.headers.get('authentication-results') || []).join(' ').toLowerCase();
+  if (!/\b(dmarc|dkim)=pass\b/.test(authResults)) return null;
+
+  const bodyText = parsed.text || parsed.html?.replace(/<[^>]+>/g, ' ') || '';
+  const amount = extractAmount(bodyText) || extractAmount(subject);
+  const dueDate = extractDueDate(bodyText) || extractDueDate(subject);
+  const last4 = extractLast4(bodyText) || extractLast4(subject);
+  if (!amount && !dueDate) return null;
+
+  return {
+    subject: subject.slice(0, 300),
+    from: `${fromName} <${fromAddr}>`.slice(0, 300),
+    domain: extractDomain(fromAddr),
+    date: parsed.date || new Date(),
+    amount,
+    dueDate,
+    last4,
+  };
+};
+
+module.exports = { scanGmailForBills, parseBillFromRaw, OFFICIAL_BANK_DOMAINS };
