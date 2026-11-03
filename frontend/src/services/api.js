@@ -41,6 +41,8 @@ export const loginUser = (data) => request('/auth/login', { method: 'POST', body
 export const registerUser = (data) => request('/auth/register', { method: 'POST', body: data });
 export const googleAuth = (data) => request('/auth/google', { method: 'POST', body: data });
 export const getMe = () => request('/auth/me');
+export const forgotPassword = (email) => request('/auth/forgot-password', { method: 'POST', body: { email } });
+export const resetPassword = (token, password) => request(`/auth/reset-password/${encodeURIComponent(token)}`, { method: 'POST', body: { password } });
 
 // ─── Transactions ───
 export const fetchTransactions = () => request('/transactions');

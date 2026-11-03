@@ -106,6 +106,8 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/google', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
 
 const stocksLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
@@ -118,6 +120,7 @@ app.use('/api/stocks', stocksLimiter);
 
 // ─── Routes ───
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth', require('./routes/passwordReset'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/investments', require('./routes/investments'));

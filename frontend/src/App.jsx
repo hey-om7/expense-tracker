@@ -15,6 +15,8 @@ import CyclicScreen from './pages/Cyclic';
 import SettingsScreen from './pages/Settings';
 import LoginScreen from './pages/Login';
 import RegisterScreen from './pages/Register';
+import ForgotPasswordScreen from './pages/ForgotPassword';
+import ResetPasswordScreen from './pages/ResetPassword';
 import ToastContainer from './components/ui/ToastContainer';
 
 function App() {
@@ -25,6 +27,8 @@ function App() {
           {/* Public Auth Routes */}
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/register" element={<RegisterScreen />} />
+          <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+          <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
 
           {/* Protected App Routes */}
           <Route

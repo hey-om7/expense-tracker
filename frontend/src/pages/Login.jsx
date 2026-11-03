@@ -10,7 +10,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
-  
+
   const googleBtnRef = useRef(null);
   const passwordRef = useRef(null); // ADDED: Ref to control password focus
 
@@ -118,7 +118,7 @@ const Login = () => {
                 onKeyDown={(e) => {
                   // ADDED: Intercept "Enter" / "Next" key and focus password field
                   if (e.key === 'Enter') {
-                    e.preventDefault(); 
+                    e.preventDefault();
                     passwordRef.current?.focus();
                   }
                 }}
@@ -174,6 +174,13 @@ const Login = () => {
                   {showPassword ? 'visibility_off' : 'visibility'}
                 </span>
               </button>
+            </div>
+
+            {/* Forgot password */}
+            <div className="flex justify-end -mt-2">
+              <Link to="/forgot-password" className="text-primary-container text-xs font-semibold font-inter hover:underline transition-colors">
+                Forgot password?
+              </Link>
             </div>
 
             {/* Error */}
