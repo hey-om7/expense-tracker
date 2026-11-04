@@ -1,32 +1,36 @@
+# Usage:
+#   cp .template.env .env   # fill in values
+#   docker compose up --build
+# App: http://localhost:${APP_PORT:-8080}
+#
+# Uses MONGO_URI from .env (e.g. MongoDB Atlas). To use the bundled local MongoDB instead:
+#   docker compose --profile local-db up --build
+# and set MONGO_URI=mongodb://mongo:27017/vestor in .env.
 services:
-  backend:
+  app:
     build:
       context: .
-      dockerfile: backend/Dockerfile
-    container_name: vestor-backend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    container_name: vestor-app
     restart: unless-stopped
-    # Not published to the host: only nginx (frontend) can reach it. Publishing
-    # it would let clients bypass nginx and spoof X-Forwarded-For to evade rate limits.
-    expose:
-      - "5001"
     env_file:
       - .env
-    networks:
-      - vestor-network
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: vestor-frontend
-    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5001
     ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - vestor-network
+      - "${APP_PORT:-8080}:5001"
 
-networks:
-  vestor-network:
-    driver: bridge
+  mongo:
+    image: mongo:7
+    profiles: ["local-db"]
+    container_name: vestor-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

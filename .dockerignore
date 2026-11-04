@@ -1,8 +1,15 @@
 **/node_modules
 **/dist
 **/.env
+**/.env.*
+!.template.env
 .git
 .vscode
+.kiro
+resources
 **/*.log
 **/npm-debug.log*
 **/.DS_Store
+docker-compose.yml
+render.yaml
+README.md

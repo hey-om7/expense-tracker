@@ -13,7 +13,14 @@
     "build": "npm run build -w frontend",
     "lint": "npm run lint -w frontend",
     "preview": "npm run preview -w frontend",
-    "start": "npm run start -w backend"
+    "start": "npm run start -w backend",
+    "prod": "npm run build && npm run start",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f app"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

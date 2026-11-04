@@ -7,6 +7,15 @@ const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
 
+// `npm start` / `npm run prod` pass --production so NODE_ENV is set cross-platform
+if (process.argv.includes('--production')) process.env.NODE_ENV = 'production';
+const isProd = process.env.NODE_ENV === 'production';
+
+if (isProd && !process.env.MONGODB_URI && !process.env.MONGO_URI) {
+  console.error('❌ MONGO_URI must be set in production.');
+  process.exit(1);
+}
+
 const app = express();
 
 // ─── Refuse to start with a missing or guessable JWT secret ───
@@ -27,10 +36,14 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "https://accounts.google.com", "https://apis.google.com"],
       frameSrc: ["https://accounts.google.com"],
-      connectSrc: ["'self'", "https://accounts.google.com"],
+      connectSrc: ["'self'", "https://accounts.google.com", "https://api.mfapi.in"],
       imgSrc: ["'self'", "data:", "https:"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
     },
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
@@ -145,6 +158,32 @@ app.use('/api/gmail', require('./routes/gmailScan'));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// ─── Serve the built frontend (single-service production deploy) ───
+// Enabled when frontend/dist exists (after `npm run build`). In dev, Vite serves the UI.
+const path = require('path');
+const fs = require('fs');
+const distDir = process.env.FRONTEND_DIST || path.resolve(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(path.join(distDir, 'index.html'))) {
+  app.use(express.static(distDir, {
+    index: false,
+    dotfiles: 'ignore',
+    setHeaders: (res, filePath) => {
+      // Vite emits content-hashed files under /assets — safe to cache forever
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+  // SPA fallback: any non-API GET returns index.html so React Router can handle it
+  app.get(/^(?!\/api(\/|$)).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+  console.log(`📦 Serving frontend from ${distDir}`);
+} else if (isProd) {
+  console.warn(`⚠️  No frontend build at ${distDir}. Run \`npm run build\` (or \`npm run prod\`) to serve the UI.`);
+}
 
 // ─── 404 handler ───
 app.use((_req, res) => {

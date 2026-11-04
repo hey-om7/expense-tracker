@@ -1,40 +1,49 @@
-# ── Stage 1: Build the React app ──
-FROM node:18 AS build
+# Single image: Express serves the API (/api) and the built React app (everything else).
+# Works for `docker compose up` locally and Render's Docker runtime.
 
+# ── Stage 1: build the frontend ──
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Copy workspace manifests first (for Docker layer caching)
 COPY package.json package-lock.json ./
 COPY frontend/package.json frontend/
 COPY backend/package.json backend/
+RUN npm ci -w frontend --include-workspace-root=false
 
-# Install frontend workspace dependencies (including devDependencies needed for build)
-RUN npm ci -w frontend
-
-# Copy the frontend source code
 COPY frontend/ frontend/
 
-# Accept the API URL as a build argument
-# In production with nginx proxy, this should be empty string ""
-# so the browser hits the same origin and nginx proxies /api/ to backend
+# VITE_* values are baked into the JS bundle at build time (public values only, never secrets).
+# Render passes service env vars as build args automatically when declared here.
 ARG VITE_API_URL=""
-ENV VITE_API_URL=$VITE_API_URL
-
-# Build the Vite app
+ARG VITE_GOOGLE_CLIENT_ID=""
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 RUN npm run build -w frontend
 
-# ── Stage 2: Serve with Nginx ──
-FROM nginx:alpine
+# ── Stage 2: backend production dependencies ──
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/
+COPY backend/package.json backend/
+RUN npm ci -w backend --omit=dev --include-workspace-root=false && npm cache clean --force
 
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
+# ── Stage 3: runtime ──
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production \
+    PORT=5001
 
-# Copy our custom nginx config
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json ./
+COPY --chown=node:node backend/ backend/
+COPY --from=build --chown=node:node /app/frontend/dist frontend/dist
 
-# Copy the built React app from the build stage
-COPY --from=build /app/frontend/dist /usr/share/nginx/html
+USER node
+EXPOSE 5001
 
-EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT}/api/health" >/dev/null || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+WORKDIR /app/backend
+CMD ["node", "server.js", "--production"]
