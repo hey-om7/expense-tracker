@@ -59,6 +59,10 @@ app.use(helmet({
       frameAncestors: ["'none'"],
     },
   },
+  // Google Sign-In's popup must postMessage the credential back to this window.
+  // Helmet's default COOP ("same-origin") cuts that link, leaving the popup blank
+  // on accounts.google.com/gsi/transform.
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   permissionsPolicy: {
     features: {
