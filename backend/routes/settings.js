@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const UserPreferences = require('../models/UserPreferences');
 const { maskKey, isMaskedKey } = require('../utils/security');
+const { encryptSecret, revealSecret, isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 
 // Never send stored API keys back in full; the browser only needs to know one exists.
 const toPublic = (prefs) => ({
@@ -10,8 +11,8 @@ const toPublic = (prefs) => ({
   aiModel: prefs.aiModel,
   emailAlertsEnabled: prefs.emailAlertsEnabled,
   aiEmailProcessingEnabled: prefs.aiEmailProcessingEnabled === true,
-  geminiApiKey: maskKey(prefs.geminiApiKey),
-  groqApiKey: maskKey(prefs.groqApiKey),
+  geminiApiKey: maskKey(revealSecret(prefs.geminiApiKey)),
+  groqApiKey: maskKey(revealSecret(prefs.groqApiKey)),
 });
 
 // undefined = leave unchanged (masked value echoed back), otherwise a cleaned string.
@@ -68,8 +69,12 @@ router.put('/', async (req, res) => {
     if (typeof aiEmailProcessingEnabled === 'boolean') update.aiEmailProcessingEnabled = aiEmailProcessingEnabled;
     const gem = cleanKey(geminiApiKey);
     const groq = cleanKey(groqApiKey);
-    if (gem !== undefined) update.geminiApiKey = gem;
-    if (groq !== undefined) update.groqApiKey = groq;
+    // API keys are encrypted at rest; refuse to store them in plaintext.
+    if ((gem || groq) && !isEncryptionConfigured()) {
+      return res.status(503).json({ message: 'Saving API keys is not configured on the server.' });
+    }
+    if (gem !== undefined) update.geminiApiKey = encryptSecret(gem);
+    if (groq !== undefined) update.groqApiKey = encryptSecret(groq);
 
     const prefs = await UserPreferences.findOneAndUpdate(
       { userId: req.userId },

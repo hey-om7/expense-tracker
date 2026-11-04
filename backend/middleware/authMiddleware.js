@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const { readCookie, SESSION_COOKIE } = require('../utils/session');
 
 // Simple in-memory cache to avoid hitting DB on every request
 // Key: userId, Value: { valid: boolean, checkedAt: timestamp }
@@ -8,13 +9,12 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const auth = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Session JWT comes only from the httpOnly cookie (never readable by page scripts)
+    const token = readCookie(req, SESSION_COOKIE);
+    if (!token) {
       return res.status(401).json({ message: 'Authentication required' });
     }
-
-    const token = authHeader.split(' ')[1];
-    if (!token || token.length > 2000) {
+    if (token.length > 2000) {
       return res.status(401).json({ message: 'Invalid token' });
     }
 

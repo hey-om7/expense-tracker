@@ -172,7 +172,7 @@ router.post('/refresh-sectors', async (req, res) => {
 
     res.json({ updated, total: stocks.length });
   } catch (err) {
-    console.error('Sector refresh failed:', err);
+    console.error('Sector refresh failed:', err.message);
     res.status(500).json({ message: 'Failed to refresh sectors' });
   }
 });

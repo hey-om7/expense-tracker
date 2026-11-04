@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { resendVerification } from '../services/api';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [notice, setNotice] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
@@ -17,6 +20,8 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setNotice('');
+    setNeedsVerification(false);
 
     if (!email || !password) {
       setError('Please fill in all fields');
@@ -28,9 +33,21 @@ const Login = () => {
       await login(email, password);
       navigate('/', { replace: true });
     } catch (err) {
+      setNeedsVerification(err.code === 'EMAIL_NOT_VERIFIED');
       setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      const res = await resendVerification(email);
+      setError('');
+      setNeedsVerification(false);
+      setNotice(res.message);
+    } catch (err) {
+      setError(err.message || 'Could not resend the link');
     }
   };
 
@@ -189,6 +206,14 @@ const Login = () => {
                 <span className="material-symbols-outlined text-error text-lg">error</span>
                 <p className="text-error text-sm font-inter">{error}</p>
               </div>
+            )}
+            {needsVerification && (
+              <button type="button" onClick={handleResend} className="text-primary-container text-sm font-semibold hover:underline">
+                Resend verification email
+              </button>
+            )}
+            {notice && (
+              <p className="text-on-surface-variant text-sm font-inter">{notice}</p>
             )}
 
             {/* Submit */}

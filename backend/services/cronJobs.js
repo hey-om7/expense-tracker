@@ -1,3 +1,4 @@
+const { runExclusive } = require('./jobLock');
 const cron = require('node-cron');
 const Subscription = require('../models/Subscription');
 const CreditCard = require('../models/CreditCard');
@@ -118,7 +119,7 @@ const processSubscriptions = async () => {
             buildReminderEmail(user.name || 'there', notifMessage)
           );
         } catch (emailErr) {
-          console.error(`Failed to send email to ${user.email}:`, emailErr.message);
+          console.error(`Failed to send email to user ${user._id}:`, emailErr.message);
         }
       }
 
@@ -126,7 +127,7 @@ const processSubscriptions = async () => {
       sub.lastReminderSentDate = new Date();
       await sub.save();
 
-      console.log(`🔔 Subscription reminder sent: ${sub.name} → ${user?.email || sub.userId}`);
+      console.log(`🔔 Subscription reminder sent: ${sub.name} → user ${sub.userId}`);
     }
   }
 };
@@ -210,7 +211,7 @@ const processCreditCards = async () => {
             buildReminderEmail(user.name || 'there', msg)
           );
         } catch (emailErr) {
-          console.error(`Failed to send email to ${user.email}:`, emailErr.message);
+          console.error(`Failed to send email to user ${user._id}:`, emailErr.message);
         }
       }
 
@@ -218,7 +219,7 @@ const processCreditCards = async () => {
       card.lastReminderSentDate = new Date();
       await card.save();
 
-      console.log(`💳 CC reminder sent: ${card.name} → ${user?.email || card.userId}`);
+      console.log(`💳 CC reminder sent: ${card.name} → user ${card.userId}`);
     }
   }
 };
@@ -245,7 +246,12 @@ const buildReminderEmail = (name, message) => {
 /**
  * Core check function — extracted so it can be called on startup AND by cron
  */
-const runReminderCheck = async () => {
+// Locked so that with several server instances, only one sends reminders per hour.
+const runReminderCheck = () => runExclusive('reminder-check', 50 * 60 * 1000, doReminderCheck)
+  .then(r => { if (r.skipped) console.log('⏭️  Reminder check skipped (already run by another instance).'); })
+  .catch(err => console.error('❌ Reminder check lock error:', err.message));
+
+const doReminderCheck = async () => {
   console.log(`⏰ [${new Date().toISOString()}] Running reminder check...`);
   try {
     await processSubscriptions();
@@ -274,7 +280,8 @@ const initCronJobs = () => {
   // Scans each user's connected Gmail for statements newer than their last scan.
   // The hourly reminder check above then emails users one day before each due date.
   cron.schedule('0 6 * * *', () => {
-    syncAllConnections().catch(err => console.error('❌ Gmail statement sync error:', err.message));
+    runExclusive('gmail-daily-sync', 20 * 60 * 60 * 1000, syncAllConnections)
+      .catch(err => console.error('❌ Gmail statement sync error:', err.message));
   }, { timezone: 'Asia/Kolkata' });
   console.log('📧 Daily Gmail statement sync scheduled at 06:00 IST.');
 };

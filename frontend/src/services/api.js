@@ -1,37 +1,36 @@
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-const getToken = () => localStorage.getItem('vestor_token');
+// Pages that work without a session; a 401 there must not bounce to /login.
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
 
-const request = async (endpoint, options = {}) => {
+const request = async (endpoint, { redirectOn401 = true, ...options } = {}) => {
   const url = `${API_URL}/api${endpoint}`;
-  const token = getToken();
   const config = {
+    ...options,
+    // The session is an httpOnly cookie; JavaScript never sees the token.
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Required by the server's CSRF check on POST/PUT/DELETE
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(options.headers || {}),
     },
-    ...options,
   };
   if (config.body && typeof config.body === 'object') {
     config.body = JSON.stringify(config.body);
   }
   const response = await fetch(url, config);
 
-  // Handle 401 — token expired or invalid
-  if (response.status === 401) {
-    localStorage.removeItem('vestor_token');
-    localStorage.removeItem('vestor_user');
-    // Only redirect if not already on auth pages
-    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const error = new Error(data.message || (response.status === 401 ? 'Session expired' : 'API request failed'));
+    error.status = response.status;
+    error.code = data.code;
+    if (response.status === 401 && redirectOn401 &&
+        !PUBLIC_PATHS.some((p) => window.location.pathname.startsWith(p))) {
       window.location.href = '/login';
     }
-    const error = await response.json().catch(() => ({ message: 'Session expired' }));
-    throw new Error(error.message || 'Session expired');
-  }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Network error' }));
-    throw new Error(error.message || 'API request failed');
+    throw error;
   }
   return response.json();
 };
@@ -40,7 +39,10 @@ const request = async (endpoint, options = {}) => {
 export const loginUser = (data) => request('/auth/login', { method: 'POST', body: data });
 export const registerUser = (data) => request('/auth/register', { method: 'POST', body: data });
 export const googleAuth = (data) => request('/auth/google', { method: 'POST', body: data });
-export const getMe = () => request('/auth/me');
+export const getMe = () => request('/auth/me', { redirectOn401: false });
+export const logoutUser = () => request('/auth/logout', { method: 'POST', redirectOn401: false });
+export const verifyEmail = (token) => request(`/auth/verify-email/${encodeURIComponent(token)}`, { method: 'POST' });
+export const resendVerification = (email) => request('/auth/resend-verification', { method: 'POST', body: { email } });
 export const forgotPassword = (email) => request('/auth/forgot-password', { method: 'POST', body: { email } });
 export const resetPassword = (token, password) => request(`/auth/reset-password/${encodeURIComponent(token)}`, { method: 'POST', body: { password } });
 
@@ -97,9 +99,7 @@ export const fetchStockHistory = (symbol, range) => request(`/stocks/history/${e
 
 // ─── Gmail statements (per-user Google OAuth) ───
 export const fetchGmailStatus = () => request('/gmail/status');
-// credentials: 'include' so the browser keeps the OAuth nonce cookie even when
-// the API is on another origin (e.g. VITE_API_URL=http://localhost:5001).
-export const connectGmail = () => request('/gmail/connect', { method: 'POST', credentials: 'include' });
+export const connectGmail = () => request('/gmail/connect', { method: 'POST' });
 export const disconnectGmail = () => request('/gmail/disconnect', { method: 'POST' });
 export const scanGmailBills = (full = false) => request('/gmail/scan-bills', { method: 'POST', body: { full } });
 export const fetchCardStatements = (params = {}) =>

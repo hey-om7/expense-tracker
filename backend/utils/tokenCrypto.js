@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-// AES-256-GCM for secrets at rest (Gmail refresh tokens).
+// AES-256-GCM for secrets at rest (Gmail refresh tokens, users' AI API keys).
 // GMAIL_TOKEN_ENCRYPTION_KEY must be 64 hex chars (32 bytes): openssl rand -hex 32
 const getKey = () => {
   const hex = process.env.GMAIL_TOKEN_ENCRYPTION_KEY || '';
@@ -29,4 +29,21 @@ const isConfigured = () => {
   try { getKey(); return true; } catch { return false; }
 };
 
-module.exports = { encrypt, decrypt, isConfigured };
+const isEncrypted = (value) => typeof value === 'string' && value.startsWith('v1:');
+
+// For user API keys: stored values may be legacy plaintext (before encryption was
+// added) or ciphertext. Returns the usable key, or '' if it can't be decrypted.
+const revealSecret = (stored) => {
+  if (!stored) return '';
+  if (!isEncrypted(stored)) return String(stored);
+  try {
+    return decrypt(stored);
+  } catch (err) {
+    console.error('Failed to decrypt stored secret:', err.message);
+    return '';
+  }
+};
+
+const encryptSecret = (plain) => (plain ? encrypt(plain) : '');
+
+module.exports = { encrypt, decrypt, isConfigured, isEncrypted, revealSecret, encryptSecret };

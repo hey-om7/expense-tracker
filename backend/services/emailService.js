@@ -2,6 +2,9 @@ const nodemailer = require('nodemailer');
 
 let transporter = null;
 
+// Keep addresses out of logs: "jane@example.com" -> "j***@example.com"
+const maskEmail = (addr) => String(addr).replace(/^(.).*?@/, '$1***@');
+
 const getTransporter = () => {
   if (transporter) return transporter;
 
@@ -42,10 +45,10 @@ const sendEmail = async (to, subject, html) => {
       subject,
       html,
     });
-    console.log(`📧 Email sent to ${to}: ${subject}`);
+    console.log(`📧 Email sent to ${maskEmail(to)}: ${subject}`);
     return true;
   } catch (err) {
-    console.error(`❌ Email failed to ${to}:`, err.message);
+    console.error(`❌ Email failed to ${maskEmail(to)}:`, err.message);
     return false;
   }
 };

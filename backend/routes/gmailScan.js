@@ -72,6 +72,11 @@ router.get('/oauth/callback', async (req, res) => {
 
 router.use(auth);
 
+// Per-account caps: scans call Gmail (and possibly a paid AI API) many times.
+const { userLimiter } = require('../utils/rateLimits');
+const scanLimiter = userLimiter('gmail-scan', { windowMs: 60 * 60 * 1000, limit: 10, message: 'Too many Gmail scans. Please try again later.' });
+const connectLimiter = userLimiter('gmail-connect', { windowMs: 60 * 60 * 1000, limit: 10, message: 'Too many Gmail connection attempts. Please try again later.' });
+
 const publicStatus = (conn) => (conn
   ? {
       connected: true,
@@ -96,7 +101,7 @@ router.get('/status', async (req, res) => {
   }
 });
 
-router.post('/connect', (req, res) => {
+router.post('/connect', connectLimiter, (req, res) => {
   if (!gmail.isOAuthConfigured() || !isEncryptionConfigured()) {
     return res.status(503).json({ message: 'Gmail connection is not configured on the server.' });
   }
@@ -114,7 +119,7 @@ router.post('/connect', (req, res) => {
   res.json({ url: gmail.getAuthUrl(state) });
 });
 
-router.post('/scan-bills', async (req, res) => {
+router.post('/scan-bills', scanLimiter, async (req, res) => {
   try {
     const conn = await GmailConnection.findOne({ userId: req.userId }).lean();
     if (!conn) return res.status(400).json({ message: 'Connect your Gmail first.' });

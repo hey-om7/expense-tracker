@@ -17,6 +17,7 @@ import LoginScreen from './pages/Login';
 import RegisterScreen from './pages/Register';
 import ForgotPasswordScreen from './pages/ForgotPassword';
 import ResetPasswordScreen from './pages/ResetPassword';
+import VerifyEmailScreen from './pages/VerifyEmail';
 import ToastContainer from './components/ui/ToastContainer';
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
           <Route path="/register" element={<RegisterScreen />} />
           <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
           <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
+          <Route path="/verify-email/:token" element={<VerifyEmailScreen />} />
 
           {/* Protected App Routes */}
           <Route

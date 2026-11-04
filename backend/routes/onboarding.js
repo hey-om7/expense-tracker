@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
     const prefs = await UserPreferences.findOne({ userId: req.userId }).lean();
     res.json(prefs?.onboarding || DEFAULT_ONBOARDING);
   } catch (err) {
-    console.error('Failed to fetch onboarding:', err);
+    console.error('Failed to fetch onboarding:', err.message);
     res.status(500).json({ message: 'Failed to fetch onboarding state' });
   }
 });
@@ -49,7 +49,7 @@ router.put('/', async (req, res) => {
 
     res.json(prefs.onboarding || DEFAULT_ONBOARDING);
   } catch (err) {
-    console.error('Failed to update onboarding:', err);
+    console.error('Failed to update onboarding:', err.message);
     res.status(500).json({ message: 'Failed to update onboarding state' });
   }
 });
@@ -65,7 +65,7 @@ router.post('/reset', async (req, res) => {
 
     res.json(prefs.onboarding || DEFAULT_ONBOARDING);
   } catch (err) {
-    console.error('Failed to reset onboarding:', err);
+    console.error('Failed to reset onboarding:', err.message);
     res.status(500).json({ message: 'Failed to reset onboarding state' });
   }
 });

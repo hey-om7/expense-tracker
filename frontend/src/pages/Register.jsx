@@ -9,6 +9,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { register, googleLogin } = useAuth();
@@ -58,8 +59,8 @@ const Register = () => {
 
     try {
       setLoading(true);
-      await register(name, email, password);
-      navigate('/', { replace: true });
+      const res = await register(name, email, password);
+      setSuccess(res.message || 'Check your inbox to verify your email.');
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -111,6 +112,19 @@ const Register = () => {
       return () => clearInterval(interval);
     }
   }, []);
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-surface-container-low/80 backdrop-blur-xl border border-outline-variant/30 rounded-2xl p-8 shadow-2xl text-center">
+          <span className="material-symbols-outlined text-tertiary text-4xl mb-3" style={{ fontVariationSettings: "'FILL' 1" }}>mark_email_read</span>
+          <h2 className="text-xl font-headline font-bold text-on-surface mb-2">Verify your email</h2>
+          <p className="text-on-surface-variant text-sm mb-6">{success}</p>
+          <Link to="/login" className="text-primary-container font-semibold hover:underline">Go to sign in</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">

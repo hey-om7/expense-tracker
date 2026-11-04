@@ -23,7 +23,7 @@ const pipeline = require('./emailProcessing');
 const { rootDomainFor } = require('./emailProcessing/institutions');
 const { applyLatestToCard } = pipeline.sinks;
 const { sendEmail } = require('./emailService');
-const { encrypt, decrypt } = require('../utils/tokenCrypto');
+const { encrypt, decrypt, revealSecret } = require('../utils/tokenCrypto');
 const { escapeHtml } = require('../utils/security');
 
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -39,7 +39,7 @@ const loadProcessingPrefs = (userId) =>
   UserPreferences.findOne({ userId }).select('aiEmailProcessingEnabled groqApiKey').lean();
 
 // Groq key for AI processing: server key first, else the user's own key from Settings.
-const groqKeyFrom = (prefs) => process.env.GROQ_API_KEY || prefs?.groqApiKey?.trim() || null;
+const groqKeyFrom = (prefs) => process.env.GROQ_API_KEY || revealSecret(prefs?.groqApiKey).trim() || null;
 
 const isOAuthConfigured = () =>
   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GMAIL_OAUTH_REDIRECT_URI);

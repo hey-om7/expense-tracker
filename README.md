@@ -8,6 +8,17 @@ Backend and frontend share one `.env` file in the repository root.
 
 `.env` is gitignored. Only `VITE_`-prefixed variables reach browser code, so never give secrets that prefix. `docker-compose.yml` passes the same root `.env` to the backend container.
 
+## Production security checklist
+
+These can't be enforced in code; do them in the hosting dashboards before going live.
+
+- **MongoDB Atlas:** give the app a database user with `readWrite` on this one database only. Avoid allowing `0.0.0.0/0`: use Render's static outbound IPs (paid plans) or Atlas private networking. Turn on backups.
+- **Accounts:** turn on two-factor login for Render, MongoDB Atlas, Google Cloud and the email provider. Limit who can see the Render environment and logs.
+- **Secrets:** generate `JWT_SECRET` and `GMAIL_TOKEN_ENCRYPTION_KEY` fresh for production (never reuse dev values). Rotate any secret that was ever pasted into chat, a ticket or a commit. Rotating `JWT_SECRET` logs everyone out; rotating the encryption key disconnects Gmail and drops saved AI keys.
+- **After setting `GMAIL_TOKEN_ENCRYPTION_KEY`** on an existing database, run `node backend/scripts/encrypt-api-keys.js` once to encrypt previously saved AI keys.
+- **`TRUST_PROXY`:** after deploying, check that rate limiting sees real client IPs (default `1` fits Render).
+- **Instances:** scheduled jobs are locked in MongoDB, so scaling to several instances is safe.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

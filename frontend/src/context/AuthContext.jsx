@@ -3,81 +3,63 @@ import * as api from '../services/api';
 
 const AuthContext = createContext();
 
+// The session lives in an httpOnly cookie set by the server, so nothing
+// sensitive is kept in localStorage. "Logged in" means /auth/me succeeds.
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('vestor_token'));
   const [loading, setLoading] = useState(true);
 
-  // Validate token on mount
   useEffect(() => {
-    const validateToken = async () => {
-      const storedToken = localStorage.getItem('vestor_token');
-      if (!storedToken) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const userData = await api.getMe();
-        setUser(userData);
-        setToken(storedToken);
-      } catch (err) {
-        console.warn('Token validation failed:', err.message);
-        localStorage.removeItem('vestor_token');
-        localStorage.removeItem('vestor_user');
-        setUser(null);
-        setToken(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-    validateToken();
+    // Remove tokens left behind by older versions that used localStorage
+    localStorage.removeItem('vestor_token');
+    localStorage.removeItem('vestor_user');
+
+    api.getMe()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email, password) => {
     const response = await api.loginUser({ email, password });
-    localStorage.setItem('vestor_token', response.token);
-    localStorage.setItem('vestor_user', JSON.stringify(response.user));
-    setToken(response.token);
     setUser(response.user);
     return response;
   }, []);
 
+  // Sign-up doesn't log in: the user must verify their email first.
   const register = useCallback(async (name, email, password) => {
-    const response = await api.registerUser({ name, email, password });
-    localStorage.setItem('vestor_token', response.token);
-    localStorage.setItem('vestor_user', JSON.stringify(response.user));
-    setToken(response.token);
-    setUser(response.user);
-    return response;
+    return api.registerUser({ name, email, password });
   }, []);
 
   const googleLogin = useCallback(async (credential) => {
     const response = await api.googleAuth({ credential });
-    localStorage.setItem('vestor_token', response.token);
-    localStorage.setItem('vestor_user', JSON.stringify(response.user));
-    setToken(response.token);
     setUser(response.user);
     return response;
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('vestor_token');
-    localStorage.removeItem('vestor_user');
-    setToken(null);
+  // Called after the email verification link signs the user in
+  const setSessionUser = useCallback((u) => setUser(u), []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.logoutUser();
+    } catch {
+      // Clear local state even if the server is unreachable
+    }
     setUser(null);
   }, []);
 
-  const isAuthenticated = !!token && !!user;
+  const isAuthenticated = !!user;
 
   return (
     <AuthContext.Provider value={{
       user,
-      token,
       loading,
       isAuthenticated,
       login,
       register,
       googleLogin,
+      setSessionUser,
       logout,
     }}>
       {children}

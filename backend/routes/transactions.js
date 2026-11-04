@@ -3,6 +3,28 @@ const router = express.Router();
 const Transaction = require('../models/Transaction');
 const auth = require('../middleware/authMiddleware');
 const validateId = require('../middleware/validateId');
+const mongoose = require('mongoose');
+const Category = require('../models/Category');
+const Investment = require('../models/Investment');
+const Subscription = require('../models/Subscription');
+
+// Linked records must belong to the same user. categoryId may also be a
+// built-in key (e.g. "trade"), which isn't an ObjectId and needs no check.
+const checkReferences = async (userId, fields) => {
+  const isId = (v) => v && mongoose.Types.ObjectId.isValid(String(v));
+  const checks = [];
+  if (isId(fields.categoryId)) checks.push(Category.exists({ _id: fields.categoryId, userId }));
+  if (fields.investmentId) {
+    if (!isId(fields.investmentId)) return false;
+    checks.push(Investment.exists({ _id: fields.investmentId, userId }));
+  }
+  if (fields.subscriptionId) {
+    if (!isId(fields.subscriptionId)) return false;
+    checks.push(Subscription.exists({ _id: fields.subscriptionId, userId }));
+  }
+  const results = await Promise.all(checks);
+  return results.every(Boolean);
+};
 
 router.use(auth);
 
@@ -39,6 +61,7 @@ router.post('/', async (req, res) => {
   try {
     const fields = pickFields(req.body);
     if (!fields) return res.status(400).json({ message: 'Invalid amount' });
+    if (!(await checkReferences(req.userId, fields))) return res.status(400).json({ message: 'Invalid linked record' });
     const transaction = new Transaction({ ...fields, userId: req.userId });
     const saved = await transaction.save();
     res.status(201).json(saved);
@@ -51,6 +74,15 @@ router.put('/:id', validateId, async (req, res) => {
   try {
     const fields = pickFields(req.body);
     if (!fields) return res.status(400).json({ message: 'Invalid amount' });
+    const existing = await Transaction.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!existing) return res.status(404).json({ message: 'Transaction not found' });
+    // Only check links that change, so editing an old transaction whose category
+    // was later deleted still works.
+    const changed = {};
+    for (const k of ['categoryId', 'investmentId', 'subscriptionId']) {
+      if (fields[k] !== undefined && String(fields[k] ?? '') !== String(existing[k] ?? '')) changed[k] = fields[k];
+    }
+    if (!(await checkReferences(req.userId, changed))) return res.status(400).json({ message: 'Invalid linked record' });
     const updated = await Transaction.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       fields,

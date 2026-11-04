@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
 
@@ -27,7 +26,21 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 app.disable('x-powered-by');
 
 // ─── Trust proxy (required behind load balancers / reverse proxies) ───
-app.set('trust proxy', 1);
+// Number of proxy hops in front of the app (Render: 1). Wrong values break
+// per-IP rate limiting: too low = every user shares one IP, too high = clients can spoof it.
+// Accepts a hop count, "true"/"false", or a comma-separated list of trusted subnets.
+const parseTrustProxy = (v) => {
+  if (v === undefined || v === '') return 1;
+  if (/^\d+$/.test(v)) return Number(v);
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return v.split(',').map(s => s.trim()).filter(Boolean);
+};
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
+
+if (isProd && !require('./utils/tokenCrypto').isConfigured()) {
+  console.warn('⚠️  GMAIL_TOKEN_ENCRYPTION_KEY is not set — users cannot save AI API keys or connect Gmail.');
+}
 
 // ─── Security Headers ───
 app.use(helmet({
@@ -64,22 +77,38 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-if (allowedOrigins.length === 0) {
-  console.warn('⚠️  ALLOWED_ORIGINS is not set — all cross-origin browser requests will be rejected.');
-}
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400, // Preflight cache 24h
+// Same-origin requests also send an Origin header (on POST/PUT/DELETE), so the
+// app's own origin and FRONTEND_URL are always allowed.
+const frontendOrigin = (() => {
+  try { return process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : null; } catch { return null; }
+})();
+const isAllowedOrigin = (req, origin) =>
+  !origin ||
+  origin === `${req.protocol}://${req.get('host')}` ||
+  origin === frontendOrigin ||
+  allowedOrigins.includes(origin);
+
+app.use(cors((req, callback) => {
+  if (!isAllowedOrigin(req, req.headers.origin)) return callback(new Error('Not allowed by CORS'));
+  callback(null, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'X-Requested-With'],
+    maxAge: 86400, // Preflight cache 24h
+  });
 }));
+
+// ─── CSRF protection ───
+// Sessions are cookies, so state-changing requests must carry a custom header.
+// Browsers only let other sites send one after a CORS preflight, which the check above rejects.
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (req.get('X-Requested-With') !== 'XMLHttpRequest') {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  next();
+});
 
 // ─── Body parsing with strict size limit ───
 app.use(express.json({ limit: '256kb' }));
@@ -105,39 +134,28 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Rate limiting ───
-const generalLimiter = rateLimit({
+// ─── Rate limiting (stored in MongoDB: survives restarts, shared across instances) ───
+const { ipLimiter } = require('./utils/rateLimits');
+app.use('/api', ipLimiter('general', {
   windowMs: 15 * 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many requests, please try again later.' },
-  // keyGenerator: (req) => req.ip,
-});
-app.use('/api', generalLimiter);
+  limit: 300,
+  message: 'Too many requests, please try again later.',
+}));
 
-const authLimiter = rateLimit({
+const authLimiter = ipLimiter('auth', {
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many authentication attempts. Please wait 15 minutes.' },
-  // keyGenerator: (req) => req.ip,
+  limit: 10,
+  message: 'Too many authentication attempts. Please wait 15 minutes.',
 });
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
-app.use('/api/auth/google', authLimiter);
-app.use('/api/auth/forgot-password', authLimiter);
-app.use('/api/auth/reset-password', authLimiter);
+for (const p of ['login', 'register', 'google', 'forgot-password', 'reset-password', 'verify-email', 'resend-verification']) {
+  app.use(`/api/auth/${p}`, authLimiter);
+}
 
-const stocksLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many stock lookups. Please slow down.' },
-});
-app.use('/api/stocks', stocksLimiter);
+app.use('/api/stocks', ipLimiter('stocks', {
+  windowMs: 60 * 1000,
+  limit: 30,
+  message: 'Too many stock lookups. Please slow down.',
+}));
 
 // ─── Routes ───
 app.use('/api/auth', require('./routes/auth'));
@@ -194,6 +212,9 @@ app.use((_req, res) => {
 app.use((err, _req, res, _next) => {
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({ message: 'Forbidden' });
+  }
+  if (err.type === 'entity.too.large' || err.type === 'entity.parse.failed') {
+    return res.status(400).json({ message: 'Invalid request body' });
   }
   console.error('Unhandled error:', err.message);
   res.status(500).json({ message: 'Internal server error' });

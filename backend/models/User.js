@@ -51,6 +51,17 @@ const userSchema = new mongoose.Schema({
     default: null,
     select: false,
   },
+  // false = registered with a password and hasn't clicked the verification link yet.
+  // Missing (accounts created before verification existed) counts as verified.
+  emailVerified: {
+    type: Boolean,
+  },
+  emailVerifyToken: { type: String, default: null, select: false },
+  emailVerifyExpires: { type: Date, default: null, select: false },
+  emailVerifySentAt: { type: Date, default: null, select: false },
+  // Per-account brute-force protection
+  failedLoginCount: { type: Number, default: 0, select: false },
+  lockUntil: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
 // Hash password before saving
@@ -75,6 +86,11 @@ userSchema.methods.toJSON = function () {
   delete obj.resetPasswordToken;
   delete obj.resetPasswordExpires;
   delete obj.resetPasswordRequestedAt;
+  delete obj.emailVerifyToken;
+  delete obj.emailVerifyExpires;
+  delete obj.emailVerifySentAt;
+  delete obj.failedLoginCount;
+  delete obj.lockUntil;
   delete obj.__v;
   return obj;
 };

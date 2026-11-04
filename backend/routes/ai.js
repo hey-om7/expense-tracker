@@ -10,8 +10,12 @@ const CreditCard = require('../models/CreditCard');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const UserPreferences = require('../models/UserPreferences');
+const { revealSecret } = require('../utils/tokenCrypto');
+const { userLimiter } = require('../utils/rateLimits');
 
 router.use(auth);
+// Per-account cap: each chat call sends the user's data to a paid AI API.
+router.use(userLimiter('ai-chat', { windowMs: 10 * 60 * 1000, limit: 20, message: 'Too many AI requests. Please wait a few minutes.' }));
 
 // POST /api/ai/chat
 router.post('/chat', async (req, res) => {
@@ -34,6 +38,8 @@ router.post('/chat', async (req, res) => {
         groqApiKey: '' // ADDED: Default fallback for Groq
       };
     }
+    prefs.geminiApiKey = revealSecret(prefs.geminiApiKey);
+    prefs.groqApiKey = revealSecret(prefs.groqApiKey);
 
     if (!prefs.aiEnabled) {
       return res.status(403).json({ message: 'AI Chatbot is disabled in settings.' });
