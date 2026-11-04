@@ -127,7 +127,7 @@ const CyclicScreen = () => {
          <section className="animate-[slideUp_0.3s_ease-out]" data-onboarding="cyclic-subs">
             <div className="flex justify-between items-center mb-6 max-md:mb-4">
                <h3 className="font-headline font-bold text-xl max-md:text-base">Subscriptions ({subscriptions.length})</h3>
-               <button onClick={() => setSubModal({isOpen: true, data: null})} className="text-sm font-bold text-primary flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs">
+               <button onClick={() => setSubModal({isOpen: true, data: null})} className="text-sm font-bold text-primary flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs max-md:bg-surface-container-high max-md:px-3 max-md:py-2 max-md:rounded-lg">
                  <span className="material-symbols-outlined text-sm">add</span> Add Sub
                </button>
             </div>
@@ -202,8 +202,8 @@ const CyclicScreen = () => {
                                 <div className="w-9 h-5 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#95CD41]"></div>
                              </label>
                           </div>
-                          <div className="flex justify-between items-center">
-                             <span className="text-xs text-on-surface-variant">
+                          <div className="flex justify-between items-center gap-3">
+                             <span className="text-xs text-on-surface-variant min-w-0 truncate">
                                 <span className="font-bold opacity-70 tracking-wide text-[10px] uppercase mr-1">
                                    {sub.period === 'one_time' ? 'Expires:' : 'Renews:'}
                                 </span>
@@ -212,7 +212,7 @@ const CyclicScreen = () => {
                                    return formatDateToDDMMYYYY(targetDate);
                                 })()}
                              </span>
-                             <span className="font-headline font-extrabold text-base text-on-surface">{formatCurrency(sub.amount)}</span>
+                             <span className="font-headline font-extrabold text-base text-on-surface shrink-0">{formatCurrency(sub.amount)}</span>
                           </div>
                        </div>
                     ))}
@@ -228,7 +228,7 @@ const CyclicScreen = () => {
             <div className="flex justify-between items-center mb-4 max-md:mb-3">
                <h3 className="font-headline font-bold text-xl max-md:text-base">Credit Cards ({creditCards.length})</h3>
                <div className="flex items-center gap-2">
-                 <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs">
+                 <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs max-md:bg-surface-container-high max-md:px-3 max-md:py-2 max-md:rounded-lg">
                    <span className="material-symbols-outlined text-sm">add</span> Add Card
                  </button>
                </div>
@@ -304,14 +304,14 @@ const CyclicScreen = () => {
                                 {cc.notes && <p className="text-[11px] text-outline truncate">{cc.notes}</p>}
                              </div>
                           </div>
-                          <div className="flex justify-between items-center">
-                             <div>
+                          <div className="flex justify-between items-center gap-3">
+                             <div className="min-w-0">
                                 <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Due Date</span>
                                 <span className={`text-xs font-bold ${(warning || past) ? 'text-error' : 'text-on-surface'}`}>
                                    {formatDateToDDMMYYYY(cc.billDueDate)} {past ? '· Past Due' : warning ? '· Soon' : ''}
                                 </span>
                              </div>
-                             <div className="text-right">
+                             <div className="text-right shrink-0">
                                 <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Pending</span>
                                 <span className={`font-headline font-extrabold text-sm ${cc.billAmount ? 'text-error' : 'text-outline'}`}>
                                   {cc.billAmount ? formatCurrency(cc.billAmount) : 'N/A'}

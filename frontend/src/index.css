@@ -296,3 +296,26 @@
     border-bottom: none;
   }
 }
+
+/* iOS home-indicator safe area for the fixed mobile bottom nav */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+/* Recharts: prevent focus outlines on tap and stop charts from forcing horizontal overflow */
+.recharts-wrapper,
+.recharts-surface {
+  max-width: 100%;
+}
+.recharts-wrapper *:focus {
+  outline: none;
+}
+
+/* Prevent iOS Safari auto-zoom on focus (triggers for inputs < 16px) */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -8,6 +8,81 @@ Backend and frontend share one `.env` file in the repository root.
 
 `.env` is gitignored. Only `VITE_`-prefixed variables reach browser code, so never give secrets that prefix. `docker-compose.yml` passes the same root `.env` to the backend container.
 
+## Commands
+
+Run all of these from the repository root.
+
+| Command | What it does |
+| --- | --- |
+| `npm install` | Install dependencies for both `frontend` and `backend` (npm workspaces). |
+| `npm run dev` | Development: backend with auto-restart plus the Vite dev server (hot reload). |
+| `npm run build` | Build the frontend into `frontend/dist`. |
+| `npm start` | Start the server in production mode. It serves the API under `/api` and the built frontend everywhere else. Needs `npm run build` first. |
+| `npm run prod` | `npm run build` then `npm start`, in one step. For your own machine or a VPS. |
+| `npm run docker:up` / `docker:down` / `docker:logs` | Run the same app in Docker (see below). |
+
+Production is a single Node process: there is no separate frontend server.
+
+## Deploying to Render
+
+`render.yaml` in the repository root is a Render Blueprint that sets all of this up. To deploy: Render dashboard > New > Blueprint > pick this repository, then fill in the secret values it asks for.
+
+If you create the service by hand instead (New > Web Service), use:
+
+| Setting | Value |
+| --- | --- |
+| Runtime | Node (Node 20 or newer) |
+| Build command | `npm ci --include=dev && npm run build` |
+| Start command | `npm start` |
+| Health check path | `/api/health` |
+| Instances | 1 is fine; more is safe because scheduled jobs are locked in MongoDB. |
+
+Do not use `npm run prod` as the start command. It rebuilds the frontend on every restart.
+
+### Environment variables on Render
+
+Set these in the service's Environment tab. `VITE_*` values are baked into the frontend during the build, so after changing one, redeploy with "Clear build cache & deploy".
+
+Required:
+
+| Variable | Value |
+| --- | --- |
+| `NODE_ENV` | `production` (set by `render.yaml`) |
+| `MONGODB_URI` | Atlas connection string, e.g. `mongodb+srv://USER:PASSWORD@cluster.xxxxx.mongodb.net/wallo?retryWrites=true&w=majority`. `MONGO_URI` is also accepted. The server won't start without one. |
+| `JWT_SECRET` | At least 32 characters. Generate: `openssl rand -hex 48` |
+| `FRONTEND_URL` | Your public URL, no trailing slash, e.g. `https://your-app.onrender.com`. Used in verification and password-reset links. |
+| `GMAIL_TOKEN_ENCRYPTION_KEY` | 64 hex characters. Generate: `openssl rand -hex 32`. Needed to save users' AI API keys and to connect Gmail. |
+
+Needed for specific features:
+
+| Variable | Feature | Value |
+| --- | --- | --- |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` | Email. **Required in production**: sign-up sends a verification link, so without email nobody can register. | `smtp.gmail.com`, `587`, your address, and a Gmail App Password (not your normal password). |
+| `EMAIL_FROM` | Sender name and address on emails | Optional, e.g. `"Vestor" <you@gmail.com>` |
+| `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` | "Continue with Google" sign-in | The same OAuth client ID in both. Add your Render URL under "Authorized JavaScript origins". |
+| `GOOGLE_CLIENT_SECRET` and `GMAIL_OAUTH_REDIRECT_URI` | Gmail statement scanning | The client secret, and `https://your-app.onrender.com/api/gmail/oauth/callback`. Add the same URL under "Authorized redirect URIs" and enable the Gmail API. |
+| `GROQ_API_KEY`, `GROQ_STATEMENT_MODEL`, `GROQ_EMAIL_MODEL` | Optional server-wide AI for parsing bank emails | If unset, each user's own key from Settings is used. |
+
+Optional with sensible defaults: `JWT_EXPIRES_IN` (`7d`), `TRUST_PROXY` (`1`, the right value on Render), `ALLOWED_ORIGINS` (leave empty, since the UI and API share one domain).
+
+Leave these unset on Render:
+- `PORT`: Render provides it. A fixed value can break the health check.
+- `VITE_API_URL`: leave empty so the browser calls the same domain. A value with a trailing slash used to cause `//api/...` 404s.
+- `VITE_API_PROXY_TARGET`: development only.
+
+Also on Atlas: allow Render's outbound IPs under Network Access, or the app can't connect (see the checklist below).
+
+### Docker (alternative)
+
+```
+cp .template.env .env        # fill in the values
+npm run docker:up            # builds the image and starts it at http://localhost:8080
+npm run docker:logs          # follow logs
+npm run docker:down          # stop
+```
+
+Set `APP_PORT` in `.env` to change the host port. To also run a local MongoDB: `docker compose --profile local-db up --build` with `MONGODB_URI=mongodb://mongo:27017/vestor`. Render can also build from the `Dockerfile` instead of the Node runtime if you prefer; pass the `VITE_*` values as build arguments.
+
 ## Production security checklist
 
 These can't be enforced in code; do them in the hosting dashboards before going live.
@@ -18,6 +93,20 @@ These can't be enforced in code; do them in the hosting dashboards before going 
 - **After setting `GMAIL_TOKEN_ENCRYPTION_KEY`** on an existing database, run `node backend/scripts/encrypt-api-keys.js` once to encrypt previously saved AI keys.
 - **`TRUST_PROXY`:** after deploying, check that rate limiting sees real client IPs (default `1` fits Render).
 - **Instances:** scheduled jobs are locked in MongoDB, so scaling to several instances is safe.
+
+## Rotating secrets (do yearly, or immediately if one leaks)
+
+After changing any value, update it in the Render Environment tab (or your `.env`) and redeploy. Never paste real values into chats, tickets or commits.
+
+| Secret | How to rotate | Effect |
+| --- | --- | --- |
+| `MONGODB_URI` (database password) | Atlas > Database Access > edit the database user > set a new password, then put it in the connection string. | Brief downtime until the new value is deployed. Use only URL-safe characters or URL-encode the password. |
+| `EMAIL_PASS` | Google Account > Security > App passwords: revoke the old one, create a new one. | Emails (verification, password reset, reminders) fail until the new value is deployed. |
+| `GOOGLE_CLIENT_SECRET` | Google Cloud Console > APIs & Services > Credentials > the OAuth client > add a new secret, then delete the old one. | Gmail connect fails until the new value is deployed. Google sign-in is unaffected (it only uses the client ID). |
+| `JWT_SECRET` | `openssl rand -hex 48` | Every user is logged out once. |
+| `GMAIL_TOKEN_ENCRYPTION_KEY` | `openssl rand -hex 32` | Every connected Gmail is disconnected and saved AI API keys become unreadable, so users must reconnect Gmail and re-enter their keys. Worth it if the old key leaked. |
+
+Order for a full rotation: change the database password first (highest impact), then the email app password, the Google client secret and `JWT_SECRET`, and the encryption key last. Deploy once with all new values, then check `/api/health`, log in, and send a password-reset email to confirm everything works.
 
 # Getting Started with Create React App
 

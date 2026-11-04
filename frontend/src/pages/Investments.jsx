@@ -115,10 +115,10 @@ const InvestmentsScreen = () => {
   };
 
   return (
-    <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto min-h-screen">
-      <section className="mb-12">
+    <main className="pt-24 pb-32 px-4 sm:px-6 max-w-7xl mx-auto min-h-screen w-full">
+      <section className="mb-12 max-md:mb-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-12 bg-surface-container-low rounded-lg p-8 relative overflow-hidden flex flex-col justify-between min-h-[320px]">
+          <div className="lg:col-span-12 bg-surface-container-low rounded-lg p-4 md:p-8 relative overflow-hidden flex flex-col justify-between md:min-h-[320px]">
 
             {/* ===== DESKTOP HERO (unchanged) ===== */}
             <div className="hidden md:flex justify-between items-start">
@@ -156,24 +156,24 @@ const InvestmentsScreen = () => {
             </div>
 
             {/* ===== MOBILE HERO ===== */}
-            <div className="md:hidden -m-8 mb-0 p-5 pb-4">
+            <div className="md:hidden">
               <div className="flex justify-between items-center mb-3">
                 <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
                   {activeFilter === 'All' ? 'Portfolio (Live)' : `${activeFilter} (Live)`}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => setAnalyticsOpen(true)} className="flex items-center gap-1 bg-surface-container-highest text-on-surface-variant border border-outline/20 py-1.5 px-2.5 rounded-lg font-manrope font-bold text-xs active:scale-95 transition-all">
-                    <span className="material-symbols-outlined text-sm">bar_chart</span>
+                  <button onClick={() => setAnalyticsOpen(true)} className="flex items-center gap-1 bg-surface-container-highest text-on-surface-variant border border-outline/20 min-h-[36px] min-w-[36px] justify-center px-2.5 rounded-lg font-manrope font-bold text-xs active:scale-95 transition-all" aria-label="Analytics">
+                    <span className="material-symbols-outlined text-base">bar_chart</span>
                   </button>
-                  <button onClick={() => setProfileModal({ isOpen: true, data: null })} className="bg-primary-container text-on-primary py-1.5 px-3 rounded-lg font-manrope font-bold text-xs shadow-lg shadow-[#E5BA73]/10 active:scale-95">
+                  <button onClick={() => setProfileModal({ isOpen: true, data: null })} className="bg-primary-container text-on-primary min-h-[36px] px-3 rounded-lg font-manrope font-bold text-xs shadow-lg shadow-[#E5BA73]/10 active:scale-95">
                     + New
                   </button>
                 </div>
               </div>
-              <h2 className="font-headline font-extrabold text-3xl text-primary tracking-tighter mb-3">
+              <h2 className="font-headline font-extrabold text-3xl text-primary tracking-tighter mb-3 break-words">
                 {formatCurrency(visiblePortfolioValue)}
               </h2>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-y-2 gap-x-4">
                 <div className="flex flex-col">
                   <span className="text-[9px] text-on-surface-variant uppercase font-bold tracking-widest mb-0.5">Unrealized</span>
                   <span className={`text-sm font-bold font-body ${visibleUnrealizedProfit >= 0 ? 'text-[#95CD41]' : 'text-error'}`}>
@@ -190,7 +190,7 @@ const InvestmentsScreen = () => {
             </div>
 
             {/* ===== HOLDINGS SECTION ===== */}
-            <div className="mt-10 md:mt-10 max-md:-mx-8 max-md:mt-4 max-md:px-4" data-onboarding="investments-holdings">
+            <div className="mt-10 max-md:mt-6" data-onboarding="investments-holdings">
 
               {/* ===== MOBILE: Search + Filters ===== */}
               <div className="md:hidden flex flex-col gap-3 mb-4">
@@ -199,7 +199,7 @@ const InvestmentsScreen = () => {
                   <select
                     value={sortConfig.key}
                     onChange={(e) => setSortConfig({ key: e.target.value, direction: 'desc' })}
-                    className="bg-surface-container-highest border border-outline/10 text-xs rounded-lg py-1.5 px-2 focus:outline-none text-on-surface-variant"
+                    className="bg-surface-container-highest border border-outline/10 text-xs rounded-lg py-2 px-2 focus:outline-none text-on-surface-variant"
                   >
                     <option value="value">By Value</option>
                     <option value="name">By Name</option>
@@ -214,7 +214,7 @@ const InvestmentsScreen = () => {
                     placeholder="Search..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 pr-4 py-2 bg-surface-container-highest border border-outline/10 text-sm rounded-lg focus:outline-none focus:border-primary text-on-surface w-full"
+                    className="pl-9 pr-4 py-2.5 bg-surface-container-highest border border-outline/10 text-sm rounded-lg focus:outline-none focus:border-primary text-on-surface w-full"
                   />
                 </div>
                 <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
@@ -224,7 +224,7 @@ const InvestmentsScreen = () => {
                       <button
                         key={f}
                         onClick={() => setActiveFilter(filterVal)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${activeFilter === filterVal ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-highest text-on-surface-variant'}`}
+                        className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap shrink-0 ${activeFilter === filterVal ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-highest text-on-surface-variant'}`}
                       >
                         {f}
                       </button>
@@ -234,9 +234,9 @@ const InvestmentsScreen = () => {
               </div>
 
               {/* ===== DESKTOP: Search + Filters (unchanged) ===== */}
-              <div className="hidden md:flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+              <div className="hidden md:flex flex-row flex-wrap items-center justify-between mb-4 gap-4">
                 <h3 className="text-lg font-bold">Current Holdings</h3>
-                <div className="flex flex-col md:flex-row gap-3">
+                <div className="flex flex-row flex-wrap gap-3">
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
                     <input
@@ -335,29 +335,29 @@ const InvestmentsScreen = () => {
                           </div>
 
                           {/* Middle: Stats grid */}
-                          <div className="grid grid-cols-3 gap-px bg-outline/5 mx-4">
-                            <div className="bg-[#241a12] py-2 pr-2">
+                          <div className="grid grid-cols-3 gap-px bg-outline/5 mx-4 min-w-0">
+                            <div className="bg-[#241a12] min-w-0 py-2 pr-2">
                               <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Invested</span>
-                              <span className="text-xs font-bold text-on-surface">{formatCurrency(investedAmount)}</span>
+                              <span className="block text-[11px] sm:text-xs font-bold text-on-surface break-words">{formatCurrency(investedAmount)}</span>
                             </div>
-                            <div className="bg-[#241a12] py-2 px-2 text-center">
+                            <div className="bg-[#241a12] min-w-0 py-2 px-2 text-center">
                               <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">P/L</span>
-                              <span className={`text-xs font-bold ${unrealizedPL >= 0 ? 'text-[#95CD41]' : 'text-error'}`}>
+                              <span className={`block text-[11px] sm:text-xs font-bold break-words ${unrealizedPL >= 0 ? 'text-[#95CD41]' : 'text-error'}`}>
                                 {unrealizedPL >= 0 ? '+' : ''}{formatCurrency(unrealizedPL)}
                               </span>
                             </div>
-                            <div className="bg-[#241a12] py-2 pl-2 text-right">
+                            <div className="bg-[#241a12] min-w-0 py-2 pl-2 text-right">
                               <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Value</span>
-                              <span className="text-xs font-bold text-primary">{formatCurrency(currentValue)}</span>
+                              <span className="block text-[11px] sm:text-xs font-bold text-primary break-words">{formatCurrency(currentValue)}</span>
                             </div>
                           </div>
 
                           {/* Bottom: Actions */}
                           <div className="flex gap-2 p-4 pt-3">
-                            <button onClick={() => setProfileModal({ isOpen: true, data: inv })} className="flex-1 bg-surface-container-highest/60 text-on-surface-variant py-2 rounded-lg text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1">
+                            <button onClick={() => setProfileModal({ isOpen: true, data: inv })} className="flex-1 bg-surface-container-highest/60 text-on-surface-variant py-2.5 rounded-lg text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1">
                               <span className="material-symbols-outlined text-sm">edit</span> Edit
                             </button>
-                            <button onClick={() => setTradeModal({ isOpen: true, data: inv })} className="flex-1 bg-primary/15 text-primary py-2 rounded-lg text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1">
+                            <button onClick={() => setTradeModal({ isOpen: true, data: inv })} className="flex-1 bg-primary/15 text-primary py-2.5 rounded-lg text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1">
                               <span className="material-symbols-outlined text-sm">swap_vert</span> Trade
                             </button>
                           </div>

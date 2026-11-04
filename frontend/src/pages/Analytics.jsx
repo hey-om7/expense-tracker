@@ -112,9 +112,9 @@ const AnalyticsScreen = () => {
           { label: 'Total Expenses', value: summaryStats.totalExpense, color: 'text-error' },
           { label: 'Recurring/mo', value: summaryStats.recurringMonthly, color: 'text-[#E5BA73]' },
         ].map((stat, i) => (
-          <div key={i} className="bg-surface-container-low rounded-lg p-4 md:p-5 border border-outline/5">
+          <div key={i} className="bg-surface-container-low rounded-lg p-3 sm:p-4 md:p-5 border border-outline/5 min-w-0">
             <span className="text-[9px] md:text-[10px] uppercase text-on-surface-variant font-bold tracking-widest block mb-1">{stat.label}</span>
-            <span className={`text-lg md:text-xl font-headline font-extrabold ${stat.color}`}>{formatCurrency(stat.value)}</span>
+            <span className={`block text-base sm:text-lg md:text-xl font-headline font-extrabold break-words leading-tight ${stat.color}`}>{formatCurrency(stat.value)}</span>
           </div>
         ))}
       </div>

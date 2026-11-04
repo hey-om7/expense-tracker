@@ -3,6 +3,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts';
+import useIsMobile from '../../hooks/useIsMobile';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
 import * as api from '../../services/api';
@@ -33,6 +34,7 @@ const tooltipStyle = {
 
 // ─── Price Chart for a single Stock/MF ───
 const PriceChart = ({ investment }) => {
+  const isMobile = useIsMobile();
   const [range, setRange] = useState('1M');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -97,15 +99,15 @@ const PriceChart = ({ investment }) => {
 
   return (
     <div className="bg-surface-container-low rounded-xl p-5 border border-outline/5 w-full">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h4 className="font-bold text-on-surface text-sm">{investment.name}</h4>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h4 className="font-bold text-on-surface text-sm truncate">{investment.name}</h4>
           <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mt-0.5">
             {investment.symbol} · {investment.type}
           </p>
         </div>
-        <div className="text-right">
-          <p className="font-headline font-extrabold text-lg text-primary">
+        <div className="text-right shrink-0">
+          <p className="font-headline font-extrabold text-base sm:text-lg text-primary">
             {formatCurrency(investment.currentPrice)}
           </p>
           {data.length >= 2 && (
@@ -116,12 +118,12 @@ const PriceChart = ({ investment }) => {
         </div>
       </div>
 
-      <div className="flex gap-1 mb-6">
+      <div className="flex gap-1 mb-6 overflow-x-auto no-scrollbar">
         {RANGES.map(r => (
           <button
             key={r}
             onClick={() => setRange(r)}
-            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all ${
+            className={`shrink-0 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all ${
               range === r
                 ? 'bg-primary text-on-primary'
                 : 'bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
@@ -168,7 +170,7 @@ const PriceChart = ({ investment }) => {
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10 }}
-                width={65}
+                width={isMobile ? 48 : 65}
                 domain={[minVal * 0.995, maxVal * 1.005]}
                 tickFormatter={(v) => `₹${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0)}`}
               />
@@ -198,6 +200,7 @@ const PriceChart = ({ investment }) => {
 
 // ─── Portfolio Overview Charts ───
 const PortfolioCharts = ({ investments }) => {
+  const isMobile = useIsMobile();
   const { totalPortfolioValue, totalInvested, totalUnrealizedProfit, totalRealizedProfit } = useAppContext();
 
   const allocationData = useMemo(() => {
@@ -257,16 +260,16 @@ const PortfolioCharts = ({ investments }) => {
   return (
     <div className="flex flex-col gap-6">
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Portfolio Value', value: totalPortfolioValue, color: 'text-primary' },
           { label: 'Total Invested', value: totalInvested, color: 'text-[#E5BA73]' },
           { label: 'Unrealized P/L', value: totalUnrealizedProfit, color: totalUnrealizedProfit >= 0 ? 'text-[#95CD41]' : 'text-error' },
           { label: 'Realized P/L', value: totalRealizedProfit, color: totalRealizedProfit >= 0 ? 'text-[#95CD41]' : 'text-error' },
         ].map((s, i) => (
-          <div key={i} className="bg-surface-container-lowest rounded-xl p-4 border border-outline/5">
+          <div key={i} className="bg-surface-container-lowest rounded-xl p-3 sm:p-4 border border-outline/5 min-w-0">
             <span className="text-[9px] uppercase text-on-surface-variant font-bold tracking-widest block mb-1">{s.label}</span>
-            <span className={`text-base font-headline font-extrabold ${s.color}`}>
+            <span className={`block text-sm sm:text-base font-headline font-extrabold break-words ${s.color}`}>
               {s.value >= 0 ? '' : ''}{formatCurrency(s.value)}
             </span>
           </div>
@@ -274,7 +277,7 @@ const PortfolioCharts = ({ investments }) => {
       </div>
 
       {/* Allocation Pie */}
-      <div className="bg-surface-container-low rounded-xl p-6 border border-outline/5">
+      <div className="bg-surface-container-low rounded-xl p-4 sm:p-6 border border-outline/5">
         <h4 className="font-bold text-sm text-on-surface mb-5">Allocation by Type</h4>
         {allocationData.length === 0 ? (
           <div className="h-[180px] flex items-center justify-center text-outline text-xs">No active holdings</div>
@@ -301,7 +304,7 @@ const PortfolioCharts = ({ investments }) => {
                     <span className="text-[10px] text-on-surface-variant w-8 text-right">
                       {totalPortfolioValue > 0 ? ((e.value / totalPortfolioValue) * 100).toFixed(1) : 0}%
                     </span>
-                    <span className="font-bold w-24 text-right">{formatCurrency(e.value)}</span>
+                    <span className="font-bold sm:w-24 text-right">{formatCurrency(e.value)}</span>
                   </div>
                 </div>
               ))}
@@ -311,7 +314,7 @@ const PortfolioCharts = ({ investments }) => {
       </div>
 
       {/* P/L per holding - Labels strictly enforced & given space */}
-      <div className="bg-surface-container-low rounded-xl p-6 border border-outline/5 w-full">
+      <div className="bg-surface-container-low rounded-xl p-4 sm:p-6 border border-outline/5 w-full">
         <h4 className="font-bold text-sm text-on-surface mb-5">Unrealized P/L by Holding</h4>
         {plData.length === 0 ? (
           <div className="h-[130px] flex items-center justify-center text-outline text-xs">No active holdings</div>
@@ -319,7 +322,7 @@ const PortfolioCharts = ({ investments }) => {
           <div style={{ height: Math.max(130, plData.length * 18 + 35) }} className="w-full">
             <ResponsiveContainer width="100%" height="100%">
               {/* Reset left margin to 0, because YAxis width handles the left side layout */}
-              <BarChart data={plData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <BarChart data={plData} layout="vertical" margin={{ top: 5, right: isMobile ? 8 : 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#4e4539" horizontal={false} />
                 <XAxis
                   type="number"
@@ -335,8 +338,8 @@ const PortfolioCharts = ({ investments }) => {
                   stroke="#9a8f80"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#9a8f80' }} // added explicit fill to ensure text color applies
-                  width={120} // Increased from 85 to 120 to guarantee space for the company name
+                  tick={{ fontSize: isMobile ? 10 : 11, fill: '#9a8f80' }} // added explicit fill to ensure text color applies
+                  width={isMobile ? 80 : 120} // Increased from 85 to 120 to guarantee space for the company name
                   interval={0} // CRITICAL FIX: Forces every single label to render despite tight row heights
                 />
                 <Tooltip 
@@ -360,7 +363,7 @@ const PortfolioCharts = ({ investments }) => {
       </div>
 
       {/* Trade Activity */}
-      <div className="bg-surface-container-low rounded-xl p-6 border border-outline/5 w-full">
+      <div className="bg-surface-container-low rounded-xl p-4 sm:p-6 border border-outline/5 w-full">
         <h4 className="font-bold text-sm text-on-surface mb-5">Trade Activity (12 Months)</h4>
         <div className="h-[250px] min-h-[250px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -380,7 +383,7 @@ const PortfolioCharts = ({ investments }) => {
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10 }}
-                width={55}
+                width={isMobile ? 36 : 55}
                 tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
               />
               <Tooltip formatter={(v) => formatCurrency(v)} {...tooltipStyle} cursor={{ fill: 'rgba(229,186,115,0.05)' }} />
@@ -411,22 +414,22 @@ const InvestmentAnalytics = ({ isOpen, onClose, investments }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[94]" onClick={onClose} aria-hidden="true" />
 
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl bg-surface-container shadow-2xl flex flex-col" role="dialog" aria-modal="true" aria-label="Investment Analytics">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-outline/10 shrink-0">
+      <div className="fixed inset-y-0 right-0 z-[95] w-full max-w-4xl bg-surface-container shadow-2xl flex flex-col" role="dialog" aria-modal="true" aria-label="Investment Analytics">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 sm:py-5 pt-[max(1rem,env(safe-area-inset-top))] border-b border-outline/10 shrink-0">
           <div>
             <h2 className="font-headline font-bold text-lg text-on-surface">Investment Analytics</h2>
             <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mt-0.5">
               Portfolio performance & charts
             </p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors" aria-label="Close analytics">
+          <button onClick={onClose} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors" aria-label="Close analytics">
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
 
-        <div className="flex border-b border-outline/10 px-6 shrink-0">
+        <div className="flex border-b border-outline/10 px-4 sm:px-6 shrink-0">
           <button onClick={() => setActiveTab('overview')} className={`py-3 px-1 mr-6 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${activeTab === 'overview' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`}>
             Overview
           </button>
@@ -437,7 +440,7 @@ const InvestmentAnalytics = ({ isOpen, onClose, investments }) => {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar p-4 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           {activeTab === 'overview' && <PortfolioCharts investments={investments} />}
           {activeTab === 'charts' && (
             <div className="flex flex-col gap-6">

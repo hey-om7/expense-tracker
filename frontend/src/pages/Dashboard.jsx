@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency } from '../utils/currency';
 import { getContrastingColor } from '../utils/colorUtils'; // Make sure this file exists from previous screens!
@@ -103,7 +104,7 @@ const DashboardScreen = () => {
     <main className="pt-24 px-6 pb-12 max-w-7xl mx-auto w-full max-md:pb-28 max-md:px-4 max-md:min-h-screen">
       
       {/* Header Section */}
-      <section className="mb-10">
+      <section className="mb-10 max-md:mb-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 max-md:gap-4">
           <div className="min-w-0" data-onboarding="dashboard-balance">
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#F1DFD3]/40 font-semibold mb-2 block">Available Liquidity</span>
@@ -116,11 +117,11 @@ const DashboardScreen = () => {
               {formatCurrency(totalBalance)}
             </h2>
           </div>
-          <div className="flex gap-3 max-md:gap-2" data-onboarding="dashboard-actions">
-            <button onClick={() => setIsQuickAddOpen(true)} className="bg-[#E5BA73]/10 text-[#E5BA73] p-4 rounded-xl flex items-center gap-2 font-manrope font-bold text-sm hover:bg-[#E5BA73]/20 transition-all active:scale-95 max-md:p-3 max-md:text-xs max-md:rounded-lg">
+          <div className="flex gap-3 max-md:gap-2 max-md:grid max-md:grid-cols-2" data-onboarding="dashboard-actions">
+            <button onClick={() => setIsQuickAddOpen(true)} className="bg-[#E5BA73]/10 text-[#E5BA73] p-4 rounded-xl flex items-center justify-center gap-2 font-manrope font-bold text-sm hover:bg-[#E5BA73]/20 transition-all active:scale-95 max-md:p-3 max-md:text-xs max-md:rounded-lg">
               <span className="material-symbols-outlined max-md:text-lg">add_circle</span> Quick Add
             </button>
-            <button className="bg-primary-container text-on-primary p-4 rounded-xl flex items-center gap-2 font-manrope font-bold text-sm shadow-xl shadow-[#E5BA73]/10 hover:brightness-110 transition-all active:scale-95 max-md:p-3 max-md:text-xs max-md:rounded-lg">
+            <button className="bg-primary-container text-on-primary p-4 rounded-xl flex items-center justify-center gap-2 font-manrope font-bold text-sm shadow-xl shadow-[#E5BA73]/10 hover:brightness-110 transition-all active:scale-95 max-md:p-3 max-md:text-xs max-md:rounded-lg">
               <span className="material-symbols-outlined max-md:text-lg">file_upload</span> Transfer
             </button>
           </div>
@@ -133,14 +134,14 @@ const DashboardScreen = () => {
         <div className="md:col-span-8 flex flex-col gap-6 max-md:gap-4">
           
           {/* Spending Widget */}
-          <div className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
-            <div className="flex justify-between items-end mb-6">
-              <div>
+          <div className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
+            <div className="flex justify-between items-end gap-3 mb-6">
+              <div className="min-w-0">
                 <h3 className="font-manrope font-bold text-lg text-on-surface">Monthly Spending</h3>
                 <p className="text-xs text-on-surface-variant mt-1">Where your money went this month</p>
               </div>
               <div className="text-right">
-                <span className="block font-headline font-extrabold text-2xl text-error">{formatCurrency(monthlySpent)}</span>
+                <span className="block font-headline font-extrabold text-xl sm:text-2xl text-error whitespace-nowrap">{formatCurrency(monthlySpent)}</span>
               </div>
             </div>
 
@@ -150,12 +151,12 @@ const DashboardScreen = () => {
                <div className="flex flex-col gap-4 mt-4">
                  {categorySpending.data.map(cat => (
                    <div key={cat.id} className="flex flex-col gap-1.5">
-                     <div className="flex justify-between text-xs font-bold">
-                       <span className="flex items-center gap-1.5 text-on-surface">
-                         <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }}></span>
-                         {cat.name}
+                     <div className="flex justify-between gap-3 text-xs font-bold">
+                       <span className="flex items-center gap-1.5 text-on-surface min-w-0">
+                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }}></span>
+                         <span className="truncate">{cat.name}</span>
                        </span>
-                       <span className="text-on-surface-variant">{formatCurrency(cat.spent)}</span>
+                       <span className="text-on-surface-variant shrink-0">{formatCurrency(cat.spent)}</span>
                      </div>
                      {/* Custom Tailwind Progress Bar */}
                      <div className="w-full bg-surface-container-highest rounded-full h-2 overflow-hidden">
@@ -171,10 +172,10 @@ const DashboardScreen = () => {
           </div>
 
           {/* Recent Activity Widget */}
-          <div className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+          <div className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
              <div className="flex justify-between items-center mb-6">
                 <h3 className="font-manrope font-bold text-lg text-on-surface">Recent Activity</h3>
-                <span className="text-xs font-bold text-primary cursor-pointer hover:underline">View All</span>
+                <Link to="/transactions" className="text-xs font-bold text-primary hover:underline py-2 pl-3">View All</Link>
              </div>
              
              {recentTransactions.length === 0 ? (
@@ -186,8 +187,8 @@ const DashboardScreen = () => {
                     const isExpense = t.type === 'expense' || t.type === 'buy_investment';
                     
                     return (
-                      <div key={t.id} className="flex items-center justify-between p-3 bg-surface-container-highest/30 rounded-xl hover:bg-surface-container-highest transition-colors">
-                        <div className="flex items-center gap-3">
+                      <div key={t.id} className="flex items-center justify-between gap-3 p-3 bg-surface-container-highest/30 rounded-xl hover:bg-surface-container-highest transition-colors">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: cat.color, color: getContrastingColor(cat.color) }}>
                             <span className="material-symbols-outlined text-[20px]">{cat.icon}</span>
                           </div>
@@ -211,14 +212,14 @@ const DashboardScreen = () => {
         <div className="md:col-span-4 flex flex-col gap-6 max-md:gap-4">
           
           {/* Portfolio Summary (Refined UI) */}
-          <div className="bg-surface-container-lowest border border-outline/10 rounded-2xl p-6 md:p-8 relative overflow-hidden">
+          <div className="bg-surface-container-lowest border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8 relative overflow-hidden">
              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full"></div>
              <h3 className="font-manrope font-bold text-sm uppercase tracking-widest text-on-surface-variant mb-6 relative z-10">Portfolio Overview</h3>
              
              <div className="flex flex-col gap-4 relative z-10">
                <div>
                   <span className="block text-xs font-medium text-outline mb-1">Total Value</span>
-                  <span className="block font-headline font-extrabold text-3xl text-primary">{formatCurrency(totalPortfolioValue)}</span>
+                  <span className="block font-headline font-extrabold text-2xl sm:text-3xl text-primary break-words">{formatCurrency(totalPortfolioValue)}</span>
                </div>
                
                <div className="flex justify-between items-center bg-surface-container-low p-3 rounded-xl border border-outline/5 mt-2">
@@ -238,7 +239,7 @@ const DashboardScreen = () => {
           </div>
 
           {/* Upcoming Bills Widget */}
-          <div className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+          <div className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
              <div className="flex items-center gap-2 mb-6">
                 <span className="material-symbols-outlined text-error-container text-xl">calendar_clock</span>
                 <h3 className="font-manrope font-bold text-base text-on-surface">Upcoming Bills</h3>
@@ -273,19 +274,19 @@ const DashboardScreen = () => {
                    }
 
                    return (
-                     <div key={`${bill.id}-${idx}`} className="flex justify-between items-center pb-4 border-b border-outline/10 last:border-0 last:pb-0">
-                       <div className="flex items-center gap-3">
+                     <div key={`${bill.id}-${idx}`} className="flex justify-between items-center gap-3 pb-4 border-b border-outline/10 last:border-0 last:pb-0">
+                       <div className="flex items-center gap-3 min-w-0 flex-1">
                          <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0" style={{ color: bill.color }}>
                             <span className="material-symbols-outlined text-[16px]">{bill.icon}</span>
                          </div>
-                         <div>
-                           <p className="text-sm font-bold text-on-surface">{bill.title}</p>
+                         <div className="min-w-0">
+                           <p className="text-sm font-bold text-on-surface truncate">{bill.title}</p>
                            <p className={`text-[10px] font-bold mt-0.5 ${textClass}`}>
                              {statusText}
                            </p>
                          </div>
                        </div>
-                       <span className="text-xs font-bold text-on-surface">
+                       <span className="text-xs font-bold text-on-surface shrink-0">
                          {typeof bill.amount === 'number' ? formatCurrency(bill.amount) : bill.amount}
                        </span>
                      </div>

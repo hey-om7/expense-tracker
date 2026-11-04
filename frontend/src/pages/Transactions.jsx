@@ -93,9 +93,9 @@ const TransactionsScreen = () => {
   };
 
   return (
-    <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto min-h-screen">
-      <div className="mb-10">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <main className="pt-24 pb-32 px-4 sm:px-6 max-w-7xl mx-auto min-h-screen w-full">
+      <div className="mb-6 md:mb-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
           <div>
             <span className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-2 block">Ledger Overview</span>
             <h1 className="font-headline font-extrabold text-4xl md:text-5xl text-on-surface tracking-tight">History</h1>
@@ -103,7 +103,7 @@ const TransactionsScreen = () => {
           <div className="bg-surface-container-low rounded-xl p-4 flex items-center gap-6 shadow-sm border border-outline-variant/10">
             <div className="flex flex-col">
               <span className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Total Monthly Spent</span>
-              <span className="text-2xl font-headline font-bold text-primary">{formatCurrency(monthlySpent)}</span>
+              <span className="text-xl sm:text-2xl font-headline font-bold text-primary break-words">{formatCurrency(monthlySpent)}</span>
             </div>
           </div>
         </div>
@@ -112,10 +112,10 @@ const TransactionsScreen = () => {
       {/* ===== MOBILE: Search + Filter Toggle ===== */}
       <div className="md:hidden mb-4 flex flex-col gap-3">
         <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-3 text-on-surface-variant">search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
           <input 
             type="text" 
-            placeholder="Search notes..." 
+            placeholder="Search transactions..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-3 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary"
@@ -150,39 +150,39 @@ const TransactionsScreen = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Type</span>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none">
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
                   <option value="all">All Types</option>
                   <option value="expense">Expenses</option>
                   <option value="income">Income</option>
                   <option value="trade">Trades</option>
                 </select>
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Category</span>
-                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none">
+                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
                   <option value="all">All</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 min-w-0 overflow-hidden">
-              <div className="flex flex-col min-w-0">
+            <div className="grid grid-cols-2 gap-3 min-w-0">
+              <div className="flex flex-col min-w-0 col-span-2">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Date</span>
-                <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none w-full min-w-0 box-border" />
+                <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full min-w-0 box-border text-on-surface" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Month</span>
-                <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none">
+                <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
                   <option value="all">Any</option>
                   {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Year</span>
-                <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2 px-2 text-sm focus:outline-none">
+                <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
                   <option value="all">Any</option>
                   {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
                 </select>
@@ -257,11 +257,11 @@ const TransactionsScreen = () => {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12 min-w-0">
         <div className="lg:col-span-8 flex flex-col gap-6" data-onboarding="history-list">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 md:gap-4">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-headline font-bold text-lg text-on-surface-variant">
+              <h3 className="font-headline font-bold text-base md:text-lg text-on-surface-variant">
                 {filteredTransactions.length} Transactions Found
               </h3>
             </div>
@@ -285,22 +285,22 @@ const TransactionsScreen = () => {
                      } else {
                         setEditModal({ isOpen: true, data: t });
                      }
-                  }} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high hover:scale-[1.01] transition-all rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-transparent hover:border-primary/20">
-                    <div className="flex items-center gap-4">
-                      <div className="min-w-[3rem] h-12 flex-shrink-0 rounded-2xl flex items-center justify-center" style={{ backgroundColor: cat?.color || '#3D332B', color: getContrastingColor(cat?.color || '#3D332B') }}>
+                  }} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high md:hover:scale-[1.01] active:bg-surface-container-high transition-all rounded-lg p-3 sm:p-5 flex flex-row items-center justify-between gap-3 md:gap-4 border border-transparent hover:border-primary/20">
+                    <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
+                      <div className="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-xl md:rounded-2xl flex items-center justify-center" style={{ backgroundColor: cat?.color || '#3D332B', color: getContrastingColor(cat?.color || '#3D332B') }}>
                         <span className="material-symbols-outlined">{cat?.icon || 'receipt'}</span>
                       </div>
-                      <div>
-                        <h4 className="font-headline font-bold text-on-surface">{t.title}</h4>
-                        <p className="text-xs text-outline font-medium">{cat?.name || 'Uncategorized'} • {new Date(t.date).toLocaleDateString('en-IN')}</p>
-                        {t.notes && <p className="text-xs text-on-surface-variant mt-1 italic">"{t.notes}"</p>}
+                      <div className="min-w-0">
+                        <h4 className="font-headline font-bold text-sm md:text-base text-on-surface truncate">{t.title}</h4>
+                        <p className="text-[11px] md:text-xs text-outline font-medium truncate">{cat?.name || 'Uncategorized'} • {new Date(t.date).toLocaleDateString('en-IN')}</p>
+                        {t.notes && <p className="text-xs text-on-surface-variant mt-1 italic line-clamp-2 break-words">"{t.notes}"</p>}
                       </div>
                     </div>
-                      <div className="text-left md:text-right mt-2 md:mt-0 flex flex-col items-end">
-                        <span className={`block whitespace-nowrap font-headline font-extrabold text-lg ${(t.type === 'expense' || t.type === 'buy_investment') ? 'text-on-surface' : 'text-[#95CD41]'}`}>
+                      <div className="text-right flex flex-col items-end shrink-0">
+                        <span className={`block whitespace-nowrap font-headline font-extrabold text-sm sm:text-lg ${(t.type === 'expense' || t.type === 'buy_investment') ? 'text-on-surface' : 'text-[#95CD41]'}`}>
                           {(t.type === 'expense' || t.type === 'buy_investment') ? '-' : '+'}{formatCurrency(t.amount)}
                         </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline group-hover:text-primary transition-colors flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline group-hover:text-primary transition-colors hidden md:flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100">
                          Edit <span className="material-symbols-outlined text-[10px]">edit</span>
                       </span>
                     </div>

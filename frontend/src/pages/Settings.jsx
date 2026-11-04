@@ -43,7 +43,7 @@ const TutorialSection = () => {
   };
 
   return (
-    <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8 mt-8" data-onboarding="settings-tutorial">
+    <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8 mt-8" data-onboarding="settings-tutorial">
       <div className="flex items-center gap-3 mb-6">
         <span className="material-symbols-outlined text-primary text-3xl">school</span>
         <h2 className="font-headline font-bold text-xl text-on-surface">Tutorial & Help</h2>
@@ -51,7 +51,7 @@ const TutorialSection = () => {
 
       <div className="flex flex-col gap-5">
         {/* Replay Tutorial */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <span className="block text-sm font-bold text-on-surface mb-1">Replay Tutorial</span>
             <span className="block text-xs text-on-surface-variant max-w-md">
@@ -61,7 +61,7 @@ const TutorialSection = () => {
           <button
             type="button"
             onClick={handleReplay}
-            className="shrink-0 bg-primary/10 text-primary px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/20 active:scale-95 transition-all border border-primary/15 flex items-center gap-2"
+            className="shrink-0 justify-center bg-primary/10 text-primary px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/20 active:scale-95 transition-all border border-primary/15 flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-base">replay</span>
             Replay
@@ -71,7 +71,7 @@ const TutorialSection = () => {
         <div className="h-px bg-outline/10" />
 
         {/* Reset Tutorial Progress */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <span className="block text-sm font-bold text-on-surface mb-1">Reset Tutorial Progress</span>
             <span className="block text-xs text-on-surface-variant max-w-md">
@@ -84,7 +84,7 @@ const TutorialSection = () => {
             type="button"
             onClick={handleReset}
             disabled={resetting}
-            className="shrink-0 bg-error-container/20 text-error px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-error-container/40 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-error/20 flex items-center gap-2"
+            className="shrink-0 justify-center bg-error-container/20 text-error px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-error-container/40 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-error/20 flex items-center gap-2"
           >
             {resetting ? (
               <span className="w-4 h-4 border-2 border-error border-t-transparent rounded-full animate-spin" />
@@ -248,13 +248,13 @@ const SettingsScreen = () => {
   const isGroqModel = settings.aiModel.includes('llama') || settings.aiModel.includes('mixtral');
 
   return (
-    <main className="pt-24 pb-32 px-6 max-w-3xl mx-auto min-h-screen">
+    <main className="pt-24 pb-32 px-4 sm:px-6 max-w-3xl w-full mx-auto min-h-screen">
       <h1 className="font-headline font-extrabold text-4xl text-on-surface mb-8">Settings</h1>
 
       <form onSubmit={handleSave} className="flex flex-col gap-8">
         
         {/* Generative AI Settings */}
-        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8 relative overflow-hidden" data-onboarding="settings-ai">
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8 relative overflow-hidden" data-onboarding="settings-ai">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full"></div>
           
           <div className="flex items-center gap-3 mb-6">
@@ -263,12 +263,12 @@ const SettingsScreen = () => {
           </div>
 
           <div className="flex flex-col gap-6">
-            <label className="flex items-center justify-between cursor-pointer group">
+            <label className="flex items-center justify-between gap-4 cursor-pointer group">
               <div>
                 <span className="block text-sm font-bold text-on-surface mb-1">Enable Vestor AI</span>
                 <span className="block text-xs text-on-surface-variant max-w-md">Provides interactive chat using your financial context. If disabled, the AI chatbot icon is removed.</span>
               </div>
-              <div className="relative">
+              <div className="relative shrink-0">
                 <input type="checkbox" name="aiEnabled" checked={settings.aiEnabled} onChange={handleChange} className="sr-only peer" />
                 <div className="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-on-surface after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-all"></div>
               </div>
@@ -336,18 +336,18 @@ const SettingsScreen = () => {
         </section>
 
         {/* Notification Settings */}
-        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="material-symbols-outlined text-primary text-3xl">mark_email_unread</span>
             <h2 className="font-headline font-bold text-xl text-on-surface">Notification Settings</h2>
           </div>
 
-          <label className="flex items-center justify-between cursor-pointer group">
+          <label className="flex items-center justify-between gap-4 cursor-pointer group">
             <div>
               <span className="block text-sm font-bold text-on-surface mb-1">Email Alerts</span>
               <span className="block text-xs text-on-surface-variant max-w-md">Receive email reminders for upcoming subscription renewals and credit card bills.</span>
             </div>
-            <div className="relative">
+            <div className="relative shrink-0">
               <input type="checkbox" name="emailAlertsEnabled" checked={settings.emailAlertsEnabled} onChange={handleChange} className="sr-only peer" />
               <div className="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-on-surface after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-all"></div>
             </div>
@@ -356,7 +356,7 @@ const SettingsScreen = () => {
         </section>
 
         {/* Email Processing (Gmail) */}
-        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="material-symbols-outlined text-primary text-3xl">mail_lock</span>
             <h2 className="font-headline font-bold text-xl text-on-surface">Email Processing</h2>
@@ -397,13 +397,13 @@ const SettingsScreen = () => {
         </section>
 
         {/* ADDED: Security Settings */}
-        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-6 md:p-8">
+        <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="material-symbols-outlined text-primary text-3xl">lock_reset</span>
             <h2 className="font-headline font-bold text-xl text-on-surface">Security Settings</h2>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
               <span className="block text-sm font-bold text-on-surface mb-1">App Lock PIN</span>
               <span className="block text-xs text-on-surface-variant max-w-md">
@@ -416,7 +416,7 @@ const SettingsScreen = () => {
               type="button"
               onClick={handleResetPin}
               disabled={!hasPin}
-              className="shrink-0 bg-error-container/20 text-error px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-error-container/40 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-error/20"
+              className="shrink-0 justify-center bg-error-container/20 text-error px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-error-container/40 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-error/20"
             >
               Reset PIN
             </button>
@@ -424,7 +424,7 @@ const SettingsScreen = () => {
         </section>
 
         {/* Save Button */}
-        <div className="flex justify-end mt-4">
+        <div className="flex justify-end mt-4 max-sm:[&>button]:w-full">
           <button 
             type="submit" 
             disabled={saving}

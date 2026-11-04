@@ -30,7 +30,7 @@ const ToastContainer = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 pointer-events-none items-center w-full max-w-sm px-4">
+    <div className="fixed bottom-28 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 pointer-events-none items-center w-full max-w-sm px-4">
       {toasts.map(toast => (
         <div key={toast.id} className="bg-primary-container text-on-primary-container backdrop-blur-md shadow-2xl rounded-2xl p-4 flex flex-col gap-1 w-full animate-[slideUp_0.3s_ease-out] shadow-primary-container/20 pointer-events-auto border border-outline/10">
           <div className="flex items-center gap-2">
