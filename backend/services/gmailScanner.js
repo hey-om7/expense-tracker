@@ -225,6 +225,9 @@ const OFFICIAL_BANK_DOMAINS = [
   'sliceit.com',
   'scapia.cards',
   'jupiter.money',
+
+  // UPI apps (payment confirmations only; still DKIM/DMARC-checked like banks)
+  'phonepe.com',
 ];
 
 const isBankDomain = (domain) =>

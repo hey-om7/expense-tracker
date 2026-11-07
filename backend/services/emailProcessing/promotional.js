@@ -9,7 +9,7 @@
 const { BILL_SUBJECT_PATTERNS } = require('../gmailScanner');
 
 // A completed money movement or a bill. Wins over any promotional signal.
-const RECORD_SUBJECT = /\b(statement|debited|credited|spent|transaction|txn|payment\s+(received|due|reminder)|due\s+date|amount\s+due|e-?mandate|auto[\s-]*debit|refund(ed)?)\b/i;
+const RECORD_SUBJECT = /\b(statement|debited|credited|spent|transaction|txn|payment\s+(received|due|reminder|successful)|due\s+date|amount\s+due|e-?mandate|auto[\s-]*debit|refund(ed)?|(paid|sent)\s+(to\b|(rs\.?|inr)\s*[0-9])|paid\s+₹|sent\s+₹)/i;
 
 // Strong signals: one is enough.
 const PROMO_SUBJECT_STRONG = [

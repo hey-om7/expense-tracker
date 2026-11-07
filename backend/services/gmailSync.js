@@ -364,5 +364,7 @@ module.exports = {
   syncConnection,
   syncAllConnections,
   applyLatestToCard,
+  clientForConnection,
+  GMAIL_API,
   rootDomainFor,
 };

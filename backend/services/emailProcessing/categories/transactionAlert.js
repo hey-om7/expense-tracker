@@ -13,6 +13,10 @@ const SIGNALS = [
   /payment\s*(of\s*.{0,30})?(has\s*been\s*)?received/i,
   /thank\s*you\s*for\s*(your\s*)?payment/i,
   /\brefund(ed)?\b/i,
+  // UPI app confirmations: "Paid ₹150 to X", "Sent ₹500 to Y", "Payment successful"
+  /\b(paid|sent)\s+(?:to\b|(?:INR|Rs\.?|₹)\s*[0-9])/i,
+  /\bpayment\s+(successful|of\s*(?:INR|Rs\.?|₹))/i,
+  /\breceived\s+(?:INR|Rs\.?|₹)\s*[0-9]/i,
 ];
 
 const GENERIC = {
@@ -50,6 +54,7 @@ const detectType = (text) => {
   if (/\brefund(ed)?\b/i.test(text)) return 'refund';
   if (/payment\s*(of\s*.{0,30})?(has\s*been\s*)?received|thank\s*you\s*for\s*(your\s*)?payment/i.test(text)) return 'payment';
   if (/\bcredited\b/i.test(text) && !/\bdebited\b/i.test(text)) return 'credit';
+  if (/\breceived\s+(?:INR|Rs\.?|₹)\s*[0-9][\s\S]{0,60}\bfrom\b/i.test(text) && !/\b(paid|sent|debited)\b/i.test(text)) return 'credit';
   return 'debit';
 };
 

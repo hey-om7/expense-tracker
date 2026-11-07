@@ -30,6 +30,9 @@ const financialEmailSchema = new mongoose.Schema({
     paymentMethod: { type: String, default: null },
     transactionType: { type: String, default: null },
   },
+  // Expense suggestions (PhonePe/Kotak debits): null = open, 'used' = added as a transaction, 'dismissed' = hidden
+  suggestionState: { type: String, enum: [null, 'used', 'dismissed'], default: null },
+  transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
 }, { timestamps: true });
 
 financialEmailSchema.index({ userId: 1, gmailMessageId: 1 }, { unique: true });

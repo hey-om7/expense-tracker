@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import ExpenseSuggestions from './ExpenseSuggestions';
+import * as api from '../../services/api';
+
+const localDate = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
 
 const AddTransactionForm = ({ onClose, initialData }) => {
-  const { addTransaction, updateTransaction, deleteTransaction, categories } = useAppContext();
+  const { addTransaction, updateTransaction, deleteTransaction, categories, transactions } = useAppContext();
   const [showConfirm, setShowConfirm] = useState(false);
   const isEditing = !!initialData;
+  const [suggestion, setSuggestion] = useState(null);
   
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
@@ -24,6 +32,20 @@ const AddTransactionForm = ({ onClose, initialData }) => {
       setDate(new Date(initialData.date).toISOString().split('T')[0] || '');
     }
   }, [initialData]);
+
+  // Prefill from an email suggestion. Category is reused from a past expense with the same title.
+  const applySuggestion = (s) => {
+    setSuggestion(s);
+    if (!s) return;
+    setType('expense');
+    setAmount(String(s.amount));
+    setDate(localDate(s.date));
+    const title = s.merchant || `${s.sources[0]} payment`;
+    setTitle(title);
+    setNotes(`${s.sources.join(' + ')}${s.paymentMethod === 'upi' ? ' UPI' : ''} payment`);
+    const past = (transactions || []).find(t => t.type === 'expense' && t.title?.trim().toLowerCase() === title.toLowerCase());
+    if (past?.categoryId) setCategoryId(past.categoryId);
+  };
 
   const evaluateExpression = (expr) => {
     if (!expr) return '';
@@ -89,7 +111,10 @@ const AddTransactionForm = ({ onClose, initialData }) => {
     if (isEditing) {
       updateTransaction(initialData.id, payload);
     } else {
-      addTransaction(payload);
+      const picked = suggestion;
+      Promise.resolve(addTransaction(payload)).then((saved) => {
+        if (picked && saved) api.resolveExpenseSuggestion(picked.ids, 'used', saved.id || saved._id).catch(() => {});
+      });
     }
     onClose();
   };
@@ -108,6 +133,7 @@ const AddTransactionForm = ({ onClose, initialData }) => {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {!isEditing && <ExpenseSuggestions selectedId={suggestion?.id} onPick={applySuggestion} />}
       {isTradeLog && (
          <div className="bg-primary/20 text-on-surface p-3 text-xs rounded-lg mb-2 border border-primary/50">
            <strong>Notice:</strong> This is an investment trade log. You can only update its title, notes, and date here. To reverse financial impact, delete it and adjust holdings manually.

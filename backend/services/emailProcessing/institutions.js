@@ -25,6 +25,7 @@ const BANK_NAMES = {
   'dbs.com': 'DBS Bank', 'sbi.co.in': 'SBI', 'pnb.co.in': 'PNB', 'canarabank.com': 'Canara Bank',
   'unionbankofindia.co.in': 'Union Bank of India', 'idbibank.co.in': 'IDBI Bank',
   'bandhanbank.com': 'Bandhan Bank', 'jupiter.money': 'Jupiter',
+  'kotakbank.com': 'Kotak', 'phonepe.com': 'PhonePe',
 };
 // Labels used under the RBI ".bank.in" domain, e.g. axis.bank.in
 const BANK_IN_NAMES = {
@@ -101,7 +102,59 @@ const TEMPLATES = [
       },
     },
   },
+  {
+    id: 'kotak',
+    roots: ['kotak.com', 'kotakbank.com', 'kotak.bank.in'],
+    patterns: {
+      // "Rs.250.00 is debited from your Kotak Bank Account XX1234 towards UPI/SWIGGY/... on 05-11-2026"
+      // "Your account xx1234 is debited for INR 500.00 on 04-Nov-2026"
+      // "Sent Rs.120.00 from Kotak Bank AC X1234 to shop@okaxis on 05-11-26"
+      transaction_alert: {
+        amount: [
+          new RegExp(`(?:INR|Rs\\.?|₹)\\s*${AMT}\\s+(?:is|has\\s+been|was)\\s+debited`, 'i'),
+          new RegExp(`debited\\s+(?:for|with|by)\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
+          new RegExp(`\\bSent\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
+        ],
+        merchant: [
+          /\bto\s+VPA\s+([A-Za-z0-9._-]+@[A-Za-z0-9.-]+)/i,
+          /\btowards\s+UPI\/(?:[^/\n]*\/)?([A-Za-z][^/\n]{1,50}?)\s*(?:\/|\s+on\s+\d|\n|$)/i,
+          /\bto\s+([A-Za-z0-9._-]+@[A-Za-z][A-Za-z0-9.-]*)/i,
+          /\b(?:towards|at)\s+(.+?)\s+on\s+\d/i,
+        ],
+        transactionDate: [new RegExp(`\\bon\\s+${NUM_DATE}`, 'i')],
+      },
+    },
+  },
+  {
+    id: 'phonepe',
+    roots: ['phonepe.com'],
+    patterns: {
+      // Subject "Paid ₹150 to Swiggy" / "Sent ₹500 to Ravi"; body "Paid to\nSWIGGY\n₹150\nTxn. ID ..."
+      // or "Your payment of ₹ 200 to NAME was successful".
+      transaction_alert: {
+        amount: [
+          new RegExp(`\\b(?:Paid|Sent)\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
+          new RegExp(`payment\\s+of\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
+          new RegExp(`\\b(?:Paid|Sent)\\s+to\\b[\\s\\S]{0,120}?(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
+        ],
+        merchant: [
+          /\b(?:Paid|Sent)\s+(?:INR|Rs\.?|₹)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+to\s+(.+?)(?=\s+(?:on|via|using|successfully|from)\b|[.,;\n]|$)/i,
+          /\bpayment\s+of\s+(?:INR|Rs\.?|₹)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+to\s+(.+?)\s+(?:was|is|has)\b/i,
+          /\b(?:Paid|Sent)\s+to\s*\n\s*([^\n₹]{2,60}?)\s*(?:\n|₹)/i,
+          /\b(?:Paid|Sent)\s+to\s+([^\n₹]{2,60}?)\s*(?:\n|₹)/i,
+        ],
+        transactionDate: [
+          new RegExp(`\\bon\\s+${NUM_DATE}`, 'i'),
+          /(\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4})/,
+          /([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/,
+        ],
+      },
+    },
+  },
 ];
+
+// Senders whose debit alerts are offered as suggestions when adding an expense.
+const PAYMENT_SUGGESTION_DOMAINS = ['phonepe.com', 'kotak.com', 'kotakbank.com', 'kotak.bank.in'];
 
 const templateByRoot = new Map();
 TEMPLATES.forEach(t => t.roots.forEach(r => templateByRoot.set(r, t)));
@@ -124,4 +177,4 @@ const identifyInstitution = (domain = '') => {
 const patternsFor = (template, categoryId, field, generic = []) =>
   [...(template?.patterns?.[categoryId]?.[field] || []), ...generic];
 
-module.exports = { rootDomainFor, bankNameFor, identifyInstitution, patternsFor, registerTemplate, TEMPLATES };
+module.exports = { rootDomainFor, bankNameFor, identifyInstitution, patternsFor, registerTemplate, TEMPLATES, PAYMENT_SUGGESTION_DOMAINS };

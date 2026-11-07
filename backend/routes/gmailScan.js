@@ -261,4 +261,85 @@ router.post('/emails/:id/dismiss', validateId, async (req, res) => {
   }
 });
 
+// ─── Expense suggestions: recent PhonePe/Kotak debits not yet added as transactions ───
+const { PAYMENT_SUGGESTION_DOMAINS } = require('../services/emailProcessing/institutions');
+const SUGGESTION_DAYS = 45;
+// A PhonePe payment from a Kotak account sends two emails for one payment; treat
+// same amount within this window as one, keeping the record with the better merchant.
+const SAME_PAYMENT_MS = 15 * 60 * 1000;
+
+// Prefer the receive time (has hours); use the parsed date only when it is clearly a different day.
+const whenOf = (e) => {
+  const t = e.fields?.transactionDate;
+  return t && Math.abs(new Date(t) - e.receivedAt) > 36 * 3600e3 ? t : e.receivedAt;
+};
+
+const cleanMerchant = (m) => {
+  if (!m) return null;
+  const s = String(m).trim().replace(/\s+/g, ' ');
+  // "swiggy.upi@axisbank" -> "Swiggy"; keep person names as-is
+  if (/@/.test(s)) {
+    const handle = s.split('@')[0].split(/[._-]/).find(p => /[a-z]{3,}/i.test(p) && !/^(upi|pay|paytm|ybl|ok\w+)$/i.test(p));
+    return handle ? handle.charAt(0).toUpperCase() + handle.slice(1).toLowerCase() : s;
+  }
+  return s.length > 3 && s === s.toUpperCase() ? s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : s;
+};
+
+router.get('/suggestions', async (req, res) => {
+  try {
+    const since = new Date(Date.now() - SUGGESTION_DAYS * 864e5);
+    const rows = await FinancialEmail.find({
+      userId: req.userId,
+      status: 'recorded',
+      category: 'transaction_alert',
+      suggestionState: null,
+      senderDomain: { $in: PAYMENT_SUGGESTION_DOMAINS },
+      'fields.amount': { $gt: 0 },
+      'fields.transactionType': { $in: ['debit', null] },
+      receivedAt: { $gte: since },
+    }).select('institutionName senderDomain subject receivedAt fields confidence').sort({ receivedAt: -1 }).limit(100).lean();
+
+    const out = [];
+    for (const r of rows) {
+      const twin = out.find(o => o.amount === r.fields.amount && Math.abs(o.receivedAt - r.receivedAt) < SAME_PAYMENT_MS);
+      if (twin) {
+        twin.ids.push(String(r._id));
+        if (!twin.merchant && r.fields.merchant) twin.merchant = cleanMerchant(r.fields.merchant);
+        if (!twin.sources.includes(r.institutionName)) twin.sources.push(r.institutionName);
+        continue;
+      }
+      out.push({
+        id: String(r._id),
+        ids: [String(r._id)],
+        amount: r.fields.amount,
+        merchant: cleanMerchant(r.fields.merchant),
+        paymentMethod: r.fields.paymentMethod,
+        last4: r.fields.last4,
+        date: whenOf(r),
+        receivedAt: r.receivedAt,
+        sources: [r.institutionName],
+        confidence: r.confidence,
+      });
+    }
+    res.json(out.slice(0, 30).map(({ receivedAt, ...s }) => s));
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load suggestions' });
+  }
+});
+
+// Mark suggestion(s) as used (after the expense was saved) or dismissed.
+router.post('/suggestions/resolve', async (req, res) => {
+  try {
+    const ids = [].concat(req.body?.ids || []).filter(id => mongoose.Types.ObjectId.isValid(id)).slice(0, 10);
+    const state = req.body?.state === 'dismissed' ? 'dismissed' : 'used';
+    if (!ids.length) return res.status(400).json({ message: 'No suggestion given' });
+    const set = { suggestionState: state };
+    if (state === 'used' && mongoose.Types.ObjectId.isValid(req.body?.transactionId)) set.transactionId = req.body.transactionId;
+    const r = await FinancialEmail.updateMany({ _id: { $in: ids }, userId: req.userId, suggestionState: null }, { $set: set });
+    res.json({ updated: r.modifiedCount });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update suggestion' });
+  }
+});
+
 module.exports = router;
