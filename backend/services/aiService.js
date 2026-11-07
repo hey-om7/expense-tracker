@@ -47,15 +47,25 @@ const chatWithGroq = async (userMessage, userData, options = {}) => {
   const groq = new Groq({ apiKey });
   const modelName = isValidModelId(options.model) ? options.model : DEFAULT_GROQ_MODEL;
 
-  const catSummary = buildCategoriesSummary(userData.categories || []);
-  const txSummary = buildTransactionSummary(userData.transactions || []);
-  const invSummary = buildInvestmentSummary(userData.investments || []);
-  const subSummary = buildSubscriptionSummary(userData.subscriptions || []);
-  const ccSummary = buildCreditCardSummary(userData.creditCards || []);
+  const categories = userData.categories || [];
+  const catNames = new Map(categories.map(c => [String(c._id), c.name]));
+  const withCat = (txs) => txs.map(t => ({ ...t, category: t.category || (catNames.has(t.categoryId) ? { name: catNames.get(t.categoryId) } : undefined) }));
+  // When a search ran, only the sections the question needs are sent.
+  const search = userData.search;
+  const wants = (scope) => !search || search.plan.scopes.includes(scope);
+  const skipped = 'Not needed for this question.';
+
+  const catSummary = buildCategoriesSummary(categories);
+  const txSummary = search?.transactions
+    ? buildSearchSummary(withCat(search.transactions), search)
+    : wants('transactions') ? buildTransactionSummary(withCat(userData.transactions || [])) : skipped;
+  const invSummary = wants('investments') ? buildInvestmentSummary(userData.investments || []) : skipped;
+  const subSummary = wants('subscriptions') ? buildSubscriptionSummary(userData.subscriptions || []) : skipped;
+  const ccSummary = wants('credit_cards') ? buildCreditCardSummary(userData.creditCards || []) : skipped;
 
   const systemPrompt = buildSystemPrompt(userData.userName, catSummary, txSummary, invSummary, subSummary, ccSummary);
 
-  console.log(`AI Model hit (Groq): ${modelName}`);
+  console.log(`AI Model hit (Groq): ${modelName}, prompt ${systemPrompt.length} chars`);
   
   const chatCompletion = await groq.chat.completions.create({
     messages: [
@@ -111,6 +121,29 @@ ${cc}
 </financial_data>
 
 Answer the user's question based on this data. Keep responses concise (under 300 words) and formatted for readability.`;
+}
+
+// Transactions found by the server-side search for this question, with totals
+// computed by the database so the AI doesn't have to add them up.
+function buildSearchSummary(transactions, { plan, totals, count, promptLimit }) {
+  const range = plan.dateFrom || plan.dateTo
+    ? `${plan.dateFrom || 'beginning'} to ${plan.dateTo || 'today'}`
+    : 'all time';
+  const totalLines = Object.entries(totals || {})
+    .map(([type, t]) => `${clean(type, 20).toUpperCase()}: ₹${t.total} across ${t.count} transaction(s)`);
+  const shown = transactions.slice(0, promptLimit || transactions.length);
+  const lines = shown.map(t => {
+    const d = t.date ? new Date(t.date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'Unknown Date';
+    const cat = t.category?.name ? ` | Category: ${clean(t.category.name, 50)}` : '';
+    const notes = t.notes ? ` | Notes: ${clean(t.notes, 150)}` : '';
+    return `- ${d} | ${clean(t.type, 20).toUpperCase()} | ₹${t.amount} | ${clean(t.title, 100) || 'Untitled'}${cat}${notes}`;
+  });
+  const more = count > shown.length ? `\n(${count - shown.length} more matching transactions not listed; the totals above include them.)` : '';
+  return `These are the transactions the app's search found for the user's question (date range: ${range}${plan.keywords.length ? `; matched words: ${plan.keywords.map(k => clean(k, 40)).join(', ')}` : ''}). Some matches may be unrelated to what was asked; ignore those and say so if it matters.
+Matches: ${count}
+${totalLines.join('\n') || 'No matching transactions.'}
+
+${lines.join('\n')}${more}`;
 }
 
 function buildCategoriesSummary(categories) {

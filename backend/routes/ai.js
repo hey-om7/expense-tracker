@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const { chatWithGroq, parseSpokenTransaction, resolveModel } = require('../services/aiService');
+const { planAndSearch, MAX_PROMPT_RECORDS } = require('../services/aiQuery');
 const Transaction = require('../models/Transaction');
 const Investment = require('../models/Investment');
 const Subscription = require('../models/Subscription');
@@ -42,27 +43,65 @@ router.post('/chat', async (req, res) => {
       return res.status(403).json({ message: 'Please add your Groq API key in Settings to use AI.' });
     }
 
-    // Fetch user-specific data including categories
-    const [user, categories, transactions, investments, subscriptions, creditCards] = await Promise.all([
-      User.findById(req.userId).select('name email'),
-      Category.find({ userId: req.userId }).lean(),
-      Transaction.find({ userId: req.userId }).sort({ date: -1 }).limit(50).lean(),
-      Investment.find({ userId: req.userId }).lean(),
-      Subscription.find({ userId: req.userId }).lean(),
-      CreditCard.find({ userId: req.userId }).lean(),
+    const question = message.trim();
+    const [user, categories] = await Promise.all([
+      User.findById(req.userId).select('name').lean(),
+      Category.find({ userId: req.userId }).select('_id name type').lean(),
+    ]);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    // Step 1: let the AI turn the question into a filter, then search the DB.
+    const search = await planAndSearch({
+      question, userId: req.userId, categories, today, apiKey: groqApiKey, model: modelName,
+    });
+    const scopes = search?.plan.scopes || ['transactions', 'investments', 'subscriptions', 'credit_cards'];
+    const needs = (s) => scopes.includes(s);
+
+    // Step 2: load only the other data the question needs.
+    const [transactions, investments, subscriptions, creditCards] = await Promise.all([
+      search?.transactions ? null : needs('transactions')
+        ? Transaction.find({ userId: req.userId }).sort({ date: -1 }).limit(50).lean() : [],
+      needs('investments') ? Investment.find({ userId: req.userId }).lean() : [],
+      needs('subscriptions') ? Subscription.find({ userId: req.userId }).lean() : [],
+      needs('credit_cards') ? CreditCard.find({ userId: req.userId }).lean() : [],
     ]);
 
     const userData = {
       userName: user?.name || 'User',
       categories,
-      transactions,
+      transactions: transactions || [],
       investments,
       subscriptions,
       creditCards,
+      search: search ? { ...search, promptLimit: MAX_PROMPT_RECORDS } : null,
     };
 
-    const reply = await chatWithGroq(message.trim(), userData, { model: modelName, apiKey: groqApiKey });
-    res.json({ reply });
+    const reply = await chatWithGroq(question, userData, { model: modelName, apiKey: groqApiKey });
+
+    // Send the matched records so the chat can list them under the answer.
+    let records;
+    if (search?.transactions) {
+      const catNames = new Map(categories.map(c => [String(c._id), c.name]));
+      records = {
+        count: search.count,
+        totals: search.totals,
+        filter: {
+          dateFrom: search.plan.dateFrom,
+          dateTo: search.plan.dateTo,
+          keywords: search.plan.keywords,
+          categories: search.plan.categoryIds.map(id => catNames.get(id)).filter(Boolean),
+        },
+        items: search.transactions.map(t => ({
+          id: String(t._id),
+          date: t.date,
+          type: t.type,
+          amount: t.amount,
+          title: t.title,
+          category: catNames.get(t.categoryId) || '',
+        })),
+      };
+    }
+    res.json({ reply, records });
     
   } catch (err) {
     console.error('AI Chat Error:', err.message);

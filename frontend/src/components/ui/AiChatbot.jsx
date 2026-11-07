@@ -4,6 +4,59 @@ import { Link } from 'react-router-dom';
 import { useOnboarding } from '../../context/OnboardingContext';
 import FeatureTour from './FeatureTour';
 
+const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const fmtDay = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+
+// The transactions the server's search matched for an answer. Rendered as
+// plain React text (no HTML), so record titles can't inject markup.
+const MatchedRecords = ({ records }) => {
+  const [open, setOpen] = useState(false);
+  const { count = 0, items = [], filter = {} } = records;
+  const range = filter.dateFrom || filter.dateTo
+    ? `${fmtDay(filter.dateFrom) || 'Start'} – ${fmtDay(filter.dateTo) || 'Today'}`
+    : 'All time';
+  const spent = records.totals?.expense?.total;
+
+  return (
+    <div className="max-w-[85%] w-full mt-1.5 bg-surface-container-lowest border border-outline/10 rounded-xl text-xs overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        disabled={!count}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-on-surface-variant hover:bg-surface-container-highest/40 disabled:cursor-default"
+      >
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="material-symbols-outlined text-sm text-primary">receipt_long</span>
+          <span className="truncate">
+            {count ? `${count} matching record${count === 1 ? '' : 's'}` : 'No matching records'} · {range}
+            {spent ? ` · ${inr(spent)} spent` : ''}
+          </span>
+        </span>
+        {count > 0 && <span className="material-symbols-outlined text-sm">{open ? 'expand_less' : 'expand_more'}</span>}
+      </button>
+      {open && (
+        <ul className="max-h-56 overflow-y-auto border-t border-outline/10 divide-y divide-outline/5">
+          {items.map(t => (
+            <li key={t.id} className="flex items-center justify-between gap-2 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-on-surface font-semibold truncate">{t.title || 'Untitled'}</p>
+                <p className="text-[10px] text-on-surface-variant truncate">{fmtDay(t.date)}{t.category ? ` · ${t.category}` : ''}</p>
+              </div>
+              <span className={`shrink-0 font-bold ${t.type === 'income' ? 'text-primary' : 'text-on-surface'}`}>
+                {t.type === 'income' ? '+' : '−'}{inr(t.amount)}
+              </span>
+            </li>
+          ))}
+          {count > items.length && (
+            <li className="px-3 py-2 text-[10px] text-on-surface-variant italic">Showing the latest {items.length} of {count}.</li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 const AiChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(true);
@@ -59,7 +112,7 @@ const AiChatbot = () => {
 
     try {
       const data = await sendAiChat(msg);
-      setMessages(prev => [...prev, { role: 'ai', text: data.reply }]);
+      setMessages(prev => [...prev, { role: 'ai', text: data.reply, records: data.records }]);
     } catch (err) {
       setMessages(prev => [...prev, { role: 'ai', text: `Sorry, I couldn't process that. ${err.message || 'Please try again.'}`, isError: true }]);
     } finally {
@@ -176,7 +229,7 @@ const AiChatbot = () => {
                 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline/20 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full
               ">
                 {messages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div
                       className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed
                         ${msg.role === 'user'
@@ -187,6 +240,7 @@ const AiChatbot = () => {
                         }`}
                       dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }}
                     />
+                    {msg.records && <MatchedRecords records={msg.records} />}
                   </div>
                 ))}
 
