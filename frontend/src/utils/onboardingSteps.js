@@ -112,7 +112,7 @@ export const onboardingSteps = {
     },
     {
       title: 'AI Configuration',
-      description: 'Choose between Google Gemini and Groq models for your AI assistant. You\'ll need to provide your own API key — it\'s stored securely in your profile.',
+      description: 'Add your own Groq API key, test it, then pick from the models Groq currently has active. Your key is stored encrypted in your profile.',
       targetSelector: '[data-onboarding="settings-ai"]',
       icon: 'smart_toy',
     },

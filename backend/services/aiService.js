@@ -1,40 +1,41 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const Groq = require('groq-sdk'); // ADDED GROQ IMPORT
+const Groq = require('groq-sdk');
 
-const getModel = (options = {}) => {
-  const apiKey = options.apiKey;
+const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
+// Model ids are stored per user and sent to Groq; keep them to a safe charset.
+const isValidModelId = (id) => typeof id === 'string' && /^[\w.\/:-]{1,100}$/.test(id);
+// Older accounts may still have a Gemini model saved; those fall back to the default.
+const resolveModel = (id) => (isValidModelId(id) && !/^gemini/i.test(id) ? id : DEFAULT_GROQ_MODEL);
+
+// Groq's model list also contains speech, TTS and safety models that can't chat.
+const NON_CHAT_MODEL = /whisper|tts|playai|orpheus|guard|safeguard/i;
+
+// Returns the active chat models for this key. Throws an error with .status
+// (401 for a bad key) when Groq rejects the request.
+async function listGroqModels(apiKey) {
   if (!apiKey) {
-    throw new Error('No Gemini API key configured. Please add your API key in Settings.');
+    const err = new Error('No Groq API key provided.');
+    err.status = 400;
+    throw err;
   }
-  
-  const ai = new GoogleGenerativeAI(apiKey);
-  const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest'];
-  const modelName = allowedModels.includes(options.model) ? options.model : 'gemini-2.5-flash';
-  return ai.getGenerativeModel({ model: modelName });
-};
-
-// --- GEMINI SERVICE ---
-const chatWithGemini = async (userMessage, userData, options = {}) => {
-  const model = getModel(options);
-
-  const catSummary = buildCategoriesSummary(userData.categories || []);
-  const txSummary = buildTransactionSummary(userData.transactions || []);
-  const invSummary = buildInvestmentSummary(userData.investments || []);
-  const subSummary = buildSubscriptionSummary(userData.subscriptions || []);
-  const ccSummary = buildCreditCardSummary(userData.creditCards || []);
-
-  const systemPrompt = buildSystemPrompt(userData.userName, catSummary, txSummary, invSummary, subSummary, ccSummary);
-
-  console.log(`AI Model hit (Gemini): ${options.model || 'gemini-2.5-flash'}`);
-  const result = await model.generateContent({
-    contents: [
-      { role: 'user', parts: [{ text: systemPrompt + '\n\nUser: ' + userMessage }] },
-    ],
+  const res = await fetch('https://api.groq.com/openai/v1/models', {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(10000),
   });
-
-  const response = result.response;
-  return response.text();
-};
+  if (!res.ok) {
+    const err = new Error(`Groq models request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  const body = await res.json();
+  return (Array.isArray(body?.data) ? body.data : [])
+    .filter(m => m && isValidModelId(m.id) && m.active !== false && !NON_CHAT_MODEL.test(m.id))
+    .map(m => ({
+      id: m.id,
+      ownedBy: typeof m.owned_by === 'string' ? m.owned_by : '',
+      contextWindow: Number.isFinite(m.context_window) ? m.context_window : null,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
 
 // --- GROQ SERVICE ---
 const chatWithGroq = async (userMessage, userData, options = {}) => {
@@ -44,7 +45,7 @@ const chatWithGroq = async (userMessage, userData, options = {}) => {
   }
 
   const groq = new Groq({ apiKey });
-  const modelName = options.model || 'llama-3.1-8b-instant';
+  const modelName = isValidModelId(options.model) ? options.model : DEFAULT_GROQ_MODEL;
 
   const catSummary = buildCategoriesSummary(userData.categories || []);
   const txSummary = buildTransactionSummary(userData.transactions || []);
@@ -183,14 +184,14 @@ function buildCreditCardSummary(creditCards) {
   ).join('\n');
 }
 
-module.exports = { chatWithGemini, chatWithGroq, parseSpokenTransaction };
+module.exports = { chatWithGroq, parseSpokenTransaction, listGroqModels, isValidModelId, resolveModel, DEFAULT_GROQ_MODEL };
 
 // --- VOICE / TEXT → TRANSACTION ---
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 const retiredGroqModels = new Set();
 // Turns a short spoken sentence ("spent 250 on lunch at Swiggy yesterday") into
 // transaction fields. The model must answer with JSON only; the route validates it.
-async function parseSpokenTransaction(transcript, { categories = [], today, isGroq, ...options }) {
+async function parseSpokenTransaction(transcript, { categories = [], today, ...options }) {
   const catLines = categories.length
     ? categories.map(c => `- id=${clean(c._id, 30)} | ${clean(c.type, 10)} | ${clean(c.name, 50)}`).join('\n')
     : '(none)';
@@ -215,38 +216,28 @@ Rules:
 
 Sentence: """${clean(transcript, 500)}"""`;
 
-  let text;
-  if (isGroq) {
-    if (!options.apiKey) throw new Error('No Groq API key configured. Please add your API key in Settings.');
-    const groq = new Groq({ apiKey: options.apiKey });
-    const ask = (model) => groq.chat.completions.create({
-      messages: [{ role: 'user', content: prompt }],
-      model,
-      temperature: 0,
-      max_tokens: 1500, // reasoning models spend tokens before the JSON
-      ...(/gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}),
-      response_format: { type: 'json_object' },
-    });
-    const wanted = options.model && !retiredGroqModels.has(options.model) ? options.model : GROQ_FALLBACK_MODEL;
-    let out;
-    try {
-      out = await ask(wanted);
-    } catch (err) {
-      // Groq retires models (e.g. llama-3.1-8b-instant); keep voice add working on a current one.
-      if (wanted === GROQ_FALLBACK_MODEL || (err.status !== 404 && !/model_not_found|decommissioned/i.test(err.message || ''))) throw err;
-      console.warn(`Groq model ${wanted} unavailable, using ${GROQ_FALLBACK_MODEL}`);
-      retiredGroqModels.add(wanted);
-      out = await ask(GROQ_FALLBACK_MODEL);
-    }
-    text = out.choices[0]?.message?.content || '';
-  } else {
-    const model = getModel(options);
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-    });
-    text = result.response.text();
+  if (!options.apiKey) throw new Error('No Groq API key configured. Please add your API key in Settings.');
+  const groq = new Groq({ apiKey: options.apiKey });
+  const ask = (model) => groq.chat.completions.create({
+    messages: [{ role: 'user', content: prompt }],
+    model,
+    temperature: 0,
+    max_tokens: 1500, // reasoning models spend tokens before the JSON
+    ...(/gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}),
+    response_format: { type: 'json_object' },
+  });
+  const wanted = isValidModelId(options.model) && !retiredGroqModels.has(options.model) ? options.model : GROQ_FALLBACK_MODEL;
+  let out;
+  try {
+    out = await ask(wanted);
+  } catch (err) {
+    // Groq retires models, and some don't support JSON mode; keep voice add working on a known one.
+    if (wanted === GROQ_FALLBACK_MODEL || (err.status !== 404 && err.status !== 400 && !/model_not_found|decommissioned/i.test(err.message || ''))) throw err;
+    console.warn(`Groq model ${wanted} failed for voice add, using ${GROQ_FALLBACK_MODEL}`);
+    if (err.status === 404 || /model_not_found|decommissioned/i.test(err.message || '')) retiredGroqModels.add(wanted);
+    out = await ask(GROQ_FALLBACK_MODEL);
   }
+  const text = out.choices[0]?.message?.content || '';
 
   const json = String(text).replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, '').trim();
   try {

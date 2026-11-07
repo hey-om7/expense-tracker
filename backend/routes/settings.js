@@ -4,14 +4,15 @@ const auth = require('../middleware/authMiddleware');
 const UserPreferences = require('../models/UserPreferences');
 const { maskKey, isMaskedKey } = require('../utils/security');
 const { encryptSecret, revealSecret, isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
+const { listGroqModels, isValidModelId, resolveModel } = require('../services/aiService');
+const { userLimiter } = require('../utils/rateLimits');
 
 // Never send stored API keys back in full; the browser only needs to know one exists.
 const toPublic = (prefs) => ({
   aiEnabled: prefs.aiEnabled,
-  aiModel: prefs.aiModel,
+  aiModel: resolveModel(prefs.aiModel),
   emailAlertsEnabled: prefs.emailAlertsEnabled,
   aiEmailProcessingEnabled: prefs.aiEmailProcessingEnabled === true,
-  geminiApiKey: maskKey(revealSecret(prefs.geminiApiKey)),
   groqApiKey: maskKey(revealSecret(prefs.groqApiKey)),
 });
 
@@ -33,9 +34,7 @@ router.get('/', async (req, res) => {
     if (!prefs) {
       prefs = {
         aiEnabled: true,
-        aiModel: 'gemini-2.5-flash',
-        geminiApiKey: '',
-        groqApiKey: '', // Added default
+        groqApiKey: '',
         emailAlertsEnabled: true,
         aiEmailProcessingEnabled: false,
       };
@@ -47,33 +46,54 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/settings/groq/models  { apiKey? }
+// Tests a Groq key and returns its active chat models. Uses the key in the body
+// when a new one is given, otherwise the saved key. Nothing is saved here.
+router.post(
+  '/groq/models',
+  userLimiter('groq-models', { windowMs: 10 * 60 * 1000, limit: 30, message: 'Too many key checks. Please wait a few minutes.' }),
+  async (req, res) => {
+    try {
+      let apiKey = cleanKey(req.body?.apiKey);
+      if (!apiKey) {
+        const prefs = await UserPreferences.findOne({ userId: req.userId }).select('groqApiKey').lean();
+        apiKey = revealSecret(prefs?.groqApiKey);
+      }
+      if (!apiKey) return res.status(400).json({ message: 'Enter a Groq API key first.' });
+
+      const models = await listGroqModels(apiKey);
+      res.json({ ok: true, models });
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        return res.status(400).json({ message: 'Groq rejected this API key. Check that it is correct and active.' });
+      }
+      console.error('Groq models check failed:', err.message);
+      res.status(502).json({ message: 'Could not reach Groq. Please try again.' });
+    }
+  }
+);
+
 // PUT /api/settings - Update user preferences
 router.put('/', async (req, res) => {
   try {
-    // Destructure the new groqApiKey
-    const { aiEnabled, aiModel, geminiApiKey, groqApiKey, emailAlertsEnabled, aiEmailProcessingEnabled } = req.body;
-    
-    // Updated to include Groq models
-    const allowedModels = [
-      'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest', 
-      'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'
-    ];
-    const modelToSave = allowedModels.includes(aiModel) ? aiModel : 'gemini-2.5-flash';
+    const { aiEnabled, aiModel, groqApiKey, emailAlertsEnabled, aiEmailProcessingEnabled } = req.body;
+
+    if (aiModel !== undefined && !isValidModelId(aiModel)) {
+      return res.status(400).json({ message: 'Invalid AI model.' });
+    }
 
     const update = {};
     // Partial updates: only fields present in the body change.
     if (aiEnabled !== undefined) update.aiEnabled = Boolean(aiEnabled);
-    if (aiModel !== undefined) update.aiModel = modelToSave;
+    if (aiModel !== undefined) update.aiModel = aiModel;
     if (emailAlertsEnabled !== undefined) update.emailAlertsEnabled = Boolean(emailAlertsEnabled);
     // Only an explicit boolean changes the email-AI opt-in; anything else leaves it as saved.
     if (typeof aiEmailProcessingEnabled === 'boolean') update.aiEmailProcessingEnabled = aiEmailProcessingEnabled;
-    const gem = cleanKey(geminiApiKey);
     const groq = cleanKey(groqApiKey);
     // API keys are encrypted at rest; refuse to store them in plaintext.
-    if ((gem || groq) && !isEncryptionConfigured()) {
+    if (groq && !isEncryptionConfigured()) {
       return res.status(503).json({ message: 'Saving API keys is not configured on the server.' });
     }
-    if (gem !== undefined) update.geminiApiKey = encryptSecret(gem);
     if (groq !== undefined) update.groqApiKey = encryptSecret(groq);
 
     const prefs = await UserPreferences.findOneAndUpdate(

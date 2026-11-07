@@ -8,8 +8,6 @@ const AiChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [hasApiKey, setHasApiKey] = useState(true);
-  // State to track which model the user chose
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash'); 
   const [messages, setMessages] = useState([
     { role: 'ai', text: 'Hey! I\'m Vestor AI — your personal finance assistant. Ask me anything about your spending, investments, or subscriptions. 💰' }
   ]);
@@ -19,32 +17,16 @@ const AiChatbot = () => {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const settings = await fetchSettings();
-        if (settings) {
-          if (settings.aiEnabled === false) setAiEnabled(false);
-          
-          // Save the model to state so we can update the UI
-          const modelName = settings.aiModel || 'gemini-2.5-flash';
-          setSelectedModel(modelName);
-
-          const isGroqModel = modelName.includes('llama') || modelName.includes('mixtral');
-
-          // Check the correct API key based on the model
-          if (isGroqModel) {
-            if (!settings.groqApiKey || settings.groqApiKey.trim().length === 0) {
-              setHasApiKey(false);
-            }
-          } else {
-            if (!settings.geminiApiKey || settings.geminiApiKey.trim().length === 0) {
-              setHasApiKey(false);
-            }
-          }
-        }
-      } catch (err) {}
+    const apply = (settings) => {
+      if (!settings) return;
+      setAiEnabled(settings.aiEnabled !== false);
+      setHasApiKey(Boolean(settings.groqApiKey && settings.groqApiKey.trim()));
     };
-    loadSettings();
+    fetchSettings().then(apply).catch(() => {});
+    // Settings page saves changes instantly and broadcasts them.
+    const onUpdate = (e) => apply(e.detail);
+    window.addEventListener('vestor:settings-updated', onUpdate);
+    return () => window.removeEventListener('vestor:settings-updated', onUpdate);
   }, []);
 
   useEffect(() => {
@@ -110,9 +92,6 @@ const AiChatbot = () => {
 
   if (!aiEnabled) return null;
 
-  // Helper boolean for rendering UI text
-  const isGroq = selectedModel.includes('llama') || selectedModel.includes('mixtral');
-
   return (
     <>
       {/* Floating Action Button */}
@@ -157,9 +136,8 @@ const AiChatbot = () => {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-sm text-on-surface">Vestor AI</h3>
-              {/*  Dynamic provider text */}
               <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
-                Powered by {isGroq ? 'Groq' : 'Gemini'}
+                Powered by Groq
               </p>
             </div>
             <button
@@ -178,9 +156,8 @@ const AiChatbot = () => {
               </div>
               <div>
                 <h3 className="font-bold text-base text-on-surface mb-2">API Key Required</h3>
-                {/* Dynamic API Key prompt */}
                 <p className="text-sm text-on-surface-variant leading-relaxed max-w-xs">
-                  Please add your {isGroq ? 'Groq' : 'Gemini'} API key in Settings to use AI features.
+                  Please add your Groq API key in Settings to use AI features.
                 </p>
               </div>
               <Link

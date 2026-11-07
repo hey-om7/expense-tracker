@@ -56,6 +56,7 @@ export const deleteTransaction = (id) => request(`/transactions/${id}`, { method
 // ─── Settings APIs ───
 export const fetchSettings = () => request('/settings');
 export const updateSettings = (settingsData) => request('/settings', { method: 'PUT', body: settingsData });
+export const fetchGroqModels = (apiKey) => request('/settings/groq/models', { method: 'POST', body: apiKey ? { apiKey } : {} });
 
 // ─── Categories ───
 export const fetchCategories = () => request('/categories');
