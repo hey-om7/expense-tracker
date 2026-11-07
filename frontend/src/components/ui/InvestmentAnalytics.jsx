@@ -7,6 +7,7 @@ import useIsMobile from '../../hooks/useIsMobile';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/currency';
 import * as api from '../../services/api';
+import { cachedFetch } from '../../utils/investCache';
 
 const RANGES = ['7D', '1M', '1Y'];
 const RANGE_MAP = { '7D': '7d', '1M': '1mo', '1Y': '1y' };
@@ -47,8 +48,12 @@ const PriceChart = ({ investment }) => {
     try {
       if (investment.type === 'Mutual Fund') {
         const days = range === '7D' ? 7 : range === '1M' ? 30 : 365;
-        const res = await fetch(`https://api.mfapi.in/mf/${investment.symbol}`);
-        const json = await res.json();
+        // Full NAV history is the same for every range, so cache it once per fund.
+        const json = await cachedFetch(`mf_${investment.symbol}`, async () => {
+          const res = await fetch(`https://api.mfapi.in/mf/${investment.symbol}`);
+          const body = await res.json();
+          return { data: (body?.data || []).slice(0, 365) };
+        });
         if (json?.data) {
           const sliced = json.data.slice(0, days).reverse();
           setData(sliced.map(d => ({
@@ -57,7 +62,7 @@ const PriceChart = ({ investment }) => {
           })));
         }
       } else if (investment.type === 'Stock') {
-        const result = await api.fetchStockHistory(investment.symbol, RANGE_MAP[range]);
+        const result = await cachedFetch(`stock_${investment.symbol}_${RANGE_MAP[range]}`, () => api.fetchStockHistory(investment.symbol, RANGE_MAP[range]));
         setData(result);
       } else {
         setData([]);
