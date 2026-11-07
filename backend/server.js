@@ -67,7 +67,7 @@ app.use(helmet({
   permissionsPolicy: {
     features: {
       camera: [],
-      microphone: [],
+      microphone: ['self'], // voice quick-add (/voice)
       geolocation: [],
     },
   },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { resendVerification } from '../services/api';
 
@@ -13,6 +13,10 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Only same-app paths, never "//evil.com"
+  const from = location.state?.from;
+  const returnTo = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/';
 
   const googleBtnRef = useRef(null);
   const passwordRef = useRef(null); // ADDED: Ref to control password focus
@@ -31,7 +35,7 @@ const Login = () => {
     try {
       setLoading(true);
       await login(email, password);
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setNeedsVerification(err.code === 'EMAIL_NOT_VERIFIED');
       setError(err.message || 'Login failed');
@@ -56,7 +60,7 @@ const Login = () => {
       setLoading(true);
       setError('');
       await googleLogin(response.credential);
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err.message || 'Google sign-in failed');
     } finally {

@@ -9,7 +9,7 @@ const localDate = (d) => {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 };
 
-const AddTransactionForm = ({ onClose, initialData }) => {
+const AddTransactionForm = ({ onClose, initialData, prefill, onSaved }) => {
   const { addTransaction, updateTransaction, deleteTransaction, categories, transactions } = useAppContext();
   const [showConfirm, setShowConfirm] = useState(false);
   const isEditing = !!initialData;
@@ -32,6 +32,24 @@ const AddTransactionForm = ({ onClose, initialData }) => {
       setDate(new Date(initialData.date).toISOString().split('T')[0] || '');
     }
   }, [initialData]);
+
+  // Prefill a new transaction (e.g. from voice quick-add). Unlike initialData, this stays in "add" mode.
+  useEffect(() => {
+    if (!prefill || initialData) return;
+    setType(prefill.type === 'income' ? 'income' : 'expense');
+    setAmount(prefill.amount ? String(prefill.amount) : '');
+    setTitle(prefill.title || '');
+    setNotes(prefill.notes || '');
+    if (prefill.date) setDate(prefill.date);
+    let cat = prefill.categoryId || '';
+    // AI found no category: reuse the one from a past transaction with the same title
+    if (!cat && prefill.title) {
+      const past = (transactions || []).find(t => t.type === (prefill.type || 'expense') && t.title?.trim().toLowerCase() === prefill.title.trim().toLowerCase());
+      cat = past?.categoryId || '';
+    }
+    setCategoryId(cat);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   // Prefill from an email suggestion. Category is reused from a past expense with the same title.
   const applySuggestion = (s) => {
@@ -114,6 +132,7 @@ const AddTransactionForm = ({ onClose, initialData }) => {
       const picked = suggestion;
       Promise.resolve(addTransaction(payload)).then((saved) => {
         if (picked && saved) api.resolveExpenseSuggestion(picked.ids, 'used', saved.id || saved._id).catch(() => {});
+        onSaved?.(saved || null);
       });
     }
     onClose();
@@ -133,7 +152,7 @@ const AddTransactionForm = ({ onClose, initialData }) => {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {!isEditing && <ExpenseSuggestions selectedId={suggestion?.id} onPick={applySuggestion} />}
+      {!isEditing && !prefill && <ExpenseSuggestions selectedId={suggestion?.id} onPick={applySuggestion} />}
       {isTradeLog && (
          <div className="bg-primary/20 text-on-surface p-3 text-xs rounded-lg mb-2 border border-primary/50">
            <strong>Notice:</strong> This is an investment trade log. You can only update its title, notes, and date here. To reverse financial impact, delete it and adjust holdings manually.

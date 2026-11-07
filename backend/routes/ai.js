@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 // ADDED: We will need a new function in your aiService to handle Groq requests
-const { chatWithGemini, chatWithGroq } = require('../services/aiService'); 
+const { chatWithGemini, chatWithGroq, parseSpokenTransaction } = require('../services/aiService'); 
 const Transaction = require('../models/Transaction');
 const Investment = require('../models/Investment');
 const Subscription = require('../models/Subscription');
@@ -103,6 +103,54 @@ router.post('/chat', async (req, res) => {
       return res.status(503).json({ message: 'The AI provider rejected the request. Check your API key in Settings.' });
     }
     res.status(500).json({ message: 'Failed to get AI response. Please try again.' });
+  }
+});
+
+// POST /api/ai/parse-transaction  { transcript }
+// Voice quick-add: returns prefill values for the Add Transaction form. Nothing is saved here.
+router.post('/parse-transaction', async (req, res) => {
+  try {
+    const transcript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
+    if (!transcript) return res.status(400).json({ message: 'Say something like "Spent 250 on lunch"' });
+    if (transcript.length > 500) return res.status(400).json({ message: 'That was too long. Try one expense at a time.' });
+
+    const prefs = (await UserPreferences.findOne({ userId: req.userId }).lean()) || { aiEnabled: true, aiModel: 'gemini-2.5-flash' };
+    if (prefs.aiEnabled === false) return res.status(403).json({ message: 'AI is disabled in Settings.' });
+    const modelName = prefs.aiModel || 'gemini-2.5-flash';
+    const isGroq = modelName.includes('llama') || modelName.includes('mixtral');
+    const apiKey = revealSecret(isGroq ? prefs.groqApiKey : prefs.geminiApiKey);
+    if (!apiKey || !apiKey.trim()) {
+      return res.status(403).json({ message: `Please add your ${isGroq ? 'Groq' : 'Gemini'} API key in Settings to use voice add.` });
+    }
+
+    const categories = await Category.find({ userId: req.userId }).select('_id name type').lean();
+    const tz = 'Asia/Kolkata';
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+
+    const ai = await parseSpokenTransaction(transcript, { categories, today, isGroq, model: modelName, apiKey });
+
+    // Never trust the model's output: coerce every field.
+    const type = ai?.type === 'income' ? 'income' : 'expense';
+    const amount = Number(ai?.amount);
+    const cat = categories.find(c => String(c._id) === String(ai?.categoryId) && c.type === type);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(ai?.date || '') && !Number.isNaN(Date.parse(ai.date)) ? ai.date : today;
+    const str = (v, max) => String(v ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max);
+
+    res.json({
+      transcript,
+      type,
+      amount: Number.isFinite(amount) && amount > 0 && amount <= 999999999 ? Math.round(amount * 100) / 100 : null,
+      categoryId: cat ? String(cat._id) : '',
+      title: str(ai?.title, 200),
+      notes: str(ai?.notes, 500),
+      date,
+    });
+  } catch (err) {
+    console.error('AI parse-transaction error:', err.message);
+    if (/api key|GEMINI|GROQ|401|403/i.test(err.message || '')) {
+      return res.status(503).json({ message: 'The AI provider rejected the request. Check your API key in Settings.' });
+    }
+    res.status(500).json({ message: "Couldn't understand that. Please try again." });
   }
 });
 

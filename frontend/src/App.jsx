@@ -18,6 +18,7 @@ import RegisterScreen from './pages/Register';
 import ForgotPasswordScreen from './pages/ForgotPassword';
 import ResetPasswordScreen from './pages/ResetPassword';
 import VerifyEmailScreen from './pages/VerifyEmail';
+import VoiceAddScreen from './pages/VoiceAdd';
 import ToastContainer from './components/ui/ToastContainer';
 
 function App() {
@@ -31,6 +32,20 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
           <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
           <Route path="/verify-email/:token" element={<VerifyEmailScreen />} />
+
+          {/* Voice quick-add shortcut: full screen, no sidebar/nav, same login + PIN lock */}
+          <Route
+            path="/voice"
+            element={
+              <ProtectedRoute>
+                <AppProvider>
+                  <LockScreen />
+                  <VoiceAddScreen />
+                  <ToastContainer />
+                </AppProvider>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected App Routes */}
           <Route
