@@ -26,6 +26,21 @@ const CyclicScreen = () => {
   const [activeTab, setActiveTab] = useState('SUBSCRIPTIONS');
   const [subModal, setSubModal] = useState({ isOpen: false, data: null });
   const [ccModal, setCcModal] = useState({ isOpen: false, data: null });
+  const [ccDetailId, setCcDetailId] = useState(null);
+  const ccDetail = ccDetailId ? creditCards.find(c => c.id === ccDetailId) : null;
+
+  // "Due in 3 days", "Due today", "Overdue by 2 days"
+  const dueText = (dateString) => {
+    if (!dateString) return 'No due date';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateString); d.setHours(0, 0, 0, 0);
+    if (isNaN(d.getTime())) return 'No due date';
+    const days = Math.round((d - today) / 86400000);
+    if (days < 0) return `Overdue by ${-days} day${days === -1 ? '' : 's'}`;
+    if (days === 0) return 'Due today';
+    if (days === 1) return 'Due tomorrow';
+    return `Due in ${days} days`;
+  };
 
   const isApproaching = (dateString, daysThreshold = 5) => {
      const today = new Date();
@@ -226,9 +241,15 @@ const CyclicScreen = () => {
       {activeTab === 'BILLS' && (
          <section className="animate-[slideUp_0.3s_ease-out]" data-onboarding="cyclic-bills">
             <div className="flex justify-between items-center mb-4 max-md:mb-3">
-               <h3 className="font-headline font-bold text-xl max-md:text-base">Credit Cards ({creditCards.length})</h3>
-               <div className="flex items-center gap-2">
-                 <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all max-md:text-xs max-md:bg-surface-container-high max-md:px-3 max-md:py-2 max-md:rounded-lg">
+               <h3 className="font-headline font-bold text-xl max-md:text-base">
+                 Credit cards <span className="md:hidden ml-1 text-sm font-normal text-on-surface-variant tabular-nums">{creditCards.length}</span>
+                 <span className="hidden md:inline">({creditCards.length})</span>
+               </h3>
+               <button type="button" onClick={() => setCcModal({isOpen: true, data: null})} aria-label="Add card" className="md:hidden w-11 h-11 -mr-1.5 rounded-full flex items-center justify-center bg-primary-container text-on-primary hover:brightness-110 transition-[filter]">
+                 <span className="material-symbols-outlined text-[22px]">add</span>
+               </button>
+               <div className="hidden md:flex items-center gap-2">
+                 <button onClick={() => setCcModal({isOpen: true, data: null})} className="text-sm font-bold text-error-container flex items-center gap-1 hover:brightness-125 transition-all">
                    <span className="material-symbols-outlined text-sm">add</span> Add Card
                  </button>
                </div>
@@ -243,7 +264,7 @@ const CyclicScreen = () => {
                  <button onClick={() => setCcModal({isOpen: true, data: null})} className="mt-4 text-error-container font-bold text-sm">Add Card</button>
                </div>
             ) : (
-               <div className="flex flex-col gap-4 max-md:gap-2.5">
+               <div className="flex flex-col md:gap-4">
                   {sortedCreditCards.map(cc => {
                     const warning = isApproaching(cc.billDueDate, 5);
                     const past = isPastDue(cc.billDueDate);
@@ -288,37 +309,23 @@ const CyclicScreen = () => {
                           </div>
                         </div>
 
-                        {/* Mobile credit card row */}
-                        <div 
-                          className={`md:hidden bg-surface-container-low rounded-lg p-4 border border-outline/5 active:border-outline/20 transition-all cursor-pointer
-                            ${past ? 'opacity-40 grayscale' : ''}
-                          `}
-                          onClick={() => setCcModal({ isOpen: true, data: cc })}
+                        {/* Mobile credit card row: name, amount and due status; tap for details */}
+                        <button
+                          type="button"
+                          onClick={() => setCcDetailId(cc.id)}
+                          className={`md:hidden w-full flex items-center gap-3 py-3.5 text-left border-b border-outline/[0.07] last:border-0 active:bg-surface-container-low transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${past ? 'opacity-50' : ''}`}
                         >
-                          <div className="flex items-center gap-3 mb-3">
-                             <div className="w-12 h-8 bg-gradient-to-br from-[#E5BA73] to-[#67490b] rounded-md shadow-sm flex items-center justify-end px-1.5 shrink-0">
-                                <span className="text-[9px] font-bold text-white tracking-widest">{cc.last4Digits}</span>
-                             </div>
-                             <div className="min-w-0">
-                                <h4 className="font-bold text-sm text-on-surface truncate">{cc.name}</h4>
-                                {cc.notes && <p className="text-[11px] text-outline truncate">{cc.notes}</p>}
-                             </div>
-                          </div>
-                          <div className="flex justify-between items-center gap-3">
-                             <div className="min-w-0">
-                                <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Due Date</span>
-                                <span className={`text-xs font-bold ${(warning || past) ? 'text-error' : 'text-on-surface'}`}>
-                                   {formatDateToDDMMYYYY(cc.billDueDate)} {past ? '· Past Due' : warning ? '· Soon' : ''}
-                                </span>
-                             </div>
-                             <div className="text-right shrink-0">
-                                <span className="block text-[9px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Pending</span>
-                                <span className={`font-headline font-extrabold text-sm ${cc.billAmount ? 'text-error' : 'text-outline'}`}>
-                                  {cc.billAmount ? formatCurrency(cc.billAmount) : 'N/A'}
-                                </span>
-                             </div>
-                          </div>
-                        </div>
+                          <span className="w-11 h-8 shrink-0 rounded-md bg-gradient-to-br from-[#E5BA73] to-[#67490b] flex items-end justify-end p-1" aria-hidden="true">
+                            <span className="text-[9px] font-bold text-white tracking-wider leading-none">{cc.last4Digits}</span>
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-[15px] font-semibold leading-snug text-on-surface line-clamp-2 break-words">{cc.name}</span>
+                            <span className={`block mt-0.5 text-xs font-semibold ${(warning || past) ? 'text-error' : 'text-on-surface-variant'}`}>{dueText(cc.billDueDate)}</span>
+                          </span>
+                          <span className={`shrink-0 font-headline font-bold tabular-nums text-[15px] ${cc.billAmount ? 'text-on-surface' : 'text-on-surface-variant text-xs font-semibold'}`}>
+                            {cc.billAmount ? formatCurrency(cc.billAmount) : 'No bill'}
+                          </span>
+                        </button>
                       </React.Fragment>
                     )
                   })}
@@ -333,6 +340,50 @@ const CyclicScreen = () => {
 
       <Modal isOpen={ccModal.isOpen} onClose={() => setCcModal({ isOpen: false, data: null})} title={ccModal.data ? "Edit Credit Card" : "Track Credit Card"}>
          <AddCreditCardForm initialData={ccModal.data} onClose={() => setCcModal({isOpen: false, data: null})} />
+      </Modal>
+
+      {/* Mobile: credit card details */}
+      <Modal
+        isOpen={!!ccDetail}
+        onClose={() => setCcDetailId(null)}
+        title={ccDetail?.name || ''}
+        footer={ccDetail && (
+          <button type="button" onClick={() => { setCcDetailId(null); setCcModal({ isOpen: true, data: ccDetail }); }} className="w-full min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface hover:bg-surface-container-highest transition-colors inline-flex items-center justify-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span> Edit card
+          </button>
+        )}
+      >
+        {ccDetail && (() => {
+          const past = isPastDue(ccDetail.billDueDate);
+          const soon = isApproaching(ccDetail.billDueDate, 5);
+          return (
+            <div>
+              <p className="text-xs text-on-surface-variant">Card ending {ccDetail.last4Digits || '—'}</p>
+              <p className={`mt-1 font-manrope font-extrabold text-[2rem] leading-none tracking-tight ${ccDetail.billAmount ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                {ccDetail.billAmount ? formatCurrency(ccDetail.billAmount) : 'No bill yet'}
+              </p>
+              <p className={`mt-1.5 text-sm font-semibold ${(past || soon) ? 'text-error' : 'text-on-surface-variant'}`}>{dueText(ccDetail.billDueDate)}</p>
+              <dl className="mt-5">
+                {[
+                  ['Due date', formatDateToDDMMYYYY(ccDetail.billDueDate)],
+                  ['Bill generated', ccDetail.billGeneratedDate ? formatDateToDDMMYYYY(ccDetail.billGeneratedDate) : '—'],
+                  ['Amount pending', ccDetail.billAmount ? formatCurrency(ccDetail.billAmount) : '—'],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-baseline justify-between gap-4 py-3 border-b border-outline/10 last:border-0">
+                    <dt className="text-sm text-on-surface-variant">{label}</dt>
+                    <dd className="text-sm font-semibold tabular-nums text-on-surface text-right">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {ccDetail.notes && (
+                <div className="mt-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-on-surface-variant">Note</p>
+                  <p className="mt-1 text-sm text-on-surface whitespace-pre-line break-words">{ccDetail.notes}</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Modal>
 
       <FeatureTour section="cyclic" />

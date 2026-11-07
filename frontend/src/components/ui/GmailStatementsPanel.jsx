@@ -40,6 +40,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const [busy, setBusy] = useState('');
   const [banner, setBanner] = useState(null);
   const [addModal, setAddModal] = useState(null); // { statement, name, last4Digits }
+  const [sheet, setSheet] = useState(null); // mobile: about | gmail | pending | review | history
 
   const load = useCallback(async () => {
     try {
@@ -161,6 +162,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   };
 
   if (!status) return null;
+  const scanning = ['pending', 'running'].includes(status.backfillStatus);
 
   const btn = 'flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed max-md:text-xs max-md:px-2.5 max-md:py-1';
 
@@ -176,8 +178,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
         </div>
       )}
 
-      {/* Connection card */}
-      <div className="bg-surface-container-low rounded-xl border border-outline/10 p-4 max-md:p-3">
+      {/* Connection card (desktop) */}
+      <div className="max-md:hidden bg-surface-container-low rounded-xl border border-outline/10 p-4">
         {!status.connected ? (
           <div className="flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
             <div>
@@ -236,7 +238,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
 
       {/* Untracked cards found in Gmail */}
       {pendingGroups.length > 0 && (
-        <div className="bg-primary/5 rounded-xl border border-primary/20 p-4 max-md:p-3">
+        <div className="max-md:hidden bg-primary/5 rounded-xl border border-primary/20 p-4">
           <p className="font-bold text-sm text-on-surface mb-1">We found statements for cards you don't track</p>
           <p className="text-xs text-on-surface-variant mb-3">Add a card to track its bills and due-date reminders from now on, or ignore it to skip its future statements.</p>
           <div className="flex flex-col gap-2">
@@ -269,7 +271,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
 
       {/* Emails that couldn't be read reliably */}
       {review.length > 0 && (
-        <div className="bg-surface-container-low rounded-xl border border-outline/10 p-4 max-md:p-3">
+        <div className="max-md:hidden bg-surface-container-low rounded-xl border border-outline/10 p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <p className="font-bold text-sm text-on-surface">Bank emails to review ({review.length})</p>
@@ -301,7 +303,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
 
       {/* Past statements */}
       {history.length > 0 && (
-        <div className="bg-surface-container-low rounded-xl border border-outline/10">
+        <div className="max-md:hidden bg-surface-container-low rounded-xl border border-outline/10">
           <button onClick={() => setShowHistory((v) => !v)} className="w-full flex items-center justify-between p-4 max-md:p-3 text-sm font-bold text-on-surface">
             <span>Statement history ({history.length})</span>
             <span className="material-symbols-outlined text-base">{showHistory ? 'expand_less' : 'expand_more'}</span>
@@ -321,6 +323,127 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
           )}
         </div>
       )}
+
+      {/* Mobile: one compact list; each row opens a sheet with the details and actions */}
+      <ul className="md:hidden rounded-2xl bg-surface-container-low divide-y divide-outline/10">
+        <li className="flex items-center gap-3 px-4 py-3">
+          <span className="material-symbols-outlined text-[22px] text-primary" aria-hidden="true">mark_email_read</span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-on-surface">{status.connected ? 'Gmail connected' : 'Track bills from Gmail'}</span>
+            <span className="block text-xs text-on-surface-variant truncate">
+              {!status.connected ? 'Statements and due dates, added for you'
+                : scanning ? 'Scanning the last 90 days…'
+                : status.status === 'revoked' ? 'Access was revoked. Reconnect to continue.'
+                : status.lastError || `Last scan ${status.lastScannedAt ? new Date(status.lastScannedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'never'} · daily at 6 AM`}
+            </span>
+          </span>
+          {status.connected ? (
+            <button type="button" onClick={() => setSheet('gmail')} className="shrink-0 min-h-[40px] px-3.5 rounded-full text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/10 transition-colors">Manage</button>
+          ) : (
+            <button type="button" onClick={() => setSheet('about')} className="shrink-0 min-h-[40px] px-3.5 rounded-full text-xs font-semibold text-on-primary bg-primary-container hover:brightness-110 transition-[filter]">Set up</button>
+          )}
+        </li>
+        {[
+          pendingGroups.length > 0 && { key: 'pending', icon: 'add_card', tone: 'text-primary', label: `${pendingGroups.length} untracked ${pendingGroups.length === 1 ? 'card' : 'cards'} found` },
+          review.length > 0 && { key: 'review', icon: 'help', tone: 'text-on-surface-variant', label: `${review.length} bank ${review.length === 1 ? 'email' : 'emails'} to review` },
+          history.length > 0 && { key: 'history', icon: 'history', tone: 'text-on-surface-variant', label: `Statement history · ${history.length}` },
+        ].filter(Boolean).map(row => (
+          <li key={row.key}>
+            <button type="button" onClick={() => setSheet(row.key)} className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-surface-container transition-colors">
+              <span className={`material-symbols-outlined text-[22px] ${row.tone}`} aria-hidden="true">{row.icon}</span>
+              <span className="flex-1 text-sm text-on-surface">{row.label}</span>
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant" aria-hidden="true">chevron_right</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <Modal isOpen={sheet === 'about'} onClose={() => setSheet(null)} title="Track bills from Gmail"
+        footer={<button type="button" onClick={handleConnect} disabled={!status.available || busy === 'connect'} className="w-full min-h-[48px] rounded-full bg-primary-container text-on-primary font-manrope font-bold text-[15px] disabled:opacity-50">{busy === 'connect' ? 'Opening Google…' : status.available ? 'Connect Gmail' : 'Not configured on the server'}</button>}>
+        <ul className="flex flex-col gap-3 text-sm text-on-surface-variant">
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">visibility</span>Wallo only reads credit card statement emails from known banks. It never sends or deletes anything.</li>
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">schedule</span>It reads the last 90 days now, then new emails every day at 6 AM.</li>
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">notifications</span>You get an email one day before each due date.</li>
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">rule</span>Emails are read by built-in rules unless you turn on &quot;Allow AI to process my emails&quot; in Settings.</li>
+        </ul>
+      </Modal>
+
+      <Modal isOpen={sheet === 'gmail'} onClose={() => setSheet(null)} title="Gmail">
+        <p className="text-sm text-on-surface break-all">{status.gmailAddress}</p>
+        <p className="mt-1 text-xs text-on-surface-variant">
+          {scanning ? 'Scanning the last 90 days…' : status.lastError || `Last scan: ${status.lastScannedAt ? new Date(status.lastScannedAt).toLocaleString('en-IN') : 'never'} · next daily scan at 6 AM`}
+        </p>
+        <div className="mt-5 flex flex-col gap-2">
+          {status.status === 'revoked' ? (
+            <button type="button" onClick={handleConnect} disabled={busy === 'connect'} className="min-h-[48px] rounded-full bg-primary-container text-on-primary font-bold text-sm disabled:opacity-50">Reconnect Gmail</button>
+          ) : (
+            <>
+              <button type="button" onClick={() => handleScan(false)} disabled={!!busy || scanning} className="min-h-[48px] rounded-full bg-primary-container text-on-primary font-bold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                {busy === 'scan' ? <span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin" /> : <span className="material-symbols-outlined text-[18px]">sync</span>}
+                Scan now
+              </button>
+              <button type="button" onClick={() => handleScan(true)} disabled={!!busy || scanning} className="min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface disabled:opacity-50">
+                {busy === 'rescan' ? 'Rescanning…' : 'Rescan last 90 days'}
+              </button>
+            </>
+          )}
+          <button type="button" onClick={handleDisconnect} disabled={!!busy} className="min-h-[48px] rounded-full text-sm font-semibold text-error disabled:opacity-50">Disconnect</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={sheet === 'pending'} onClose={() => setSheet(null)} title="Untracked cards">
+        <p className="text-xs text-on-surface-variant mb-3">Add a card to track its bills and reminders, or ignore it to skip its future statements.</p>
+        <ul className="divide-y divide-outline/10">
+          {pendingGroups.map(g => (
+            <li key={g.key} className="py-3">
+              <p className="text-sm font-semibold text-on-surface">{g.latest.bankName}{g.latest.last4 ? ` ····${g.latest.last4}` : ''}</p>
+              <p className="mt-0.5 text-xs text-on-surface-variant">
+                {g.latest.amount != null ? formatCurrency(g.latest.amount) : '—'} · due {fmtDate(g.latest.dueDate)}{g.count > 1 ? ` · ${g.count} statements` : ''}
+              </p>
+              <div className="mt-2.5 flex gap-2">
+                <button type="button" disabled={!!busy} onClick={() => { setSheet(null); setAddModal({ statement: g.latest, name: `${g.latest.bankName} Credit Card`, last4Digits: g.latest.last4 || '' }); }} className="flex-1 min-h-[40px] rounded-full bg-primary-container text-on-primary text-xs font-bold disabled:opacity-50">Add card</button>
+                <button type="button" disabled={!!busy} onClick={() => handleIgnore(g)} className="flex-1 min-h-[40px] rounded-full border border-outline/20 text-xs font-semibold text-on-surface-variant disabled:opacity-50">Ignore</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Modal>
+
+      <Modal isOpen={sheet === 'review'} onClose={() => setSheet(null)} title="Emails to review"
+        footer={<button type="button" disabled={!!busy} onClick={handleDismissAllReview} className="w-full min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface disabled:opacity-50">Dismiss all</button>}>
+        <p className="text-xs text-on-surface-variant mb-2">Wallo couldn&apos;t read these reliably, so nothing was recorded. Check them in Gmail and add anything relevant by hand.</p>
+        <ul className="divide-y divide-outline/10">
+          {review.map(e => (
+            <li key={e._id} className="py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-on-surface line-clamp-2">{e.subject || '(unreadable email)'}</p>
+                <p className="mt-0.5 text-xs text-on-surface-variant">
+                  {e.institutionName || e.senderDomain || 'Unknown sender'} · {fmtDate(e.receivedAt)}
+                  {e.fields?.amount != null ? ` · ${formatCurrency(e.fields.amount)}?` : ''}
+                  {e.reason === 'unauthenticated_sender' ? ' · sender not verified' : ''}
+                </p>
+              </div>
+              <button type="button" disabled={!!busy} onClick={() => handleDismissReview(e._id)} aria-label="Dismiss" className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-50">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Modal>
+
+      <Modal isOpen={sheet === 'history'} onClose={() => setSheet(null)} title="Statement history">
+        <ul className="divide-y divide-outline/10">
+          {history.map(st => (
+            <li key={st._id} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-on-surface truncate">{cardName(st.cardId)}</p>
+                <p className="mt-0.5 text-xs text-on-surface-variant">Statement {fmtDate(st.statementDate)} · due {fmtDate(st.dueDate)}</p>
+              </div>
+              <span className="shrink-0 font-headline font-bold tabular-nums text-sm text-on-surface">{st.amount != null ? formatCurrency(st.amount) : '—'}</span>
+            </li>
+          ))}
+        </ul>
+      </Modal>
 
       <Modal isOpen={!!addModal} onClose={() => setAddModal(null)} title="Track this card">
         {addModal && (

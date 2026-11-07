@@ -230,16 +230,36 @@ const LockScreen = () => {
   };
 
   const activeArray = (isSetupMode && step === 2) ? confirmDigits : digits;
+  const filledCount = activeArray.filter(Boolean).length;
+  const title = isSetupMode ? (step === 1 ? 'Set up a PIN' : 'Confirm your PIN') : 'Welcome back';
+  const subtitle = isSetupMode
+    ? (step === 1 ? 'Create a 4-digit PIN to secure the app.' : 'Enter the same PIN again.')
+    : 'Enter your 4-digit PIN to unlock.';
+
+  // On-screen keypad (mobile)
+  const pressDigit = (d) => {
+    const index = activeArray.findIndex(v => v === '');
+    if (index !== -1) handleDigitChange(index, d);
+  };
+  const pressBackspace = () => {
+    const last = activeArray.map(Boolean).lastIndexOf(true);
+    if (last === -1) return;
+    const next = [...activeArray];
+    next[last] = '';
+    if (isSetupMode && step === 2) setConfirmDigits(next); else setDigits(next);
+    setError('');
+  };
+  const keyClass = 'h-[72px] rounded-full text-[1.75rem] font-manrope font-semibold text-on-surface bg-surface-container-low active:bg-surface-container-highest transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
   return (
     <div 
       // FIX: Increased blur from backdrop-blur-sm to backdrop-blur-xl and lowered background opacity
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/80 backdrop-blur-xl text-on-surface transition-transform duration-400 ease-in-out ${
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/80 backdrop-blur-xl max-md:bg-[#1A120B] max-md:backdrop-blur-none text-on-surface transition-transform duration-400 ease-in-out ${
         isLocked ? 'translate-y-0' : '-translate-y-full'
       }`}
       style={{ pointerEvents: isLocked ? 'auto' : 'none' }}
     >
-      <div className="w-full max-w-sm px-6 py-8 bg-surface-container-low border border-outline-variant/40 rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.5)] flex flex-col items-center">
+      <div className="max-md:hidden w-full max-w-sm px-6 py-8 bg-surface-container-low border border-outline-variant/40 rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.5)] flex flex-col items-center">
         
         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 text-primary shadow-[0_0_20px_rgba(255,215,150,0.15)]">
           {isSetupMode && step === 2 ? <CheckCircle size={32} /> : <Lock size={32} />}
@@ -285,8 +305,49 @@ const LockScreen = () => {
           <span>Logout instead</span>
         </button>
       </div>
+
+      {/* ===== MOBILE: full-screen PIN pad (no system keyboard) ===== */}
+      <div className="md:hidden w-full h-[100dvh] flex flex-col px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div className="flex justify-end">
+          <button type="button" onClick={handleLogout} className="inline-flex items-center gap-1.5 min-h-[44px] px-3 -mr-3 rounded-full text-sm text-on-surface-variant hover:text-on-surface">
+            <LogOut size={16} aria-hidden="true" /> Log out
+          </button>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
+          <span className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+            {isSetupMode && step === 2 ? <CheckCircle size={26} aria-hidden="true" /> : <Lock size={26} aria-hidden="true" />}
+          </span>
+          <h2 className="mt-5 font-manrope font-extrabold text-[1.75rem] leading-tight tracking-tight text-on-surface">{title}</h2>
+          <p className="mt-1.5 text-sm text-on-surface-variant">{subtitle}</p>
+
+          <div className="mt-8 flex gap-5" role="img" aria-label={`${filledCount} of 4 digits entered`}>
+            {[0, 1, 2, 3].map(i => (
+              <span
+                key={i}
+                className={`w-3.5 h-3.5 rounded-full border-2 transition-colors duration-150 ${
+                  error ? 'border-error bg-error' : i < filledCount ? 'border-primary bg-primary' : 'border-on-surface-variant/40'
+                }`}
+              />
+            ))}
+          </div>
+          <p className="mt-5 h-5 text-sm font-medium text-error" role="alert">{error}</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-x-6 gap-y-3 max-w-[300px] w-full mx-auto">
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
+            <button key={d} type="button" onClick={() => pressDigit(d)} className={keyClass}>{d}</button>
+          ))}
+          <span aria-hidden="true" />
+          <button type="button" onClick={() => pressDigit('0')} className={keyClass}>0</button>
+          <button type="button" onClick={pressBackspace} disabled={filledCount === 0} aria-label="Delete last digit" className="h-[72px] rounded-full flex items-center justify-center text-on-surface-variant active:bg-surface-container-low disabled:opacity-30 transition-colors">
+            <span className="material-symbols-outlined text-[26px]">backspace</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
+
 
 export default LockScreen;
