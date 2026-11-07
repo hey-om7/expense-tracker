@@ -109,13 +109,16 @@ const TEMPLATES = [
       // "Rs.250.00 is debited from your Kotak Bank Account XX1234 towards UPI/SWIGGY/... on 05-11-2026"
       // "Your account xx1234 is debited for INR 500.00 on 04-Nov-2026"
       // "Sent Rs.120.00 from Kotak Bank AC X1234 to shop@okaxis on 05-11-26"
+      // "Your transaction of Rs.258.00 on AMAZONIN using Kotak Bank Debit Card XX9678 on 31/10/2026 10:34:44 ..."
       transaction_alert: {
         amount: [
           new RegExp(`(?:INR|Rs\\.?|₹)\\s*${AMT}\\s+(?:is|has\\s+been|was)\\s+debited`, 'i'),
           new RegExp(`debited\\s+(?:for|with|by)\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
           new RegExp(`\\bSent\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
+          new RegExp(`\\btransaction\\s+of\\s+(?:INR|Rs\\.?|₹)\\s*${AMT}`, 'i'),
         ],
         merchant: [
+          /\btransaction\s+of\s+(?:INR|Rs\.?|₹)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+(?:on|at)\s+(.+?)\s+using\b/i,
           /\bto\s+VPA\s+([A-Za-z0-9._-]+@[A-Za-z0-9.-]+)/i,
           /\btowards\s+UPI\/(?:[^/\n]*\/)?([A-Za-z][^/\n]{1,50}?)\s*(?:\/|\s+on\s+\d|\n|$)/i,
           /\bto\s+([A-Za-z0-9._-]+@[A-Za-z][A-Za-z0-9.-]*)/i,
@@ -154,7 +157,8 @@ const TEMPLATES = [
 ];
 
 // Senders whose debit alerts are offered as suggestions when adding an expense.
-const PAYMENT_SUGGESTION_DOMAINS = ['phonepe.com', 'kotak.com', 'kotakbank.com', 'kotak.bank.in'];
+// hdfcbank.bank.in: alerts@ sends one "You have done a UPI txn" email per UPI debit.
+const PAYMENT_SUGGESTION_DOMAINS = ['phonepe.com', 'kotak.com', 'kotakbank.com', 'kotak.bank.in', 'hdfcbank.bank.in'];
 
 const templateByRoot = new Map();
 TEMPLATES.forEach(t => t.roots.forEach(r => templateByRoot.set(r, t)));

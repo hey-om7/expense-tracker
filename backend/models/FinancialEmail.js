@@ -33,6 +33,9 @@ const financialEmailSchema = new mongoose.Schema({
   // Expense suggestions (PhonePe/Kotak debits): null = open, 'used' = added as a transaction, 'dismissed' = hidden
   suggestionState: { type: String, enum: [null, 'used', 'dismissed'], default: null },
   transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
+  // Payment-parser version that produced `fields`. Open suggestions parsed by an older
+  // version are re-read from Gmail on the next sync (see gmailSync.reparseStaleSuggestions).
+  parserRevision: { type: Number, default: 0 },
 }, { timestamps: true });
 
 financialEmailSchema.index({ userId: 1, gmailMessageId: 1 }, { unique: true });

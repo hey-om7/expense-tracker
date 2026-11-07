@@ -26,6 +26,8 @@ const PROMO_SUBJECT_STRONG = [
   /\b(apply|upgrade|avail|claim|unlock|grab)\s+(now|today|it|your)\b/i,
   /\b(special|exclusive|festive|mega|bumper)\s+(offers?|deals?|sale|rates?)\b/i,
   /\bsomething\s+extra\b/i,
+  // "Rs.2,000 voucher with your HDFC Bank Debit Card"
+  /(rs\.?|₹|inr)\s*[0-9][0-9,]*(\.[0-9]+)?\s+(vouchers?|gift\s*cards?|cashback)\b/i,
 ];
 
 // Weak signals: need two (subject + body).

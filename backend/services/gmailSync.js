@@ -20,7 +20,7 @@ const UserPreferences = require('../models/UserPreferences');
 const FinancialEmail = require('../models/FinancialEmail');
 const { OFFICIAL_BANK_DOMAINS } = require('./gmailScanner');
 const pipeline = require('./emailProcessing');
-const { rootDomainFor } = require('./emailProcessing/institutions');
+const { rootDomainFor, PAYMENT_SUGGESTION_DOMAINS } = require('./emailProcessing/institutions');
 const { applyLatestToCard } = pipeline.sinks;
 const { sendEmail } = require('./emailService');
 const { encrypt, decrypt, revealSecret } = require('../utils/tokenCrypto');
@@ -32,6 +32,54 @@ const BACKFILL_DAYS = 90;
 const MAX_MESSAGES_PER_SYNC = 500;
 const MAX_AI_CALLS_PER_SYNC = 60;
 const PREF_RECHECK_EVERY = 25;
+
+// Bump when the payment-alert parsing (institutions.js templates) improves. Open expense
+// suggestions stored with a lower revision and missing details are re-read from Gmail.
+const PAYMENT_PARSER_REVISION = 1;
+const REPARSE_DAYS = 45; // same window as the suggestions list
+const MAX_REPARSE_PER_SYNC = 200;
+
+/**
+ * Re-read open expense suggestions that an older parser stored without a merchant
+ * (e.g. Kotak "Your transaction of Rs.258.00 on AMAZONIN using ... Card") and update
+ * them in place. Bodies are never stored, so the email is fetched again from Gmail.
+ */
+const reparseStaleSuggestions = async (client, conn) => {
+  const stale = await FinancialEmail.find({
+    userId: conn.userId,
+    status: 'recorded',
+    category: 'transaction_alert',
+    suggestionState: null,
+    senderDomain: { $in: PAYMENT_SUGGESTION_DOMAINS },
+    'fields.merchant': null,
+    parserRevision: { $not: { $gte: PAYMENT_PARSER_REVISION } },
+    receivedAt: { $gte: new Date(Date.now() - REPARSE_DAYS * 864e5) },
+  }).select('_id gmailMessageId receivedAt').limit(MAX_REPARSE_PER_SYNC).lean();
+
+  let updated = 0;
+  for (const rec of stale) {
+    const mark = { parserRevision: PAYMENT_PARSER_REVISION };
+    try {
+      const { data: msg } = await client.request({ url: `${GMAIL_API}/messages/${rec.gmailMessageId}`, params: { format: 'raw' } });
+      const result = await pipeline.processRawEmail(Buffer.from(msg.raw, 'base64url'), {
+        method: 'deterministic', messageId: rec.gmailMessageId, receivedAt: rec.receivedAt,
+      });
+      if (result.outcome === pipeline.OUTCOME.EXTRACTED && result.category === 'transaction_alert') {
+        Object.assign(mark, { fields: result.fields, reason: result.reason, confidence: result.confidence });
+        if (result.fields.merchant) updated += 1;
+      }
+    } catch (err) {
+      if (err.response?.status !== 404) {
+        console.warn(`Re-parse failed for one message: ${err.message}`);
+        continue; // transient error: try again next sync
+      }
+      // 404: email deleted from Gmail; keep the record as it is
+    }
+    await FinancialEmail.updateOne({ _id: rec._id }, { $set: mark });
+  }
+  if (stale.length) console.log(`📧 Re-parsed ${stale.length} payment email(s), ${updated} now have a merchant`);
+  return updated;
+};
 
 // The user's saved preference decides the processing method on every job.
 // Read from the database, never from the request.
@@ -87,8 +135,20 @@ const completeConnection = async (userId, code) => {
 
 const clientForConnection = async (connectionId) => {
   const conn = await GmailConnection.findById(connectionId).select('+refreshTokenEnc');
+  if (!conn) throw new Error('Gmail connection not found');
+  let refreshToken;
+  try {
+    refreshToken = decrypt(conn.refreshTokenEnc);
+  } catch (err) {
+    // Token was encrypted with a different GMAIL_TOKEN_ENCRYPTION_KEY. It can never be
+    // read again, so ask the user to reconnect instead of failing silently on every sync.
+    await GmailConnection.updateOne({ _id: conn._id }, {
+      $set: { status: 'revoked', lastError: 'Gmail needs to be reconnected. Please reconnect from the Bills tab.' },
+    });
+    throw new Error(`Stored Gmail token can't be decrypted (encryption key changed?): ${err.message}`);
+  }
   const client = newOAuthClient();
-  client.setCredentials({ refresh_token: decrypt(conn.refreshTokenEnc) });
+  client.setCredentials({ refresh_token: refreshToken });
   return { conn, client };
 };
 
@@ -224,6 +284,11 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     }
 
     for (const cardId of touchedCards) await applyLatestToCard(cardId);
+    try {
+      await reparseStaleSuggestions(client, conn);
+    } catch (err) {
+      console.warn(`Payment re-parse skipped: ${err.message}`);
+    }
     console.log(`📧 Gmail sync ${key}: ${ids.length} bank email(s), ${linked.length} linked, ${pending.length} pending, ` +
       `method ${method}${aiRequested ? `, AI calls ${aiSession?.calls || 0}${aiAvailable ? '' : ' (no Groq key)'}` : ''}, ` +
       `outcomes ${JSON.stringify(counts)}`);

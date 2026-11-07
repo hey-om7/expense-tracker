@@ -263,6 +263,7 @@ router.post('/emails/:id/dismiss', validateId, async (req, res) => {
 
 // ─── Expense suggestions: recent PhonePe/Kotak debits not yet added as transactions ───
 const { PAYMENT_SUGGESTION_DOMAINS } = require('../services/emailProcessing/institutions');
+const { isPromotionalSubject } = require('../services/emailProcessing/promotional');
 const SUGGESTION_DAYS = 45;
 // A PhonePe payment from a Kotak account sends two emails for one payment; treat
 // same amount within this window as one, keeping the record with the better merchant.
@@ -277,6 +278,9 @@ const whenOf = (e) => {
 const cleanMerchant = (m) => {
   if (!m) return null;
   const s = String(m).trim().replace(/\s+/g, ' ');
+  // HDFC: "VPA ****KYAQ@icici (M S CLASSIC HOSPITALITY)" -> use the registered name in brackets
+  const named = s.match(/@\S*\s*\(([^)]{2,80})\)\s*$/);
+  if (named) return cleanMerchant(named[1]);
   // "swiggy.upi@axisbank" -> "Swiggy"; keep person names as-is
   if (/@/.test(s)) {
     const handle = s.split('@')[0].split(/[._-]/).find(p => /[a-z]{3,}/i.test(p) && !/^(upi|pay|paytm|ybl|ok\w+)$/i.test(p));
@@ -301,6 +305,8 @@ router.get('/suggestions', async (req, res) => {
 
     const out = [];
     for (const r of rows) {
+      if (isPromotionalSubject(r.subject)) continue; // e.g. HDFC "Rs.2,000 voucher" mails stored before the promo rule existed
+      if (/\b(declined|failed|unsuccessful|reversed)\b/i.test(r.subject || '')) continue; // money never left the account
       const twin = out.find(o => o.amount === r.fields.amount && Math.abs(o.receivedAt - r.receivedAt) < SAME_PAYMENT_MS);
       if (twin) {
         twin.ids.push(String(r._id));
@@ -314,7 +320,7 @@ router.get('/suggestions', async (req, res) => {
         amount: r.fields.amount,
         merchant: cleanMerchant(r.fields.merchant),
         paymentMethod: r.fields.paymentMethod,
-        last4: r.fields.last4,
+        last4: r.fields.last4 && !String(r.fields.merchant || '').includes(`${r.fields.last4}@`) ? r.fields.last4 : null,
         date: whenOf(r),
         receivedAt: r.receivedAt,
         sources: [r.institutionName],
