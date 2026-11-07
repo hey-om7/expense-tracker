@@ -248,6 +248,8 @@ Reply with ONLY a JSON object, no prose, no code fences:
 Rules:
 - type: "income" only for money received (salary, refund, got paid, received); otherwise "expense".
 - amount: a positive number in rupees. Understand words ("two fifty" = 250, "1.5k" = 1500, "2 lakh" = 200000). Use 0 if no amount was said.
+  Indians say prices as pairs of numbers, and the speech recognizer often splits them: "two ₹50", "2 ₹50", "2 50", "₹2 50" and "do sau pachas" all mean 250; "twelve ₹99" means 1299. Read a small number directly followed by a two-digit amount as ONE amount, not as a count times a price, unless the sentence clearly says a quantity ("2 coffees at ₹50 each" = 100).
+  If the best reading already contains a single clear ₹ amount, prefer it over the other readings.
 - title: short payee or purpose, 2-5 words, Title Case (e.g. "Swiggy Lunch", "Petrol", "Salary").
 - categoryId: the id of the best matching category above whose type equals "type". Pick the closest by meaning (e.g. Uber → Transport/Travel, Zomato → Food). Use null only if none fit at all.
 - date: today unless the sentence says otherwise.

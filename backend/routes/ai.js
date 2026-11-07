@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const { chatWithGroq, parseSpokenTransaction, resolveModel } = require('../services/aiService');
+const { normalizeSpokenAmounts } = require('../services/spokenAmount');
 const { planAndSearch, MAX_PROMPT_RECORDS } = require('../services/aiQuery');
 const Transaction = require('../models/Transaction');
 const Investment = require('../models/Investment');
@@ -141,7 +142,14 @@ router.post('/parse-transaction', async (req, res) => {
     const tz = 'Asia/Kolkata';
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
 
-    const ai = await parseSpokenTransaction(transcript, { categories, today, alternatives, model: modelName, apiKey });
+    const ai = await parseSpokenTransaction(normalizeSpokenAmounts(transcript), {
+      categories,
+      today,
+      // Keep the raw wording as a fallback reading in case the join was wrong.
+      alternatives: [...new Set([...alternatives.map(normalizeSpokenAmounts), transcript])],
+      model: modelName,
+      apiKey,
+    });
 
     // Never trust the model's output: coerce every field.
     const type = ai?.type === 'income' ? 'income' : 'expense';
