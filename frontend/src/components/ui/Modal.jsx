@@ -12,7 +12,7 @@ const SWIPE_CLOSE_PX = 100;
  * - Desktop (>= md): centered dialog.
  * The body scrolls inside the panel; the header stays visible. Tapping the backdrop closes it.
  */
-const Modal = ({ isOpen, onClose, title, children }) => {
+const Modal = ({ isOpen, onClose, title, children, footer }) => {
   const [dragY, setDragY] = useState(0);
   const dragStart = useRef(null);
   const downOnBackdrop = useRef(false);
@@ -80,9 +80,16 @@ const Modal = ({ isOpen, onClose, title, children }) => {
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar px-5 md:px-6 pt-4 md:pt-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pb-6">
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar px-5 md:px-6 pt-4 md:pt-5 ${footer ? 'pb-5' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pb-6'}`}>
           {children}
         </div>
+
+        {/* Optional action bar pinned to the bottom edge of the panel (outside the scroll area) */}
+        {footer && (
+          <div className="shrink-0 px-5 md:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-5 border-t border-outline/10 bg-surface-container-high">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body

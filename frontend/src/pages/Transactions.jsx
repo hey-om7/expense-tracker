@@ -1,335 +1,247 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { formatCurrency } from '../utils/currency';
-import { getContrastingColor } from '../utils/colorUtils';
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 import InvestmentTradeForm from '../components/forms/InvestmentTradeForm';
 import FeatureTour from '../components/ui/FeatureTour';
+import HistorySummary from '../components/history/HistorySummary';
+import TypeTabs from '../components/history/TypeTabs';
+import FilterPanel, { PeriodMenu, CategoryMenu, SortMenu } from '../components/history/FilterPanel';
+import FilterMenuButton from '../components/history/FilterMenuButton';
+import TransactionList from '../components/history/TransactionList';
+import {
+  DEFAULT_FILTERS, PERIOD_OPTIONS, SORT_OPTIONS, applyFilters, summarize, activeChips, isTrade,
+} from '../components/history/filters';
+
+const PAGE_SIZE = 50;
+const HEADER_PX = 64; // fixed app header height (h-16)
 
 const TransactionsScreen = () => {
-  const { transactions, monthlySpent, getCategory, categories, investments } = useAppContext();
+  const { transactions, getCategory, categories, investments } = useAppContext();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('latest');
-  
-  const [filterDate, setFilterDate] = useState('');
-  const [filterMonth, setFilterMonth] = useState('all');
-  const [filterYear, setFilterYear] = useState('all');
-
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
-  const [tradeModal, setTradeModal] = useState({ isOpen: false, data: null });
+  const [tradeModal, setTradeModal] = useState({ isOpen: false, data: null, investment: null });
+  const toolbarRef = useRef(null);
+  const [stickyTop, setStickyTop] = useState(HEADER_PX);
 
-  // Mobile filter panel toggle
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const update = (patch) => { setFilters(f => ({ ...f, ...patch })); setVisible(PAGE_SIZE); };
+  const resetAll = () => { setFilters(f => ({ ...DEFAULT_FILTERS, search: f.search })); setVisible(PAGE_SIZE); };
 
-  const activeFilterCount = [
-    filterType !== 'all',
-    filterCategory !== 'all',
-    sortBy !== 'latest',
-    filterDate !== '',
-    filterMonth !== 'all',
-    filterYear !== 'all',
-  ].filter(Boolean).length;
+  // Day headers stick just below the toolbar, so track its height.
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => setStickyTop(HEADER_PX + el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  const filteredTransactions = useMemo(() => {
-    let result = transactions;
+  const filtered = useMemo(() => applyFilters(transactions, filters), [transactions, filters]);
+  const totals = useMemo(() => summarize(filtered), [filtered]);
 
-    if (searchTerm) {
-      const lowerQuery = searchTerm.toLowerCase();
-      result = result.filter(t => 
-        t.title.toLowerCase().includes(lowerQuery) || 
-        (t.notes || '').toLowerCase().includes(lowerQuery)
-      );
+  // Counts shown on the type tabs, computed with every other filter applied.
+  const typeCounts = useMemo(() => {
+    const base = applyFilters(transactions, { ...filters, type: 'all' });
+    return {
+      all: base.length,
+      expense: base.filter(t => t.type === 'expense').length,
+      income: base.filter(t => t.type === 'income').length,
+      trade: base.filter(isTrade).length,
+    };
+  }, [transactions, filters]);
+
+  const chips = activeChips(filters, categories);
+  const panelFilterCount = chips.length;
+  const scopeLabel = filters.period === 'custom' && chips.find(c => c.key === 'period')
+    ? chips.find(c => c.key === 'period').label
+    : PERIOD_OPTIONS.find(p => p.value === filters.period)?.label.toLowerCase().replace(/^custom$/, 'all time');
+
+  const periodChip = chips.find(c => c.key === 'period');
+  const periodValue = filters.period === 'all' ? 'All time' : periodChip?.label || 'Custom';
+  const categoryValue = filters.categoryIds.length === 0 ? 'All'
+    : filters.categoryIds.length === 1 ? (categories.find(c => c.id === filters.categoryIds[0])?.name || '1 selected')
+    : `${filters.categoryIds.length} selected`;
+  const sortValue = SORT_OPTIONS.find(o => o.value === filters.sort)?.label;
+
+  const openTransaction = (t) => {
+    if (isTrade(t)) {
+      const inv = investments.find(i => i.id === t.investmentId);
+      if (inv) setTradeModal({ isOpen: true, data: t, investment: inv });
+    } else {
+      setEditModal({ isOpen: true, data: t });
     }
-
-    if (filterType !== 'all') {
-      if (filterType === 'trade') {
-         result = result.filter(t => t.type === 'buy_investment' || t.type === 'sell_investment');
-      } else {
-         result = result.filter(t => t.type === filterType);
-      }
-    }
-
-    if (filterCategory !== 'all') {
-      result = result.filter(t => t.categoryId === filterCategory);
-    }
-    
-    if (filterDate) {
-       result = result.filter(t => new Date(t.date).toISOString().split('T')[0] === filterDate);
-    }
-    if (filterMonth !== 'all') {
-       result = result.filter(t => new Date(t.date).getMonth().toString() === filterMonth);
-    }
-    if (filterYear !== 'all') {
-       result = result.filter(t => new Date(t.date).getFullYear().toString() === filterYear);
-    }
-
-    result = [...result].sort((a, b) => {
-      if (sortBy === 'latest') return new Date(b.date) - new Date(a.date);
-      if (sortBy === 'oldest') return new Date(a.date) - new Date(b.date);
-      if (sortBy === 'highest') return b.amount - a.amount;
-      if (sortBy === 'lowest') return a.amount - b.amount;
-      return 0;
-    });
-
-    return result;
-  }, [transactions, searchTerm, filterType, filterCategory, sortBy, filterDate, filterMonth, filterYear]);
-
-  const uniqueYears = useMemo(() => {
-    const years = new Set(transactions.map(t => new Date(t.date).getFullYear()));
-    return Array.from(years).sort((a,b) => b - a);
-  }, [transactions]);
-
-  const clearAllFilters = () => {
-    setFilterType('all');
-    setFilterCategory('all');
-    setSortBy('latest');
-    setFilterDate('');
-    setFilterMonth('all');
-    setFilterYear('all');
   };
 
-  return (
-    <main className="pt-24 pb-32 px-4 sm:px-6 max-w-7xl mx-auto min-h-screen w-full">
-      <div className="mb-6 md:mb-10">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
-          <div>
-            <span className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-2 block">Ledger Overview</span>
-            <h1 className="font-headline font-extrabold text-4xl md:text-5xl text-on-surface tracking-tight">History</h1>
-          </div>
-          <div className="bg-surface-container-low rounded-xl p-4 flex items-center gap-6 shadow-sm border border-outline-variant/10">
-            <div className="flex flex-col">
-              <span className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Total Monthly Spent</span>
-              <span className="text-xl sm:text-2xl font-headline font-bold text-primary break-words">{formatCurrency(monthlySpent)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+  const hasAny = transactions.length > 0;
 
-      {/* ===== MOBILE: Search + Filter Toggle ===== */}
-      <div className="md:hidden mb-4 flex flex-col gap-3">
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-          <input 
-            type="text" 
-            placeholder="Search transactions..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-3 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary"
-          />
-        </div>
-        <div className="flex gap-2">
+  return (
+    <main
+      className="pt-20 md:pt-24 pb-32 md:pb-16 px-4 sm:px-6 max-w-4xl mx-auto w-full min-h-screen"
+      style={{ '--history-sticky': `${stickyTop}px` }}
+    >
+      <HistorySummary count={filtered.length} totals={totals} scopeLabel={scopeLabel} />
+
+      {/* Toolbar: search + type tabs stay pinned under the app header while scrolling */}
+      <div
+        ref={toolbarRef}
+        data-onboarding="history-filters"
+        className="sticky top-16 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-2 lg:pt-0 bg-[#1A120B]/95 backdrop-blur-md border-b border-outline/10"
+      >
+        {/* Mobile / tablet: search + filters button above the tabs */}
+        <div className="lg:hidden flex gap-2 pb-1">
+          <SearchField value={filters.search} onChange={search => update({ search })} />
           <button
-            onClick={() => setShowMobileFilters(!showMobileFilters)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all border ${showMobileFilters ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-surface-container-low border-outline/20 text-on-surface-variant'}`}
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            aria-label={`Filters${panelFilterCount ? `, ${panelFilterCount} active` : ''}`}
+            className={`relative shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary
+              ${panelFilterCount ? 'text-primary bg-primary/10' : 'text-on-surface-variant bg-surface-container-low hover:text-on-surface'}`}
           >
-            <span className="material-symbols-outlined text-lg">tune</span>
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-primary text-on-primary text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{activeFilterCount}</span>
+            <span className="material-symbols-outlined text-[22px]">tune</span>
+            {panelFilterCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">{panelFilterCount}</span>
             )}
           </button>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="flex-1 bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface-variant">
-            <option value="latest">Latest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="highest">Highest ₹</option>
-            <option value="lowest">Lowest ₹</option>
-          </select>
         </div>
 
-        {showMobileFilters && (
-          <div className="bg-surface-container-lowest rounded-xl border border-outline/10 p-4 flex flex-col gap-3 animate-[slideDown_0.2s_ease-out]">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Filter By</span>
-              {activeFilterCount > 0 && (
-                <button onClick={clearAllFilters} className="text-[10px] text-error font-bold uppercase tracking-wider">Clear All</button>
-              )}
-            </div>
+        {/* One row: tabs on the left; on desktop the menus and search sit on the right */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <TypeTabs value={filters.type} onChange={type => update({ type })} counts={typeCounts} />
+          </div>
+          <div className="hidden lg:flex items-center gap-1 shrink-0">
+            <FilterMenuButton label="Period" value={periodValue} active={filters.period !== 'all'}>
+              {close => <PeriodMenu filters={filters} onChange={update} onDone={close} />}
+            </FilterMenuButton>
+            <FilterMenuButton label="Category" value={categoryValue} active={filters.categoryIds.length > 0}>
+              <CategoryMenu filters={filters} onChange={update} categories={categories} />
+            </FilterMenuButton>
+            <FilterMenuButton label="Sort" value={sortValue} active={filters.sort !== 'latest'} align="right">
+              {close => <SortMenu filters={filters} onChange={update} onDone={close} />}
+            </FilterMenuButton>
+            {panelFilterCount > 0 && (
+              <button type="button" onClick={resetAll} aria-label="Reset filters" title="Reset filters" className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors">
+                <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+              </button>
+            )}
+            <div className="w-56 ml-2 py-2"><SearchField compact value={filters.search} onChange={search => update({ search })} /></div>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Type</span>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
-                  <option value="all">All Types</option>
-                  <option value="expense">Expenses</option>
-                  <option value="income">Income</option>
-                  <option value="trade">Trades</option>
-                </select>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Category</span>
-                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
-                  <option value="all">All</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 min-w-0">
-              <div className="flex flex-col min-w-0 col-span-2">
-                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Date</span>
-                <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full min-w-0 box-border text-on-surface" />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Month</span>
-                <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
-                  <option value="all">Any</option>
-                  {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] uppercase text-on-surface-variant mb-1 font-bold">Year</span>
-                <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none w-full">
-                  <option value="all">Any</option>
-                  {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
-                </select>
-              </div>
-            </div>
+        {/* Mobile: active filters as removable chips (desktop shows them in the menu labels) */}
+        {chips.length > 0 && (
+          <div className="lg:hidden py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+            {chips.map(c => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => update(c.clear)}
+                aria-label={`Remove filter ${c.label}`}
+                className="shrink-0 inline-flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-full bg-surface-container text-xs font-medium text-on-surface hover:bg-surface-container-high transition-colors"
+              >
+                {c.color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} aria-hidden="true" />}
+                {c.label}
+                <span className="material-symbols-outlined text-[15px] text-on-surface-variant" aria-hidden="true">close</span>
+              </button>
+            ))}
+            <button type="button" onClick={resetAll} className="shrink-0 h-8 px-2 text-xs font-semibold text-primary hover:underline underline-offset-2">Clear all</button>
           </div>
         )}
       </div>
 
-      {/* ===== DESKTOP: Unified filter bar ===== */}
-      <section className="hidden md:block mb-8" data-onboarding="history-filters">
-        <div className="bg-surface-container-lowest rounded-2xl border border-outline/5 overflow-hidden">
-          {/* Top row: Search + Primary filters */}
-          <div className="p-5 flex items-center gap-4">
-            <div className="relative flex-1 max-w-xs">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
-              <input 
-                type="text" 
-                placeholder="Search transactions..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-surface-container-low border border-outline/20 rounded-lg py-2.5 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
-              />
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
-                <option value="all">All Types</option>
-                <option value="expense">Expenses</option>
-                <option value="income">Income</option>
-                <option value="trade">Trades (Buy/Sell)</option>
-              </select>
-              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
-                <option value="all">All Categories</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-surface-container-low border border-outline/20 rounded-lg py-2.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
-                <option value="latest">Latest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="highest">Highest Amount</option>
-                <option value="lowest">Lowest Amount</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-outline/5 mx-5" />
-
-          {/* Bottom row: Date filters */}
-          <div className="px-5 py-3 flex items-center gap-4">
-            <span className="text-[10px] uppercase text-on-surface-variant font-bold tracking-widest shrink-0">Date Filter</span>
-            <div className="flex items-center gap-3 flex-1">
-              <input type="date" value={filterDate} onChange={e => {setFilterDate(e.target.value); setFilterMonth('all'); setFilterYear('all')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer" />
-              <span className="text-[10px] text-on-surface-variant/50">or</span>
-              <select value={filterMonth} onChange={e => {setFilterMonth(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
-                <option value="all">Any Month</option>
-                {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => <option key={i} value={i.toString()}>{m}</option>)}
-              </select>
-              <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setFilterDate('')}} className="bg-surface-container-low border border-outline/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none text-on-surface hover:border-outline/40 transition-colors cursor-pointer">
-                <option value="all">Any Year</option>
-                {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
-              </select>
-            </div>
-            {(filterDate || filterMonth !== 'all' || filterYear !== 'all') && (
-              <button 
-                onClick={() => {setFilterDate(''); setFilterMonth('all'); setFilterYear('all')}}
-                className="text-xs text-error font-bold hover:underline shrink-0"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+      <div className="mt-4 lg:mt-6">
+        {/* List */}
+        <div className="min-w-0" data-onboarding="history-list">
+          {!hasAny ? (
+            <EmptyView icon="receipt_long" title="No transactions yet" text="Everything you add from the dashboard or by voice will be listed here." />
+          ) : filtered.length === 0 ? (
+            <EmptyView
+              icon="filter_alt_off"
+              title="Nothing matches these filters"
+              text="Try a wider period, fewer categories or a different search."
+              action={<button type="button" onClick={() => { setFilters(DEFAULT_FILTERS); setVisible(PAGE_SIZE); }} className="mt-5 min-h-[44px] px-5 rounded-full border border-primary/40 text-sm font-semibold text-primary hover:bg-primary/10 transition-colors">Reset filters</button>}
+            />
+          ) : (
+            <>
+              <TransactionList items={filtered.slice(0, visible)} sort={filters.sort} getCategory={getCategory} onOpen={openTransaction} />
+              {filtered.length > visible && (
+                <div className="pt-4 flex flex-col items-center gap-2">
+                  <button type="button" onClick={() => setVisible(v => v + PAGE_SIZE)} className="min-h-[44px] px-6 rounded-full bg-surface-container-low border border-outline/15 text-sm font-semibold text-on-surface hover:bg-surface-container transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    Show more
+                  </button>
+                  <span className="text-xs text-on-surface-variant tabular-nums">Showing {visible} of {filtered.length}</span>
+                </div>
+              )}
+            </>
+          )}
         </div>
-      </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12 min-w-0">
-        <div className="lg:col-span-8 flex flex-col gap-6" data-onboarding="history-list">
-          <div className="flex flex-col gap-3 md:gap-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-headline font-bold text-base md:text-lg text-on-surface-variant">
-                {filteredTransactions.length} Transactions Found
-              </h3>
-            </div>
-            {filteredTransactions.length === 0 ? (
-              <div className="text-center py-10 bg-surface-container-low rounded-xl border border-dashed border-outline/20">
-                <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-2">receipt_long</span>
-                <p className="text-outline">No transactions found matching your criteria.</p>
-              </div>
-            ) : (
-               filteredTransactions.map(t => {
-                 let cat = getCategory(t.categoryId);
-                 if (t.type === 'buy_investment' || t.type === 'sell_investment') {
-                    cat = { color: '#95CD41', icon: 'monitoring', name: 'Trade Executed' }
-                 }
+      </div>
 
-                 return (
-                  <div key={t.id} onClick={() => {
-                     if (t.type === 'buy_investment' || t.type === 'sell_investment') {
-                        const inv = investments.find(i => i.id === t.investmentId);
-                        if (inv) setTradeModal({ isOpen: true, data: t, investment: inv });
-                     } else {
-                        setEditModal({ isOpen: true, data: t });
-                     }
-                  }} className="group cursor-pointer bg-surface-container-low hover:bg-surface-container-high md:hover:scale-[1.01] active:bg-surface-container-high transition-all rounded-lg p-3 sm:p-5 flex flex-row items-center justify-between gap-3 md:gap-4 border border-transparent hover:border-primary/20">
-                    <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
-                      <div className="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 rounded-xl md:rounded-2xl flex items-center justify-center" style={{ backgroundColor: cat?.color || '#3D332B', color: getContrastingColor(cat?.color || '#3D332B') }}>
-                        <span className="material-symbols-outlined">{cat?.icon || 'receipt'}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="font-headline font-bold text-sm md:text-base text-on-surface truncate">{t.title}</h4>
-                        <p className="text-[11px] md:text-xs text-outline font-medium truncate">{cat?.name || 'Uncategorized'} • {new Date(t.date).toLocaleDateString('en-IN')}</p>
-                        {t.notes && <p className="text-xs text-on-surface-variant mt-1 italic line-clamp-2 break-words">"{t.notes}"</p>}
-                      </div>
-                    </div>
-                      <div className="text-right flex flex-col items-end shrink-0">
-                        <span className={`block whitespace-nowrap font-headline font-extrabold text-sm sm:text-lg ${(t.type === 'expense' || t.type === 'buy_investment') ? 'text-on-surface' : 'text-[#95CD41]'}`}>
-                          {(t.type === 'expense' || t.type === 'buy_investment') ? '-' : '+'}{formatCurrency(t.amount)}
-                        </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline group-hover:text-primary transition-colors hidden md:flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100">
-                         Edit <span className="material-symbols-outlined text-[10px]">edit</span>
-                      </span>
-                    </div>
-                  </div>
-                 )
-               })
-            )}
+      {/* Mobile / tablet filters: bottom sheet */}
+      <Modal
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title="Filters"
+        footer={(
+          <div className="flex gap-2">
+            <button type="button" onClick={resetAll} disabled={!panelFilterCount} className="min-h-[48px] px-5 rounded-full text-sm font-semibold text-on-surface-variant hover:text-on-surface disabled:opacity-40 transition-colors">
+              Reset
+            </button>
+            <button type="button" onClick={() => setSheetOpen(false)} className="flex-1 min-h-[48px] rounded-full bg-primary-container text-on-primary font-manrope font-bold text-[15px] hover:brightness-110 active:translate-y-px transition-[filter,transform]">
+              Show {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+            </button>
           </div>
-        </div>
-      </section>
-
-      <Modal isOpen={editModal.isOpen} onClose={() => setEditModal({ isOpen: false, data: null})} title="Edit Transaction">
-        <AddTransactionForm initialData={editModal.data} onClose={() => setEditModal({isOpen: false, data: null})} />
+        )}
+      >
+        <FilterPanel filters={filters} onChange={update} categories={categories} />
       </Modal>
 
-      <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({isOpen: false, data: null})} title="Edit Trade">
-         {tradeModal.data && <InvestmentTradeForm initialTradeData={tradeModal.data} investment={tradeModal.investment} onClose={() => setTradeModal({isOpen: false, data: null})} />}
+      <Modal isOpen={editModal.isOpen} onClose={() => setEditModal({ isOpen: false, data: null })} title="Edit transaction">
+        <AddTransactionForm initialData={editModal.data} onClose={() => setEditModal({ isOpen: false, data: null })} />
+      </Modal>
+
+      <Modal isOpen={tradeModal.isOpen} onClose={() => setTradeModal({ isOpen: false, data: null, investment: null })} title="Edit trade">
+        {tradeModal.data && <InvestmentTradeForm initialTradeData={tradeModal.data} investment={tradeModal.investment} onClose={() => setTradeModal({ isOpen: false, data: null, investment: null })} />}
       </Modal>
 
       <FeatureTour section="history" />
-
-      <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </main>
   );
 };
+
+const SearchField = ({ value, onChange, compact }) => (
+  <label className="relative flex-1 min-w-0 block">
+    <span className="sr-only">Search transactions</span>
+    <span className={`material-symbols-outlined absolute top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none ${compact ? 'left-3 text-[18px]' : 'left-3.5 text-[20px]'}`} aria-hidden="true">search</span>
+    <input
+      type="search"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={compact ? 'Search' : 'Search title or notes'}
+      className={`w-full rounded-full bg-surface-container-low border border-transparent text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary/50 transition-colors [&::-webkit-search-cancel-button]:hidden
+        ${compact ? 'h-9 pl-9 pr-8 text-[13px]' : 'h-11 pl-11 pr-10 text-[15px]'}`}
+    />
+    {value && (
+      <button type="button" onClick={() => onChange('')} aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface">
+        <span className="material-symbols-outlined text-[16px]">close</span>
+      </button>
+    )}
+  </label>
+);
+
+const EmptyView = ({ icon, title, text, action }) => (
+  <div className="py-16 md:py-24 flex flex-col items-center text-center">
+    <span className="w-14 h-14 rounded-full bg-surface-container-low border border-outline/10 flex items-center justify-center text-on-surface-variant">
+      <span className="material-symbols-outlined text-[26px]" aria-hidden="true">{icon}</span>
+    </span>
+    <p className="mt-4 font-manrope font-bold text-lg text-on-surface">{title}</p>
+    <p className="mt-1 max-w-xs text-sm text-on-surface-variant">{text}</p>
+    {action}
+  </div>
+);
 
 export default TransactionsScreen;
