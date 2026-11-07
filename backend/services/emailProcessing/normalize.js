@@ -5,8 +5,45 @@
  */
 const { simpleParser } = require('mailparser');
 const { emailBodyText, extractDomain, isBankDomain } = require('../gmailScanner');
+const { rootDomainFor } = require('./institutions');
 
 const MAX_TEXT = 20000;
+
+// Gmail adds its own Authentication-Results header at the top of every message it
+// receives. A sender can put any number of fake ones further down, so only the
+// topmost header from Gmail's server is trusted.
+const GMAIL_AUTHSERV = /^\s*mx\.google\.com\s*;/i;
+
+// Same organization: both resolve to the same root bank domain
+// ("statements.hdfcbank.net" and "hdfcbank.net"). A bare suffix like "net" or
+// "bank.in" never matches a bank's root.
+const sameOrg = (a, b) => !!a && !!b && rootDomainFor(a) === rootDomainFor(b);
+
+/**
+ * True only if Gmail verified that the From domain really sent the message:
+ * DMARC passed for that domain, or a DKIM signature from that domain (or a
+ * parent/subdomain of it) passed. A valid DKIM signature from some other domain
+ * (e.g. the attacker's own) doesn't count.
+ */
+const isAuthenticatedFrom = (headerLines, fromDomain) => {
+  if (!fromDomain) return false;
+  const first = (headerLines || []).find(h => h.key === 'authentication-results');
+  if (!first) return false;
+  const value = first.line.replace(/^[^:]*:/, '').replace(/\r?\n[ \t]+/g, ' ');
+  if (!GMAIL_AUTHSERV.test(value)) return false;
+  const results = value.toLowerCase().split(';').map(s => s.trim());
+
+  const dmarc = results.find(r => r.startsWith('dmarc='));
+  if (dmarc && /^dmarc=pass\b/.test(dmarc)) {
+    const from = dmarc.match(/header\.from=([a-z0-9.-]+)/);
+    if (from && sameOrg(from[1], fromDomain)) return true;
+  }
+  return results.some(r => {
+    if (!/^dkim=pass\b/.test(r)) return false;
+    const signer = r.match(/header\.(?:i=[^@\s]*@|d=)([a-z0-9.-]+)/);
+    return !!signer && sameOrg(signer[1], fromDomain);
+  });
+};
 
 const normalizeText = (s) => String(s || '')
   .replace(/[\u200b-\u200d\ufeff]/g, '')
@@ -24,9 +61,6 @@ const normalizeEmail = async (raw, { messageId = null, receivedAt = null } = {})
   const from = parsed.from?.value?.[0] || {};
   const fromAddr = String(from.address || '').toLowerCase();
   const domain = extractDomain(fromAddr);
-  // Gmail stamps every message with Authentication-Results. DKIM or DMARC must
-  // pass, otherwise a forged "From: x@hdfcbank.com" could plant fake data.
-  const authResults = [].concat(parsed.headers.get('authentication-results') || []).join(' ').toLowerCase();
   const date = parsed.date && !isNaN(parsed.date) ? parsed.date : (receivedAt || new Date());
 
   return Object.freeze({
@@ -36,11 +70,12 @@ const normalizeEmail = async (raw, { messageId = null, receivedAt = null } = {})
     fromName: String(from.name || '').slice(0, 200),
     domain,
     knownSender: isBankDomain(domain),
-    authenticated: /\b(dmarc|dkim)=pass\b/.test(authResults),
+    // Forged "From: x@hdfcbank.com" emails must not be turned into data.
+    authenticated: isAuthenticatedFrom(parsed.headerLines, domain),
     date,
     receivedAt: receivedAt || date,
     text: normalizeText(emailBodyText(parsed)).slice(0, MAX_TEXT),
   });
 };
 
-module.exports = { normalizeEmail, normalizeText };
+module.exports = { normalizeEmail, normalizeText, isAuthenticatedFrom };

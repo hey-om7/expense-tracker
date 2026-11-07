@@ -3,7 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const UserPreferences = require('../models/UserPreferences');
 const { maskKey, isMaskedKey } = require('../utils/security');
-const { encryptSecret, revealSecret, isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
+const { encryptSecret, revealSecret, contexts, isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 const { listGroqModels, isValidModelId, resolveModel } = require('../services/aiService');
 const { userLimiter } = require('../utils/rateLimits');
 
@@ -13,7 +13,7 @@ const toPublic = (prefs) => ({
   aiModel: resolveModel(prefs.aiModel),
   emailAlertsEnabled: prefs.emailAlertsEnabled,
   aiEmailProcessingEnabled: prefs.aiEmailProcessingEnabled === true,
-  groqApiKey: maskKey(revealSecret(prefs.groqApiKey)),
+  groqApiKey: maskKey(revealSecret(prefs.groqApiKey, contexts.groqKey(prefs.userId))),
 });
 
 // undefined = leave unchanged (masked value echoed back), otherwise a cleaned string.
@@ -33,6 +33,7 @@ router.get('/', async (req, res) => {
     // If none exist, return default values
     if (!prefs) {
       prefs = {
+        userId: req.userId,
         aiEnabled: true,
         groqApiKey: '',
         emailAlertsEnabled: true,
@@ -57,7 +58,7 @@ router.post(
       let apiKey = cleanKey(req.body?.apiKey);
       if (!apiKey) {
         const prefs = await UserPreferences.findOne({ userId: req.userId }).select('groqApiKey').lean();
-        apiKey = revealSecret(prefs?.groqApiKey);
+        apiKey = revealSecret(prefs?.groqApiKey, contexts.groqKey(req.userId));
       }
       if (!apiKey) return res.status(400).json({ message: 'Enter a Groq API key first.' });
 
@@ -94,7 +95,7 @@ router.put('/', async (req, res) => {
     if (groq && !isEncryptionConfigured()) {
       return res.status(503).json({ message: 'Saving API keys is not configured on the server.' });
     }
-    if (groq !== undefined) update.groqApiKey = encryptSecret(groq);
+    if (groq !== undefined) update.groqApiKey = encryptSecret(groq, contexts.groqKey(req.userId));
 
     const prefs = await UserPreferences.findOneAndUpdate(
       { userId: req.userId },

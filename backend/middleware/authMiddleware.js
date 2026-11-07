@@ -4,8 +4,11 @@ const { readCookie, SESSION_COOKIE } = require('../utils/session');
 
 // Simple in-memory cache to avoid hitting DB on every request
 // Key: userId, Value: { valid: boolean, checkedAt: timestamp }
+// Kept short: logout / password reset on another server instance only takes effect
+// here once the entry expires, and until then a stolen session still works
+// (including Gmail scans and Gmail-derived data).
 const userCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 30 * 1000; // 30 seconds
 
 const auth = async (req, res, next) => {
   try {

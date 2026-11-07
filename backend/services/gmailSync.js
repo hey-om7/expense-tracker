@@ -23,7 +23,7 @@ const pipeline = require('./emailProcessing');
 const { rootDomainFor, PAYMENT_SUGGESTION_DOMAINS } = require('./emailProcessing/institutions');
 const { applyLatestToCard } = pipeline.sinks;
 const { sendEmail } = require('./emailService');
-const { encrypt, decrypt, revealSecret } = require('../utils/tokenCrypto');
+const { encrypt, decrypt, needsUpgrade, revealSecret, contexts } = require('../utils/tokenCrypto');
 const { escapeHtml } = require('../utils/security');
 
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -84,10 +84,11 @@ const reparseStaleSuggestions = async (client, conn) => {
 // The user's saved preference decides the processing method on every job.
 // Read from the database, never from the request.
 const loadProcessingPrefs = (userId) =>
-  UserPreferences.findOne({ userId }).select('aiEmailProcessingEnabled groqApiKey').lean();
+  UserPreferences.findOne({ userId }).select('userId aiEmailProcessingEnabled groqApiKey').lean();
 
 // Groq key for AI processing: server key first, else the user's own key from Settings.
-const groqKeyFrom = (prefs) => process.env.GROQ_API_KEY || revealSecret(prefs?.groqApiKey).trim() || null;
+const groqKeyFrom = (prefs) => process.env.GROQ_API_KEY ||
+  (prefs ? revealSecret(prefs.groqApiKey, contexts.groqKey(prefs.userId)).trim() : '') || null;
 
 const isOAuthConfigured = () =>
   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GMAIL_OAUTH_REDIRECT_URI);
@@ -117,12 +118,20 @@ const completeConnection = async (userId, code) => {
   client.setCredentials(tokens);
   const { data: profile } = await client.request({ url: `${GMAIL_API}/profile` });
 
+  // Reconnecting issues a new refresh token; the old one stays valid at Google
+  // until revoked, so revoke it instead of just overwriting it.
+  const previous = await GmailConnection.findOne({ userId }).select('+refreshTokenEnc userId').lean();
+  if (previous?.refreshTokenEnc) {
+    const old = readRefreshToken(previous);
+    if (old && old !== tokens.refresh_token) await revokeOnce(old);
+  }
+
   return GmailConnection.findOneAndUpdate(
     { userId },
     {
       $set: {
         gmailAddress: String(profile.emailAddress || '').toLowerCase(),
-        refreshTokenEnc: encrypt(tokens.refresh_token),
+        refreshTokenEnc: encrypt(tokens.refresh_token, contexts.gmailRefresh(userId)),
         status: 'active',
         lastEmailDate: null,
         backfillStatus: 'pending',
@@ -138,7 +147,13 @@ const clientForConnection = async (connectionId) => {
   if (!conn) throw new Error('Gmail connection not found');
   let refreshToken;
   try {
-    refreshToken = decrypt(conn.refreshTokenEnc);
+    refreshToken = decrypt(conn.refreshTokenEnc, contexts.gmailRefresh(conn.userId));
+    if (needsUpgrade(conn.refreshTokenEnc)) {
+      // Re-encrypt legacy tokens bound to their owner (see utils/tokenCrypto).
+      await GmailConnection.updateOne({ _id: conn._id, refreshTokenEnc: conn.refreshTokenEnc }, {
+        $set: { refreshTokenEnc: encrypt(refreshToken, contexts.gmailRefresh(conn.userId)) },
+      });
+    }
   } catch (err) {
     // Token was encrypted with a different GMAIL_TOKEN_ENCRYPTION_KEY. It can never be
     // read again, so ask the user to reconnect instead of failing silently on every sync.
@@ -152,16 +167,38 @@ const clientForConnection = async (connectionId) => {
   return { conn, client };
 };
 
-// Revoke Google access and delete the stored token. Saved statements are kept.
-const disconnect = async (userId) => {
-  const conn = await GmailConnection.findOne({ userId }).select('+refreshTokenEnc');
-  if (!conn) return;
+const readRefreshToken = (conn) => {
+  try { return decrypt(conn.refreshTokenEnc, contexts.gmailRefresh(conn.userId)); } catch { return null; }
+};
+
+// Google answers 400 invalid_token when the token is already revoked or expired.
+const isDeadTokenError = (err) =>
+  err.response?.status === 400 || /invalid_token|invalid_grant/i.test(err.message || '');
+
+// One attempt to revoke at Google. Never stores the token for a retry: the caller
+// deletes it either way, so we don't hold secrets the user asked us to remove.
+// Returns false only when Google couldn't be reached (access may still be live).
+const revokeOnce = async (refreshToken) => {
   try {
-    await newOAuthClient().revokeToken(decrypt(conn.refreshTokenEnc));
+    await newOAuthClient().revokeToken(refreshToken);
+    return true;
   } catch (err) {
-    console.warn('Gmail token revoke failed (deleting anyway):', err.message);
+    if (isDeadTokenError(err)) return true;
+    console.warn('Gmail token revoke failed; token deleted locally, user told to revoke manually:', err.message);
+    return false;
   }
+};
+
+// Revoke Google access and delete the stored token. Saved statements are kept.
+// Returns false when Google couldn't be reached; the token is deleted anyway.
+const disconnect = async (userId) => {
+  const conn = await GmailConnection.findOne({ userId }).select('+refreshTokenEnc userId');
+  if (!conn) return true;
+  const token = readRefreshToken(conn);
+  // An unreadable token can't be revoked here, so the user is told to do it manually.
+  const revoked = token ? await revokeOnce(token) : false;
   await GmailConnection.deleteOne({ _id: conn._id });
+  return revoked;
 };
 
 const listMessageIds = async (client, since) => {

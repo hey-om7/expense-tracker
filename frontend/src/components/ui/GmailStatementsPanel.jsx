@@ -123,8 +123,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const handleDisconnect = () => {
     if (!window.confirm('Disconnect Gmail? Wallo will lose access to your email. Statements already saved are kept.')) return;
     run('disconnect', async () => {
-      await api.disconnectGmail();
-      setBanner({ ok: true, text: 'Gmail disconnected.' });
+      const res = await api.disconnectGmail();
+      setBanner({ ok: true, text: res?.message || 'Gmail disconnected.' });
       await load();
     });
   };

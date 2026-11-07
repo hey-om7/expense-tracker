@@ -273,10 +273,24 @@ mongoose.connect(MONGO_URI, {
   });
 
 // ─── Catch unhandled rejections ───
+// Log only name/message/stack. Full error objects from HTTP clients can carry
+// request headers and bodies (Bearer tokens, OAuth refresh tokens, client secret).
+const SECRET_PATTERNS = [
+  [/\bya29\.[\w-]+/g, '[redacted]'],                   // Google access tokens
+  [/\b1\/\/[\w-]{20,}/g, '[redacted]'],                // Google refresh tokens
+  [/\bGOCSPX-[\w-]+/g, '[redacted]'],                  // Google client secrets
+  [/\bgsk_\w{20,}/g, '[redacted]'],                    // Groq keys
+  [/(bearer\s+)[\w.~+/-]{16,}/gi, '$1[redacted]'],
+  [/((?:refresh_token|access_token|client_secret|password)["']?\s*[:=]\s*["']?)[^\s"'&,}]+/gi, '$1[redacted]'],
+];
+const safeError = (e) => {
+  const text = e instanceof Error ? `${e.name}: ${e.message}\n${e.stack || ''}` : String(e);
+  return SECRET_PATTERNS.reduce((s, [re, rep]) => s.replace(re, rep), text);
+};
 process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
+  console.error('Unhandled Rejection:', safeError(reason));
 });
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  console.error('Uncaught Exception:', safeError(err));
   process.exit(1);
 });

@@ -118,7 +118,8 @@ export const fetchExpenseSuggestions = () => request('/gmail/suggestions');
 export const resolveExpenseSuggestion = (ids, state = 'used', transactionId) =>
   request('/gmail/suggestions/resolve', { method: 'POST', body: { ids, state, transactionId } });
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
-export const parseSpokenTransaction = (transcript) => request('/ai/parse-transaction', { method: 'POST', body: { transcript } });
+export const parseSpokenTransaction = (transcript, alternatives = []) =>
+  request('/ai/parse-transaction', { method: 'POST', body: { transcript, alternatives } });
 
 // ─── Onboarding ───
 export const fetchOnboarding = () => request('/onboarding');

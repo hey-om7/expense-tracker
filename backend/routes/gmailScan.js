@@ -152,8 +152,12 @@ router.post('/scan-bills', scanLimiter, async (req, res) => {
 
 router.post('/disconnect', async (req, res) => {
   try {
-    await gmail.disconnect(req.userId);
-    res.json({ message: 'Gmail disconnected. Wallo can no longer read your email.' });
+    const revoked = await gmail.disconnect(req.userId);
+    res.json({
+      message: revoked
+        ? 'Gmail disconnected. Wallo can no longer read your email.'
+        : "Gmail disconnected here, but Google couldn't be reached to cancel access. Wallo will keep retrying; you can also remove Wallo at myaccount.google.com/permissions.",
+    });
   } catch (err) {
     res.status(500).json({ message: 'Failed to disconnect Gmail' });
   }

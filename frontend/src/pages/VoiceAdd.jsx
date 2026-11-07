@@ -14,6 +14,33 @@ const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecogni
 
 const EXAMPLES = ['"Spent 250 on lunch at Swiggy"', '"Paid 1200 for petrol by card yesterday"', '"Got 50,000 salary today"'];
 
+const LANGUAGES = [
+  { code: 'en-IN', label: 'English (India)' },
+  { code: 'hi-IN', label: 'Hindi / Hinglish' },
+  { code: 'en-US', label: 'English (US)' },
+];
+const LANG_KEY = 'vestor_voice_lang';
+const MAX_ALTERNATIVES = 4;
+// Stop after this much silence once something has been heard.
+const SILENCE_MS = 2000;
+// Android Chrome's continuous mode repeats earlier words in later results, so
+// there we keep the one-phrase mode, which stops at the first pause.
+const CONTINUOUS = typeof navigator !== 'undefined' && !/Android/i.test(navigator.userAgent);
+
+// Builds up to MAX_ALTERNATIVES full-sentence readings from per-phrase guesses:
+// reading k uses guess k for one phrase and the top guess for the rest.
+const buildReadings = (segments) => {
+  const best = segments.map(s => s[0]).join(' ').replace(/\s+/g, ' ').trim();
+  const readings = [best];
+  segments.forEach((alts, i) => {
+    alts.slice(1).forEach(alt => {
+      const r = segments.map((s, j) => (j === i ? alt : s[0])).join(' ').replace(/\s+/g, ' ').trim();
+      if (r && !readings.includes(r)) readings.push(r);
+    });
+  });
+  return { best, alternatives: readings.slice(1, MAX_ALTERNATIVES + 1) };
+};
+
 const VoiceAdd = () => {
   // idle | listening | thinking | error | saved
   const [phase, setPhase] = useState('idle');
@@ -24,17 +51,23 @@ const VoiceAdd = () => {
   const [typed, setTyped] = useState('');
   const [showTyping, setShowTyping] = useState(!SpeechRecognition);
   const recRef = useRef(null);
-  const finalRef = useRef('');
+  const segmentsRef = useRef([]); // one array of guesses per finished phrase
   const endedRef = useRef(false);
+  const silenceRef = useRef(null);
+  const [lang, setLang] = useState(() => {
+    const saved = typeof localStorage !== 'undefined' && localStorage.getItem(LANG_KEY);
+    return LANGUAGES.some(l => l.code === saved) ? saved : 'en-IN';
+  });
+  const changeLang = (code) => { setLang(code); localStorage.setItem(LANG_KEY, code); };
 
-  const understand = useCallback(async (text) => {
+  const understand = useCallback(async (text, alternatives = []) => {
     const clean = text.trim();
     if (!clean) { setPhase('idle'); return; }
     setTranscript(clean);
     setPhase('thinking');
     setError('');
     try {
-      const fields = await api.parseSpokenTransaction(clean);
+      const fields = await api.parseSpokenTransaction(clean, alternatives);
       setPrefill({ ...fields, _at: Date.now() }); // new object each time so the form re-applies it
       setPhase('idle');
     } catch (err) {
@@ -43,45 +76,63 @@ const VoiceAdd = () => {
     }
   }, []);
 
-  const stop = () => recRef.current?.stop();
+  const stop = () => { clearTimeout(silenceRef.current); recRef.current?.stop(); };
 
   const start = () => {
     if (!SpeechRecognition) { setShowTyping(true); return; }
     setError('');
     setTranscript('');
     setSavedLabel('');
-    finalRef.current = '';
+    segmentsRef.current = [];
 
     const rec = new SpeechRecognition();
-    rec.lang = 'en-IN';
+    rec.lang = lang;
     rec.interimResults = true;
-    rec.continuous = false;
-    rec.maxAlternatives = 1;
+    rec.continuous = CONTINUOUS;
+    rec.maxAlternatives = MAX_ALTERNATIVES;
+
+    // In continuous mode the browser never stops on its own; end after a pause.
+    const armSilenceTimer = () => {
+      if (!CONTINUOUS) return;
+      clearTimeout(silenceRef.current);
+      silenceRef.current = setTimeout(() => recRef.current?.stop(), SILENCE_MS);
+    };
 
     rec.onresult = (e) => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i += 1) {
         const r = e.results[i];
-        if (r.isFinal) finalRef.current += r[0].transcript;
-        else interim += r[0].transcript;
+        if (r.isFinal) {
+          const guesses = Array.from(r, a => a.transcript.trim()).filter(Boolean);
+          if (guesses.length) segmentsRef.current[i] = guesses;
+        } else {
+          interim += r[0].transcript;
+        }
       }
-      setTranscript((finalRef.current + interim).trim());
+      const finalText = segmentsRef.current.filter(Boolean).map(s => s[0]).join(' ');
+      setTranscript(`${finalText} ${interim}`.replace(/\s+/g, ' ').trim());
+      armSilenceTimer();
     };
     rec.onerror = (e) => {
+      clearTimeout(silenceRef.current);
       recRef.current = null;
       endedRef.current = true;
       if (e.error === 'aborted') { setPhase('idle'); return; }
       setError(e.error === 'not-allowed' || e.error === 'service-not-allowed'
         ? 'Microphone access is blocked. Allow it in your browser settings, or type instead.'
-        : e.error === 'no-speech' ? "I didn't hear anything. Tap and try again." : 'Voice input failed. Try again or type instead.');
+        : e.error === 'no-speech' ? "I didn't hear anything. Tap and try again."
+        : e.error === 'language-not-supported' ? 'This browser can\'t recognize the selected language. Pick another one.'
+        : 'Voice input failed. Try again or type instead.');
       setPhase('error');
     };
     rec.onend = () => {
+      clearTimeout(silenceRef.current);
       recRef.current = null;
       if (endedRef.current) return; // onerror already handled it
-      const text = finalRef.current.trim();
-      if (text) understand(text);
-      else setPhase('idle');
+      const segments = segmentsRef.current.filter(Boolean);
+      if (!segments.length) { setPhase('idle'); return; }
+      const { best, alternatives } = buildReadings(segments);
+      understand(best, alternatives);
     };
 
     recRef.current = rec;
@@ -90,7 +141,7 @@ const VoiceAdd = () => {
     try { rec.start(); } catch { setPhase('idle'); }
   };
 
-  useEffect(() => () => recRef.current?.abort(), []);
+  useEffect(() => () => { clearTimeout(silenceRef.current); recRef.current?.abort(); }, []);
 
   const onMic = () => {
     if (phase === 'listening') stop();
@@ -130,10 +181,24 @@ const VoiceAdd = () => {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <p className="text-xs uppercase tracking-widest font-bold text-on-surface-variant flex items-center gap-1.5 mb-10">
+        <p className="text-xs uppercase tracking-widest font-bold text-on-surface-variant flex items-center gap-1.5 mb-3">
           <span className="material-symbols-outlined text-sm text-primary">auto_awesome</span>
           Voice add
         </p>
+        {SpeechRecognition && (
+          <label className="mb-7 flex items-center gap-2 text-xs text-on-surface-variant">
+            <span className="material-symbols-outlined text-sm">translate</span>
+            <span className="sr-only">Speech language</span>
+            <select
+              value={lang}
+              onChange={(e) => changeLang(e.target.value)}
+              disabled={listening || thinking}
+              className="bg-surface-container-lowest border border-outline/20 rounded-lg py-1.5 px-2 text-on-surface text-xs focus:outline-none focus:border-primary disabled:opacity-50"
+            >
+              {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          </label>
+        )}
 
         {/* Mic button */}
         <div className="relative flex items-center justify-center w-64 h-64">

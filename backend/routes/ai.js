@@ -10,7 +10,7 @@ const CreditCard = require('../models/CreditCard');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const UserPreferences = require('../models/UserPreferences');
-const { revealSecret } = require('../utils/tokenCrypto');
+const { revealSecret, contexts } = require('../utils/tokenCrypto');
 const { userLimiter } = require('../utils/rateLimits');
 
 router.use(auth);
@@ -31,7 +31,7 @@ router.post('/chat', async (req, res) => {
     // Check settings
     let prefs = await UserPreferences.findOne({ userId: req.userId }).lean();
     if (!prefs) prefs = { aiEnabled: true, groqApiKey: '' };
-    const groqApiKey = revealSecret(prefs.groqApiKey);
+    const groqApiKey = revealSecret(prefs.groqApiKey, contexts.groqKey(req.userId));
 
     if (!prefs.aiEnabled) {
       return res.status(403).json({ message: 'AI Chatbot is disabled in settings.' });
@@ -122,11 +122,17 @@ router.post('/parse-transaction', async (req, res) => {
     const transcript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
     if (!transcript) return res.status(400).json({ message: 'Say something like "Spent 250 on lunch"' });
     if (transcript.length > 500) return res.status(400).json({ message: 'That was too long. Try one expense at a time.' });
+    // Optional extra guesses from the browser's speech recognizer.
+    const alternatives = (Array.isArray(req.body?.alternatives) ? req.body.alternatives : [])
+      .filter(a => typeof a === 'string')
+      .map(a => a.trim().slice(0, 500))
+      .filter(Boolean)
+      .slice(0, 5);
 
     const prefs = (await UserPreferences.findOne({ userId: req.userId }).lean()) || { aiEnabled: true };
     if (prefs.aiEnabled === false) return res.status(403).json({ message: 'AI is disabled in Settings.' });
     const modelName = resolveModel(prefs.aiModel);
-    const apiKey = revealSecret(prefs.groqApiKey);
+    const apiKey = revealSecret(prefs.groqApiKey, contexts.groqKey(req.userId));
     if (!apiKey || !apiKey.trim()) {
       return res.status(403).json({ message: 'Please add your Groq API key in Settings to use voice add.' });
     }
@@ -135,7 +141,7 @@ router.post('/parse-transaction', async (req, res) => {
     const tz = 'Asia/Kolkata';
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
 
-    const ai = await parseSpokenTransaction(transcript, { categories, today, model: modelName, apiKey });
+    const ai = await parseSpokenTransaction(transcript, { categories, today, alternatives, model: modelName, apiKey });
 
     // Never trust the model's output: coerce every field.
     const type = ai?.type === 'income' ? 'income' : 'expense';
