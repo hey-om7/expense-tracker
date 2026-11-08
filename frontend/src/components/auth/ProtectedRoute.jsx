@@ -9,6 +9,9 @@ const ProtectedRoute = ({ children }) => {
   const location = useLocation();
 
   if (loading) {
+    if (window.location.pathname === '/voice') {
+      return <div className="min-h-[100dvh] bg-[#1a120b]" aria-busy="true" />;
+    }
     if (window.location.pathname === '/transactions') {
       return <HistorySkeleton />;
     }

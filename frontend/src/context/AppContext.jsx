@@ -5,14 +5,16 @@ import HistorySkeleton from '../components/ui/skeletons/HistorySkeleton';
 
 const AppContext = createContext();
 
-export const AppProvider = ({ children }) => {
+// `lite` (used by /voice): load only categories, don't block the first render,
+// and fetch past transactions on demand via ensureTransactions().
+export const AppProvider = ({ children, lite = false }) => {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [investments, setInvestments] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [creditCards, setCreditCards] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!lite);
   const [error, setError] = useState(null);
 
   // ─── Normalize Mongo _id → id for frontend consistency ───
@@ -23,8 +25,30 @@ export const AppProvider = ({ children }) => {
   };
   const normalizeList = (list) => Array.isArray(list) ? list.map(normalize) : [];
 
+  // ─── Lite mode: past transactions are fetched once, only when asked for ───
+  const txPromiseRef = React.useRef(null);
+  const ensureTransactions = useCallback(() => {
+    if (!txPromiseRef.current) {
+      txPromiseRef.current = api.fetchTransactions()
+        .then(txs => setTransactions(prev => {
+          // Keep anything added on this page before the list arrived
+          const loaded = normalizeList(txs);
+          const ids = new Set(loaded.map(t => t.id));
+          return [...prev.filter(t => !ids.has(t.id)), ...loaded];
+        }))
+        .catch(err => { txPromiseRef.current = null; console.warn('Failed to load transactions:', err); });
+    }
+    return txPromiseRef.current;
+  }, []);
+
   // ─── Initial Data Load ───
   useEffect(() => {
+    if (lite) {
+      api.fetchCategories()
+        .then(cats => setCategories(normalizeList(cats)))
+        .catch(err => console.warn('Failed to load categories:', err));
+      return;
+    }
     const loadAll = async () => {
       try {
         setLoading(true);
@@ -74,7 +98,7 @@ export const AppProvider = ({ children }) => {
       }
     };
     loadAll();
-  }, []);
+  }, [lite]);
 
   // ─── Aggregate Data ───
   const totalBalance = transactions.reduce((acc, curr) => {
@@ -400,7 +424,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       transactions, categories, investments: derivedInvestments, notifications, subscriptions, creditCards, loading,
       totalBalance, monthlySpent, totalPortfolioValue, totalInvested, totalRealizedProfit, totalUnrealizedProfit,
-      addTransaction, updateTransaction, deleteTransaction,
+      addTransaction, updateTransaction, deleteTransaction, ensureTransactions,
       addCategory, updateCategory, deleteCategory, getCategory,
       addInvestment, updateInvestment, deleteInvestment, refetchInvestments, executeTradeOnInvestment, deleteHolding,
       addSubscription, updateSubscription, deleteSubscription,

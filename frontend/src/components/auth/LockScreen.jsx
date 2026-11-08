@@ -58,10 +58,8 @@ const verifyPin = async (pin) => {
 
 // --- Initial State Helper ---
 // Checks if the user explicitly unlocked the app during this browser session
+// Locked by default on every device: with no PIN yet, the setup flow is shown.
 const getInitialLockState = () => {
-  const hasPin = !!getSavedPin();
-  if (!hasPin) return false; // If no PIN exists, don't lock on refresh (wait for timer to trigger setup)
-  
   const sessionLockState = sessionStorage.getItem('vestor_is_locked');
   if (sessionLockState === 'false') return false; // User already unlocked it in this tab
   
@@ -73,7 +71,7 @@ const LockScreen = () => {
   
   // FIX: Read from sessionStorage on initial load
   const [isLocked, setIsLocked] = useState(getInitialLockState);
-  const [isSetupMode, setIsSetupMode] = useState(false);
+  const [isSetupMode, setIsSetupMode] = useState(() => !getSavedPin());
   
   const [digits, setDigits] = useState(['', '', '', '']);
   const [confirmDigits, setConfirmDigits] = useState(['', '', '', '']);
@@ -100,9 +98,6 @@ const LockScreen = () => {
 
   const resetTimer = useCallback(() => {
     if (isLocked) return;
-    
-    // Only apply on desktop sizing
-    if (window.innerWidth <= 768) return;
 
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -119,23 +114,11 @@ const LockScreen = () => {
 
     events.forEach(event => window.addEventListener(event, handleActivity));
 
-    const handleResize = () => {
-      if (window.innerWidth <= 768 && isLocked) {
-        unlockApp();
-        if (timerRef.current) clearTimeout(timerRef.current);
-      } else if (window.innerWidth > 768 && !isLocked) {
-        resetTimer();
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-
     return () => {
       events.forEach(event => window.removeEventListener(event, handleActivity));
-      window.removeEventListener('resize', handleResize);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [resetTimer, isLocked, unlockApp]);
+  }, [resetTimer]);
 
   useEffect(() => {
     if (isLocked) {

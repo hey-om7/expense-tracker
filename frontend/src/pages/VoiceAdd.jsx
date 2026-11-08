@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Modal from '../components/ui/Modal';
 import AddTransactionForm from '../components/forms/AddTransactionForm';
 import * as api from '../services/api';
+import { useAppContext } from '../context/AppContext';
 
 /**
  * /voice — shortcut page for adding an expense by speaking.
@@ -60,9 +61,13 @@ const VoiceAdd = () => {
   });
   const changeLang = (code) => { setLang(code); localStorage.setItem(LANG_KEY, code); };
 
+  const { ensureTransactions } = useAppContext();
+
   const understand = useCallback(async (text, alternatives = []) => {
     const clean = text.trim();
     if (!clean) { setPhase('idle'); return; }
+    // Past transactions let the form reuse a category; fetch them while the AI parses.
+    ensureTransactions?.();
     setTranscript(clean);
     setPhase('thinking');
     setError('');
@@ -74,7 +79,7 @@ const VoiceAdd = () => {
       setError(err.message || "Couldn't understand that. Please try again.");
       setPhase('error');
     }
-  }, []);
+  }, [ensureTransactions]);
 
   const stop = () => { clearTimeout(silenceRef.current); recRef.current?.stop(); };
 
