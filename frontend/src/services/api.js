@@ -2,7 +2,7 @@
 const API_URL = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
 
 // Pages that work without a session; a 401 there must not bounce to /login.
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/privacy', '/terms'];
 
 const request = async (endpoint, { redirectOn401 = true, ...options } = {}) => {
   const url = `${API_URL}/api${endpoint}`;

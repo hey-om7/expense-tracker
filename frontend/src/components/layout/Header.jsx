@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import VestorLogo from '../ui/VestorLogo';
+import LegalLinks from '../legal/LegalLinks';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -12,11 +14,6 @@ const Header = () => {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
-  const getInitials = (name) => {
-    if (!name) return '?';
-    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  };
-
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
@@ -26,11 +23,7 @@ const Header = () => {
     <header className="fixed top-0 right-0 left-0 md:left-64 z-50 bg-[#1A120B]/80 backdrop-blur-xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)]">
       <div className="flex justify-between md:justify-end items-center px-6 h-16 w-full max-w-7xl mx-auto">
         <div className="flex items-center gap-3 md:hidden">
-          <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center overflow-hidden">
-            <span className="text-on-primary font-bold text-xs uppercase">
-              {user ? getInitials(user.name) : 'W'}
-            </span>
-          </div>
+          <VestorLogo className="w-8 h-8" />
           <h1 className="font-manrope font-bold text-lg tracking-tight text-[#E5BA73]">Vestor</h1>
         </div>
         <div className="flex items-center gap-2 relative">
@@ -130,6 +123,9 @@ const Header = () => {
                 <span className="material-symbols-outlined text-base">logout</span>
                 Sign Out
               </button>
+              <div className="px-4 py-3 border-t border-outline/10">
+                <LegalLinks className="text-[11px]" />
+              </div>
             </div>
           )}
         </div>

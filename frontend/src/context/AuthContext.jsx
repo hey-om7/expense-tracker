@@ -38,12 +38,13 @@ export const AuthProvider = ({ children }) => {
   }, [setUser]);
 
   // Sign-up doesn't log in: the user must verify their email first.
-  const register = useCallback(async (name, email, password) => {
-    return api.registerUser({ name, email, password });
+  const register = useCallback(async (name, email, password, termsAccepted = false) => {
+    return api.registerUser({ name, email, password, termsAccepted });
   }, []);
 
-  const googleLogin = useCallback(async (credential) => {
-    const response = await api.googleAuth({ credential });
+  // termsAccepted is only needed when this Google sign-in creates a new account.
+  const googleLogin = useCallback(async (credential, { termsAccepted = false } = {}) => {
+    const response = await api.googleAuth({ credential, termsAccepted });
     setUser(response.user);
     return response;
   }, [setUser]);

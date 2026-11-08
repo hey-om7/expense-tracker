@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LegalLinks from '../components/legal/LegalLinks';
 import { resendVerification } from '../services/api';
 
 const Login = () => {
@@ -62,6 +63,11 @@ const Login = () => {
       await googleLogin(response.credential);
       navigate(returnTo, { replace: true });
     } catch (err) {
+      // New Google users must accept the terms on the sign-up screen first.
+      if (err.code === 'TERMS_REQUIRED') {
+        navigate('/register', { state: { googleNotice: true } });
+        return;
+      }
       setError(err.message || 'Google sign-in failed');
     } finally {
       setLoading(false);
@@ -260,6 +266,7 @@ const Login = () => {
             </Link>
           </p>
         </div>
+        <LegalLinks className="justify-center mt-6" />
       </div>
 
       <style>{`

@@ -48,7 +48,7 @@ Required:
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` (set by `render.yaml`) |
-| `MONGODB_URI` | Atlas connection string, e.g. `mongodb+srv://USER:PASSWORD@cluster.xxxxx.mongodb.net/wallo?retryWrites=true&w=majority`. `MONGO_URI` is also accepted. The server won't start without one. |
+| `MONGODB_URI` | Atlas connection string, e.g. `mongodb+srv://USER:PASSWORD@cluster.xxxxx.mongodb.net/vestor?retryWrites=true&w=majority`. `MONGO_URI` is also accepted. The server won't start without one. |
 | `JWT_SECRET` | At least 32 characters. Generate: `openssl rand -hex 48` |
 | `FRONTEND_URL` | Your public URL, no trailing slash, e.g. `https://your-app.onrender.com`. Used in verification and password-reset links. |
 | `GMAIL_TOKEN_ENCRYPTION_KEY` | 64 hex characters. Generate: `openssl rand -hex 32`. Needed to save users' AI API keys and to connect Gmail. |

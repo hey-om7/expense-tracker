@@ -366,7 +366,7 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
       if (revoked) {
         await Notification.create({
           userId: conn.userId, title: '📭 Gmail disconnected',
-          message: 'Wallo can no longer read your Gmail. Reconnect it from the Bills tab to keep tracking statements.',
+          message: 'Vestor can no longer read your Gmail. Reconnect it from the Bills tab to keep tracking statements.',
           isRead: false, date: new Date(),
         });
       }
@@ -431,7 +431,7 @@ const notifyUser = async (userId, linked, pending, backfill) => {
 
   const html = `
   <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:28px 20px;background:#1A120B;color:#F1DFD3;border-radius:16px;">
-    <h1 style="color:#E5BA73;font-size:22px;margin:0 0 4px;text-align:center;">Wallo</h1>
+    <h1 style="color:#E5BA73;font-size:22px;margin:0 0 4px;text-align:center;">Vestor</h1>
     <p style="text-align:center;opacity:.6;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 20px;">${backfill ? 'Gmail connected' : 'New statements'}</p>
     <p>Hi ${escapeHtml(user.name || 'there')},</p>
     ${rows ? `<p>We found new statements for your tracked cards:</p>
@@ -441,8 +441,8 @@ const notifyUser = async (userId, linked, pending, backfill) => {
     </table>
     <p style="font-size:12px;opacity:.7;">We'll email you one day before each due date.</p>` : ''}
     ${pendingList ? `<p>We also found statements for cards you don't track yet:</p><ul style="font-size:13px;">${pendingList}</ul>
-    <p>Open the Bills tab in Wallo to add them for future tracking, or ignore them.</p>` : ''}
-    ${base ? `<p style="text-align:center;margin-top:20px;"><a href="${escapeHtml(base)}/cyclic" style="background:#E5BA73;color:#1A120B;text-decoration:none;font-weight:bold;padding:10px 20px;border-radius:10px;">Open Wallo</a></p>` : ''}
+    <p>Open the Bills tab in Vestor to add them for future tracking, or ignore them.</p>` : ''}
+    ${base ? `<p style="text-align:center;margin-top:20px;"><a href="${escapeHtml(base)}/cyclic" style="background:#E5BA73;color:#1A120B;text-decoration:none;font-weight:bold;padding:10px 20px;border-radius:10px;">Open Vestor</a></p>` : ''}
   </div>`;
 
   await sendEmail(user.email, backfill ? '💳 Gmail connected — statements found' : '💳 New credit card statements', html);

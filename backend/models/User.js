@@ -62,6 +62,17 @@ const userSchema = new mongoose.Schema({
   // Per-account brute-force protection
   failedLoginCount: { type: Number, default: 0, select: false },
   lockUntil: { type: Date, default: null, select: false },
+  // Agreement to the Terms of Service and acknowledgement of the Privacy Policy,
+  // recorded at sign-up. Missing on accounts created before this existed.
+  legalConsent: {
+    type: {
+      termsVersion: String,
+      privacyVersion: String,
+      acceptedAt: Date,
+    },
+    default: undefined,
+    select: false,
+  },
 }, { timestamps: true });
 
 // Hash password before saving

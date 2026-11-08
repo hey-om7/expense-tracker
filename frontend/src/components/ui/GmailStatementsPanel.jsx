@@ -124,7 +124,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   });
 
   const handleDisconnect = () => {
-    if (!window.confirm('Disconnect Gmail? Wallo will lose access to your email. Statements already saved are kept.')) return;
+    if (!window.confirm('Disconnect Gmail? Vestor will lose access to your email. Statements already saved are kept.')) return;
     run('disconnect', async () => {
       const res = await api.disconnectGmail();
       setBanner({ ok: true, text: res?.message || 'Gmail disconnected.' });
@@ -187,8 +187,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
             <div>
               <p className="font-bold text-on-surface text-sm">Track statements from Gmail</p>
               <p className="text-xs text-on-surface-variant mt-1">
-                With your permission, Wallo reads (never sends or deletes) credit card statement emails from known banks:
-                the last 90 days now, then new ones every day at 6 AM. You get an email one day before each due date.
+                With your permission, Vestor reads (never sends or deletes) credit card statement emails from known banks:
+                the last 90 days now, then new ones about every 30 minutes and when you open the app. You get an email one day before each due date.
                 Emails are read by built-in rules unless you turn on &quot;Allow AI to process my emails&quot; in Settings.
               </p>
             </div>
@@ -277,7 +277,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <p className="font-bold text-sm text-on-surface">Bank emails to review ({review.length})</p>
-              <p className="text-xs text-on-surface-variant mt-1">Wallo couldn&apos;t read these reliably, so nothing was recorded from them. Check them in Gmail and add anything relevant by hand.</p>
+              <p className="text-xs text-on-surface-variant mt-1">Vestor couldn&apos;t read these reliably, so nothing was recorded from them. Check them in Gmail and add anything relevant by hand.</p>
             </div>
             <button disabled={!!busy} onClick={handleDismissAllReview} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
               Dismiss all
@@ -363,8 +363,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
       <Modal isOpen={sheet === 'about'} onClose={() => setSheet(null)} title="Track bills from Gmail"
         footer={<button type="button" onClick={handleConnect} disabled={!status.available || busy === 'connect'} className="w-full min-h-[48px] rounded-full bg-primary-container text-on-primary font-manrope font-bold text-[15px] disabled:opacity-50">{busy === 'connect' ? 'Opening Google…' : status.available ? 'Connect Gmail' : 'Not configured on the server'}</button>}>
         <ul className="flex flex-col gap-3 text-sm text-on-surface-variant">
-          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">visibility</span>Wallo only reads credit card statement emails from known banks. It never sends or deletes anything.</li>
-          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">schedule</span>It reads the last 90 days now, then new emails every day at 6 AM.</li>
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">visibility</span>Vestor only reads credit card statement emails from known banks. It never sends or deletes anything.</li>
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">schedule</span>It reads the last 90 days now, then new emails about every 30 minutes and when you open the app.</li>
           <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">notifications</span>You get an email one day before each due date.</li>
           <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">rule</span>Emails are read by built-in rules unless you turn on &quot;Allow AI to process my emails&quot; in Settings.</li>
         </ul>
@@ -413,7 +413,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
 
       <Modal isOpen={sheet === 'review'} onClose={() => setSheet(null)} title="Emails to review"
         footer={<button type="button" disabled={!!busy} onClick={handleDismissAllReview} className="w-full min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface disabled:opacity-50">Dismiss all</button>}>
-        <p className="text-xs text-on-surface-variant mb-2">Wallo couldn&apos;t read these reliably, so nothing was recorded. Check them in Gmail and add anything relevant by hand.</p>
+        <p className="text-xs text-on-surface-variant mb-2">Vestor couldn&apos;t read these reliably, so nothing was recorded. Check them in Gmail and add anything relevant by hand.</p>
         <ul className="divide-y divide-outline/10">
           {review.map(e => (
             <li key={e._id} className="py-3 flex items-center gap-3">

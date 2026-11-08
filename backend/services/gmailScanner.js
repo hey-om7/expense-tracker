@@ -278,7 +278,7 @@ const isBillEmail = (subject = '', from = '') => {
   const isVerifiedBank = isBankDomain(domain);
 
   if (!isVerifiedBank) {
-    return false; // Instantly rejects Wallo summaries, random users, and spam.
+    return false; // Instantly rejects Vestor summaries, random users, and spam.
   }
 
   // 2. CONTEXT VERIFICATION (The Intent Gate)

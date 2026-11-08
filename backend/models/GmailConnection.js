@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 /**
- * A user's permission for Wallo to read their Gmail (read-only) for card statements.
+ * A user's permission for Vestor to read their Gmail (read-only) for card statements.
  * The refresh token is AES-256-GCM encrypted and never leaves the server.
  */
 const gmailConnectionSchema = new mongoose.Schema({

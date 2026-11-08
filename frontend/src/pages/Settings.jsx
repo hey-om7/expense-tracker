@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { fetchSettings, updateSettings, fetchGroqModels, peekCache } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { useOnboarding } from '../context/OnboardingContext';
@@ -444,7 +444,7 @@ const SettingsScreen = () => {
               <span id="aiEmailProcessingHelp" className="block text-xs text-on-surface-variant max-w-md">
                 When on, financial emails from your connected Gmail are analyzed with AI (Groq) for better classification
                 and transaction extraction. Card and account numbers are masked first. When off, emails are read only
-                by Wallo&apos;s built-in rules and never sent to an AI service.
+                by Vestor&apos;s built-in rules and never sent to an AI service.
               </span>
             </div>
             <Toggle
@@ -495,6 +495,27 @@ const SettingsScreen = () => {
 
       {/* Tutorial & Help Section */}
       <TutorialSection />
+
+      {/* Privacy & Legal */}
+      <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8 mt-8" aria-labelledby="settings-legal-title">
+        <div className="flex items-center gap-3 mb-6">
+          <span className="material-symbols-outlined text-primary text-3xl" aria-hidden="true">policy</span>
+          <h2 id="settings-legal-title" className="font-headline font-bold text-xl text-on-surface">Privacy & Legal</h2>
+        </div>
+        <p className="text-xs text-on-surface-variant max-w-xl mb-5">
+          What Vestor collects, how Gmail and AI features use your data, and the terms of using the app.
+          Vestor is a tracking tool and does not give financial advice.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          {[['/privacy', 'shield_person', 'Privacy Policy'], ['/terms', 'gavel', 'Terms of Service']].map(([to, icon, label]) => (
+            <Link key={to} to={to} className="group flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/15 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors text-sm font-semibold text-on-surface">
+              <span className="material-symbols-outlined text-lg text-primary" aria-hidden="true">{icon}</span>
+              {label}
+              <span className="material-symbols-outlined text-base text-on-surface-variant ml-auto sm:ml-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_forward</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       <FeatureTour section="settings" />
     </main>

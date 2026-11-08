@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
@@ -18,6 +18,11 @@ import VoiceAddScreen from './pages/VoiceAdd';
 import ToastContainer from './components/ui/ToastContainer';
 import DashboardSkeleton from './components/ui/skeletons/DashboardSkeleton';
 
+// Public legal pages: loaded on demand, readable signed in or out.
+const PrivacyPolicyScreen = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfServiceScreen = lazy(() => import('./pages/TermsOfService'));
+const legalFallback = <div className="min-h-screen bg-background" aria-busy="true" />;
+
 const {
   '/': DashboardScreen, '/transactions': TransactionsScreen, '/investments': InvestmentsScreen,
   '/cyclic': CyclicScreen, '/analytics': AnalyticsScreen, '/categories': CategoriesScreen, '/settings': SettingsScreen,
@@ -34,6 +39,8 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
           <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
           <Route path="/verify-email/:token" element={<VerifyEmailScreen />} />
+          <Route path="/privacy" element={<Suspense fallback={legalFallback}><PrivacyPolicyScreen /></Suspense>} />
+          <Route path="/terms" element={<Suspense fallback={legalFallback}><TermsOfServiceScreen /></Suspense>} />
 
           {/* Voice quick-add shortcut: full screen, no sidebar/nav, login required but no PIN lock */}
           <Route

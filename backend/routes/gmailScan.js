@@ -28,7 +28,7 @@ const FinancialEmail = require('../models/FinancialEmail');
 const gmail = require('../services/gmailSync');
 const { isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 
-const NONCE_COOKIE = 'wallo_gmail_oauth';
+const NONCE_COOKIE = 'vestor_gmail_oauth';
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const frontendUrl = (query) => `${(process.env.FRONTEND_URL || '').replace(/\/$/, '')}/cyclic?gmail=${query}`;
 
@@ -165,8 +165,8 @@ router.post('/disconnect', async (req, res) => {
     const revoked = await gmail.disconnect(req.userId);
     res.json({
       message: revoked
-        ? 'Gmail disconnected. Wallo can no longer read your email.'
-        : "Gmail disconnected here, but Google couldn't be reached to cancel access. Wallo will keep retrying; you can also remove Wallo at myaccount.google.com/permissions.",
+        ? 'Gmail disconnected. Vestor can no longer read your email.'
+        : "Gmail disconnected here, but Google couldn't be reached to cancel access. To make sure access is removed, remove Vestor at myaccount.google.com/permissions.",
     });
   } catch (err) {
     res.status(500).json({ message: 'Failed to disconnect Gmail' });

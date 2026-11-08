@@ -1,12 +1,12 @@
 /**
- * Onboarding step definitions for each section of Wallo.
+ * Onboarding step definitions for each section of Vestor.
  * Each section has an array of steps with title, description, targetSelector, and icon.
  */
 
 export const onboardingSteps = {
   dashboard: [
     {
-      title: 'Welcome to Wallo',
+      title: 'Welcome to Vestor',
       description: 'This is your financial command center. Get a bird\'s-eye view of your entire financial life — balance, spending, investments, and upcoming bills — all in one place.',
       targetSelector: null,
       icon: 'waving_hand',
@@ -76,7 +76,7 @@ export const onboardingSteps = {
     },
     {
       title: 'Subscriptions',
-      description: 'Add and manage all your recurring subscriptions. Toggle them on/off, set renewal frequencies, and track costs. Wallo automatically generates transactions on renewal.',
+      description: 'Add and manage all your recurring subscriptions. Toggle them on/off, set renewal frequencies, and track costs. Vestor automatically generates transactions on renewal.',
       targetSelector: '[data-onboarding="cyclic-subs"]',
       icon: 'subscriptions',
     },
@@ -106,7 +106,7 @@ export const onboardingSteps = {
   settings: [
     {
       title: 'Your Preferences',
-      description: 'Configure Wallo to work exactly how you want. From AI model selection to notification preferences and security settings — everything is customizable.',
+      description: 'Configure Vestor to work exactly how you want. From AI model selection to notification preferences and security settings — everything is customizable.',
       targetSelector: null,
       icon: 'tune',
     },
@@ -118,7 +118,7 @@ export const onboardingSteps = {
     },
     {
       title: 'Tutorial Controls',
-      description: 'You can replay this tutorial anytime or reset your progress completely from the Tutorial & Help section below. That\'s it — enjoy using Wallo! 🎉',
+      description: 'You can replay this tutorial anytime or reset your progress completely from the Tutorial & Help section below. That\'s it — enjoy using Vestor! 🎉',
       targetSelector: '[data-onboarding="settings-tutorial"]',
       icon: 'school',
     },

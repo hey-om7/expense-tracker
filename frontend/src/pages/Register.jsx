@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LegalLinks from '../components/legal/LegalLinks';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -12,8 +13,15 @@ const Register = () => {
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  // The Google callback is registered once, so it reads consent through a ref.
+  const agreedRef = useRef(false);
+  useEffect(() => { agreedRef.current = agreed; }, [agreed]);
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Sent here from sign-in when a Google account has no Vestor account yet.
+  const googleNotice = location.state?.googleNotice === true;
   const googleBtnRef = useRef(null);
 
   // Password strength
@@ -56,10 +64,14 @@ const Register = () => {
       setError('Passwords do not match');
       return;
     }
+    if (!agreed) {
+      setError('Please agree to the Terms of Service and acknowledge the Privacy Policy.');
+      return;
+    }
 
     try {
       setLoading(true);
-      const res = await register(name, email, password);
+      const res = await register(name, email, password, agreed);
       setSuccess(res.message || 'Check your inbox to verify your email.');
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -69,10 +81,14 @@ const Register = () => {
   };
 
   const handleGoogleCallback = async (response) => {
+    if (!agreedRef.current) {
+      setError('Please agree to the Terms of Service and acknowledge the Privacy Policy before continuing with Google.');
+      return;
+    }
     try {
       setLoading(true);
       setError('');
-      await googleLogin(response.credential);
+      await googleLogin(response.credential, { termsAccepted: true });
       navigate('/', { replace: true });
     } catch (err) {
       setError(err.message || 'Google sign-up failed');
@@ -152,6 +168,11 @@ const Register = () => {
         <div className="bg-surface-container-low/80 backdrop-blur-xl border border-outline-variant/30 rounded-2xl p-8 shadow-2xl">
           <h2 className="text-xl font-headline font-bold text-on-surface mb-1">Create account</h2>
           <p className="text-on-surface-variant text-sm mb-6">Set up your personal finance hub</p>
+          {googleNotice && (
+            <p role="status" className="mb-5 text-[13px] leading-snug text-on-surface bg-primary-container/10 border-l-2 border-primary-container px-3 py-2.5">
+              There's no Vestor account for that Google address yet. Tick the box below, then continue with Google to create one.
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name */}
@@ -310,10 +331,30 @@ const Register = () => {
               )}
             </div>
 
+            {/* Consent (required for both email and Google sign-up) */}
+            <div className="flex items-start gap-3 px-1">
+              <input
+                id="register-terms"
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => { setAgreed(e.target.checked); if (e.target.checked) setError(''); }}
+                aria-required="true"
+                aria-describedby="register-terms-hint"
+                className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer rounded accent-[#e5ba73] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low"
+              />
+              <label htmlFor="register-terms" className="text-[13px] leading-snug text-on-surface-variant font-inter cursor-pointer">
+                I agree to the{' '}
+                <a href="/terms" target="_blank" rel="noopener" className="legal-link text-primary-container">Terms of Service</a>
+                {' '}and acknowledge the{' '}
+                <a href="/privacy" target="_blank" rel="noopener" className="legal-link text-primary-container">Privacy Policy</a>.
+                <span id="register-terms-hint" className="block text-[11px] text-on-surface-variant/60 mt-1">Opens in a new tab. Vestor is a tracking tool, not financial advice.</span>
+              </label>
+            </div>
+
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 bg-error-container/20 border border-error/20 rounded-xl px-4 py-3 animate-[fadeIn_0.2s_ease-out]">
-                <span className="material-symbols-outlined text-error text-lg">error</span>
+              <div role="alert" className="flex items-center gap-2 bg-error-container/20 border border-error/20 rounded-xl px-4 py-3 animate-[fadeIn_0.2s_ease-out]">
+                <span className="material-symbols-outlined text-error text-lg" aria-hidden="true">error</span>
                 <p className="text-error text-sm font-inter">{error}</p>
               </div>
             )}
@@ -346,8 +387,18 @@ const Register = () => {
             <div className="flex-1 h-px bg-outline-variant/30" />
           </div>
 
-          {/* Google Sign-Up */}
-          <div ref={googleBtnRef} className="w-full flex justify-center" id="google-signup-btn" />
+          {/* Google Sign-Up: inactive until consent is given */}
+          <div className="relative">
+            <div
+              ref={googleBtnRef}
+              id="google-signup-btn"
+              aria-disabled={!agreed}
+              className={`w-full flex justify-center transition-opacity duration-200 ${agreed ? '' : 'opacity-40 pointer-events-none'}`}
+            />
+            {!agreed && (
+              <p className="text-center text-[11px] text-on-surface-variant/70 mt-2 font-inter">Tick the box above to continue with Google.</p>
+            )}
+          </div>
 
           {/* Login Link */}
           <p className="text-center text-on-surface-variant text-sm mt-6 font-inter">
@@ -357,6 +408,7 @@ const Register = () => {
             </Link>
           </p>
         </div>
+        <LegalLinks className="justify-center mt-6" />
       </div>
 
       <style>{`

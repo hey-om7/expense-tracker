@@ -14,8 +14,8 @@ const ProtectedRoute = ({ children, optimistic = false }) => {
   // Once per page load after sign-in, check Gmail for new payment emails in the
   // background so expense suggestions are fresh. Errors are ignored on purpose.
   useEffect(() => {
-    if (!isAuthenticated || window.__walloGmailSynced) return;
-    window.__walloGmailSynced = true;
+    if (!isAuthenticated || window.__vestorGmailSynced) return;
+    window.__vestorGmailSynced = true;
     syncNewGmailEmails().catch(() => {});
   }, [isAuthenticated]);
 

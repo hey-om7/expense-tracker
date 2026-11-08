@@ -22,6 +22,10 @@ const LOCK_MS = 15 * 60 * 1000;
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const VERIFY_RESEND_COOLDOWN_MS = 5 * 60 * 1000;
 
+const { TERMS_VERSION, PRIVACY_VERSION } = require('../legal');
+const TERMS_REQUIRED = 'Please agree to the Terms of Service and acknowledge the Privacy Policy to create an account.';
+const consentRecord = () => ({ termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, acceptedAt: new Date() });
+
 const hashToken = (raw) => crypto.createHash('sha256').update(raw).digest('hex');
 
 // Same response whether or not the email is already registered, so sign-up
@@ -59,11 +63,14 @@ const issueVerification = async (user) => {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, termsAccepted } = req.body;
 
     if (!name || !email || !password ||
         typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ message: 'All fields are required' });
+    }
+    if (termsAccepted !== true) {
+      return res.status(400).json({ message: TERMS_REQUIRED, code: 'TERMS_REQUIRED' });
     }
     const cleanName = String(name).replace(/<[^>]*>/g, '').trim();
     if (cleanName.length < 2 || cleanName.length > 50) {
@@ -93,7 +100,7 @@ router.post('/register', async (req, res) => {
       return res.status(202).json(REGISTER_RESPONSE);
     }
 
-    const user = new User({ name: cleanName, email: normalizedEmail, password, emailVerified: false });
+    const user = new User({ name: cleanName, email: normalizedEmail, password, emailVerified: false, legalConsent: consentRecord() });
     await user.save();
     await issueVerification(user);
 
@@ -241,7 +248,7 @@ router.get('/me', auth, async (req, res) => {
 // POST /api/auth/google
 router.post('/google', async (req, res) => {
   try {
-    const { credential } = req.body;
+    const { credential, termsAccepted } = req.body;
     if (!credential || typeof credential !== 'string') {
       return res.status(400).json({ message: 'Google credential is required' });
     }
@@ -276,12 +283,17 @@ router.post('/google', async (req, res) => {
         invalidateUserCache(user._id);
       }
     } else {
+      // Signing in with Google for the first time creates an account, which needs consent.
+      if (termsAccepted !== true) {
+        return res.status(400).json({ message: TERMS_REQUIRED, code: 'TERMS_REQUIRED' });
+      }
       user = new User({
         name: String(name || email.split('@')[0]).replace(/<[^>]*>/g, '').trim().slice(0, 50) || 'User',
         email: email.toLowerCase(),
         googleId,
         authProvider: 'google',
         emailVerified: true,
+        legalConsent: consentRecord(),
       });
       await user.save();
     }
