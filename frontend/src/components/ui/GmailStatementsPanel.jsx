@@ -32,10 +32,12 @@ const groupPending = (statements) => {
 const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [status, setStatus] = useState(null);
-  const [pending, setPending] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [review, setReview] = useState([]);
+  // Revisits paint the last snapshot instantly; load() then refreshes it.
+  const [snapshot] = useState(() => api.peekCache('gmail-panel'));
+  const [status, setStatus] = useState(snapshot?.status ?? null);
+  const [pending, setPending] = useState(snapshot?.pending ?? []);
+  const [history, setHistory] = useState(snapshot?.history ?? []);
+  const [review, setReview] = useState(snapshot?.review ?? []);
   const [showHistory, setShowHistory] = useState(false);
   const [busy, setBusy] = useState('');
   const [banner, setBanner] = useState(null);
@@ -44,18 +46,18 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
 
   const load = useCallback(async () => {
     try {
-      const s = await api.fetchGmailStatus();
+      // All four in parallel instead of status first, then the lists.
+      const [s, p, h, r] = await Promise.all([
+        api.fetchGmailStatus(),
+        api.fetchCardStatements({ status: 'pending' }).catch(() => []),
+        api.fetchCardStatements({ status: 'linked' }).catch(() => []),
+        api.fetchFinancialEmails('review').catch(() => []),
+      ]);
       setStatus(s);
-      if (s.connected || s.pendingCount > 0 || s.reviewCount > 0) {
-        const [p, h, r] = await Promise.all([
-          api.fetchCardStatements({ status: 'pending' }),
-          api.fetchCardStatements({ status: 'linked' }),
-          api.fetchFinancialEmails('review'),
-        ]);
-        setPending(p);
-        setHistory(h);
-        setReview(r);
-      }
+      setPending(p);
+      setHistory(h);
+      setReview(r);
+      api.setCache('gmail-panel', { status: s, pending: p, history: h, review: r });
       return s;
     } catch {
       setStatus({ connected: false, available: false });

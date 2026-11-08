@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useLock } from '../../context/LockContext';
 import { Lock, LogOut, CheckCircle } from 'lucide-react';
-
-const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 5 minutes
 
 // --- PIN storage ---
 // The PIN is stored only as a salted SHA-256 hash in localStorage. It is never
@@ -56,79 +55,34 @@ const verifyPin = async (pin) => {
   return false;
 };
 
-// --- Initial State Helper ---
-// Checks if the user explicitly unlocked the app during this browser session
-// Locked by default on every device: with no PIN yet, the setup flow is shown.
-const getInitialLockState = () => {
-  const sessionLockState = sessionStorage.getItem('vestor_is_locked');
-  if (sessionLockState === 'false') return false; // User already unlocked it in this tab
-  
-  return true; // Default to locked if they have a PIN and haven't unlocked this session
-};
-
 const LockScreen = () => {
   const { logout } = useAuth();
-  
-  // FIX: Read from sessionStorage on initial load
-  const [isLocked, setIsLocked] = useState(getInitialLockState);
+  const { isLocked, unlock: unlockApp } = useLock();
   const [isSetupMode, setIsSetupMode] = useState(() => !getSavedPin());
-  
+
   const [digits, setDigits] = useState(['', '', '', '']);
   const [confirmDigits, setConfirmDigits] = useState(['', '', '', '']);
-  const [setupFirstPin, setSetupFirstPin] = useState(''); 
-  
-  const [step, setStep] = useState(1); 
+  const [setupFirstPin, setSetupFirstPin] = useState('');
+
+  const [step, setStep] = useState(1);
   const [error, setError] = useState('');
-  
-  const timerRef = useRef(null);
+
   const inputRefs = useRef([]);
 
-  const lockApp = useCallback(() => {
-    const hasPin = !!getSavedPin();
-    setIsLocked(true);
-    sessionStorage.setItem('vestor_is_locked', 'true'); // Save locked state to session
-    setIsSetupMode(!hasPin);
-    setStep(1);
-  }, []);
-
-  const unlockApp = useCallback(() => {
-    setIsLocked(false);
-    sessionStorage.setItem('vestor_is_locked', 'false'); // Save unlocked state to session
-  }, []);
-
-  const resetTimer = useCallback(() => {
-    if (isLocked) return;
-
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-    
-    timerRef.current = setTimeout(lockApp, INACTIVITY_TIMEOUT);
-  }, [isLocked, lockApp]);
-
-  useEffect(() => {
-    resetTimer();
-
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    const handleActivity = () => resetTimer();
-
-    events.forEach(event => window.addEventListener(event, handleActivity));
-
-    return () => {
-      events.forEach(event => window.removeEventListener(event, handleActivity));
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [resetTimer]);
-
+  // Each time the app locks, start from a clean PIN entry.
   useEffect(() => {
     if (isLocked) {
+      setIsSetupMode(!getSavedPin());
+      setStep(1);
       setDigits(['', '', '', '']);
       setConfirmDigits(['', '', '', '']);
       setSetupFirstPin('');
       setError('');
-      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      const t = setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      return () => clearTimeout(t);
     }
-  }, [isLocked]); 
+    return undefined;
+  }, [isLocked]);
 
   const handleValidation = async (enteredPin) => {
     if (isSetupMode) {
@@ -142,7 +96,6 @@ const LockScreen = () => {
           await setSavedPin(enteredPin);
           sessionStorage.removeItem('vestor_pin_attempts');
           unlockApp();
-          resetTimer();
         } else {
           setError('PINs do not match. Try again.');
           setStep(1);
@@ -156,7 +109,6 @@ const LockScreen = () => {
       if (await verifyPin(enteredPin)) {
         sessionStorage.removeItem('vestor_pin_attempts');
         unlockApp();
-        resetTimer();
       } else {
         const attempts = Number(sessionStorage.getItem('vestor_pin_attempts') || 0) + 1;
         sessionStorage.setItem('vestor_pin_attempts', String(attempts));

@@ -28,12 +28,16 @@ const formatWhen = (d) => {
  * Tapping one calls onPick(suggestion) so the form can prefill itself.
  */
 const ExpenseSuggestions = ({ selectedId, onPick }) => {
-  const [items, setItems] = useState(null);
+  const [items, setItems] = useState(() => api.peekCache('expense-suggestions') ?? null);
 
   useEffect(() => {
     let alive = true;
     const load = () => api.fetchExpenseSuggestions()
-      .then((rows) => { if (alive) setItems(Array.isArray(rows) ? rows : []); })
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        api.setCache('expense-suggestions', list);
+        if (alive) setItems(list);
+      })
       .catch(() => { if (alive) setItems((prev) => prev ?? []); });
     // Show what we already have, then check Gmail for anything newer and refresh.
     load();
@@ -45,7 +49,11 @@ const ExpenseSuggestions = ({ selectedId, onPick }) => {
 
   const dismiss = (e, s) => {
     e.stopPropagation();
-    setItems((prev) => prev.filter((x) => x.id !== s.id));
+    setItems((prev) => {
+      const next = prev.filter((x) => x.id !== s.id);
+      api.setCache('expense-suggestions', next);
+      return next;
+    });
     if (selectedId === s.id) onPick(null);
     api.resolveExpenseSuggestion(s.ids, 'dismissed').catch(() => {});
   };

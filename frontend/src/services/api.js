@@ -36,12 +36,36 @@ const request = async (endpoint, { redirectOn401 = true, ...options } = {}) => {
   return response.json();
 };
 
+// ─── In-memory read cache ───
+// Lets pages show the last result instantly when revisited and shares one request
+// between components asking for the same thing. Memory only: nothing is written to
+// storage, and everything is dropped on logout or a full reload.
+const cache = new Map(); // key -> { data, at, promise }
+
+/** Returns cached data if younger than maxAgeMs, otherwise fetches (deduplicated). */
+export const cachedRequest = (key, fetcher, { maxAgeMs = 30_000 } = {}) => {
+  const hit = cache.get(key);
+  if (hit?.promise) return hit.promise;
+  if (hit && 'data' in hit && Date.now() - hit.at < maxAgeMs) return Promise.resolve(hit.data);
+  const promise = fetcher()
+    .then((data) => { cache.set(key, { data, at: Date.now() }); return data; })
+    .catch((err) => { if (hit && 'data' in hit) cache.set(key, hit); else cache.delete(key); throw err; });
+  cache.set(key, { ...(hit || {}), promise });
+  return promise;
+};
+/** Last cached value (possibly stale) for an instant first paint, or undefined. */
+export const peekCache = (key) => cache.get(key)?.data;
+export const setCache = (key, data) => cache.set(key, { data, at: Date.now() });
+export const invalidateCache = (prefix = '') => {
+  for (const k of [...cache.keys()]) if (k.startsWith(prefix)) cache.delete(k);
+};
+
 // ─── Auth ───
 export const loginUser = (data) => request('/auth/login', { method: 'POST', body: data });
 export const registerUser = (data) => request('/auth/register', { method: 'POST', body: data });
 export const googleAuth = (data) => request('/auth/google', { method: 'POST', body: data });
 export const getMe = () => request('/auth/me', { redirectOn401: false });
-export const logoutUser = () => request('/auth/logout', { method: 'POST', redirectOn401: false });
+export const logoutUser = () => { invalidateCache(); return request('/auth/logout', { method: 'POST', redirectOn401: false }); };
 export const verifyEmail = (token) => request(`/auth/verify-email/${encodeURIComponent(token)}`, { method: 'POST' });
 export const resendVerification = (email) => request('/auth/resend-verification', { method: 'POST', body: { email } });
 export const forgotPassword = (email) => request('/auth/forgot-password', { method: 'POST', body: { email } });
@@ -54,8 +78,14 @@ export const updateTransaction = (id, data) => request(`/transactions/${id}`, { 
 export const deleteTransaction = (id) => request(`/transactions/${id}`, { method: 'DELETE' });
 
 // ─── Settings APIs ───
-export const fetchSettings = () => request('/settings');
-export const updateSettings = (settingsData) => request('/settings', { method: 'PUT', body: settingsData });
+// Shared by the Settings page and the AI chatbot; one request serves both.
+export const fetchSettings = ({ fresh = false } = {}) =>
+  cachedRequest('settings', () => request('/settings'), { maxAgeMs: fresh ? 0 : 60_000 });
+export const updateSettings = async (settingsData) => {
+  const data = await request('/settings', { method: 'PUT', body: settingsData });
+  invalidateCache('settings');
+  return data;
+};
 export const fetchGroqModels = (apiKey) => request('/settings/groq/models', { method: 'POST', body: apiKey ? { apiKey } : {} });
 
 // ─── Categories ───
@@ -117,8 +147,12 @@ export const dismissAllFinancialEmails = () => request('/gmail/emails/dismiss-al
 export const fetchExpenseSuggestions = () => request('/gmail/suggestions');
 // Asks the server to check Gmail for new emails now. Resolves to { synced }.
 export const syncNewGmailEmails = () => request('/gmail/sync-new', { method: 'POST' });
-export const resolveExpenseSuggestion = (ids, state = 'used', transactionId) =>
-  request('/gmail/suggestions/resolve', { method: 'POST', body: { ids, state, transactionId } });
+export const resolveExpenseSuggestion = (ids, state = 'used', transactionId) => {
+  // Drop resolved items from the cached list so the next open doesn't flash them.
+  const cached = peekCache('expense-suggestions');
+  if (Array.isArray(cached)) setCache('expense-suggestions', cached.filter((s) => !s.ids?.some((id) => ids.includes(id))));
+  return request('/gmail/suggestions/resolve', { method: 'POST', body: { ids, state, transactionId } });
+};
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });
 export const parseSpokenTransaction = (transcript, alternatives = []) =>
   request('/ai/parse-transaction', { method: 'POST', body: { transcript, alternatives } });

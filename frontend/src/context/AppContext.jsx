@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
-import DashboardSkeleton from '../components/ui/skeletons/DashboardSkeleton';
-import HistorySkeleton from '../components/ui/skeletons/HistorySkeleton';
 
 const AppContext = createContext();
 
@@ -68,33 +66,29 @@ export const AppProvider = ({ children, lite = false }) => {
         setCreditCards(normalizeList(ccs));
         setError(null);
 
-        // Request OS Notification Permissions natively
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
-
-        // Run automated subscription check on app load
-        try {
-          const result = await api.runSubscriptionCheck();
-          if (result.processed > 0) {
-            // Re-fetch affected data after automation
-            const [updatedTxs, updatedSubs, updatedNotifs] = await Promise.all([
-              api.fetchTransactions(),
-              api.fetchSubscriptions(),
-              api.fetchNotifications(),
-            ]);
-            setTransactions(normalizeList(updatedTxs));
-            setSubscriptions(normalizeList(updatedSubs));
-            setNotifications(normalizeList(updatedNotifs));
-          }
-        } catch (subErr) {
-          console.warn('Subscription check failed:', subErr.message);
-        }
       } catch (err) {
         console.error('Failed to load app data:', err);
         setError('Failed to connect to server. Please ensure the backend is running.');
+        return;
       } finally {
         setLoading(false);
+      }
+
+      // Recurring-subscription automation runs after the data is shown, not before.
+      try {
+        const result = await api.runSubscriptionCheck();
+        if (result.processed > 0) {
+          const [updatedTxs, updatedSubs, updatedNotifs] = await Promise.all([
+            api.fetchTransactions(),
+            api.fetchSubscriptions(),
+            api.fetchNotifications(),
+          ]);
+          setTransactions(normalizeList(updatedTxs));
+          setSubscriptions(normalizeList(updatedSubs));
+          setNotifications(normalizeList(updatedNotifs));
+        }
+      } catch (subErr) {
+        console.warn('Subscription check failed:', subErr.message);
       }
     };
     loadAll();
@@ -397,14 +391,8 @@ export const AppProvider = ({ children, lite = false }) => {
 
 
 
-  // ─── Loading / Error States ───
-  if (loading) {
-    if (window.location.pathname === '/transactions') {
-      return <HistorySkeleton />;
-    }
-    return <DashboardSkeleton />;
-  }
-
+  // Loading no longer blocks children: the PIN screen must appear at once. The app
+  // shell (AppShell) waits for `ready` before mounting pages.
   if (error) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -422,7 +410,7 @@ export const AppProvider = ({ children, lite = false }) => {
 
   return (
     <AppContext.Provider value={{
-      transactions, categories, investments: derivedInvestments, notifications, subscriptions, creditCards, loading,
+      transactions, categories, investments: derivedInvestments, notifications, subscriptions, creditCards, loading, ready: !loading,
       totalBalance, monthlySpent, totalPortfolioValue, totalInvested, totalRealizedProfit, totalUnrealizedProfit,
       addTransaction, updateTransaction, deleteTransaction, ensureTransactions,
       addCategory, updateCategory, deleteCategory, getCategory,

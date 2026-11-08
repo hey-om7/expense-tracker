@@ -1,10 +1,13 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import { OnboardingProvider } from './context/OnboardingContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import LockScreen from './components/auth/LockScreen';
+import AppShell from './components/auth/AppShell';
+import { LockProvider } from './context/LockContext';
+import { pages } from './pages/appPages';
 import Layout from './components/layout/Layout';
 import LoginScreen from './pages/Login';
 import RegisterScreen from './pages/Register';
@@ -15,14 +18,10 @@ import VoiceAddScreen from './pages/VoiceAdd';
 import ToastContainer from './components/ui/ToastContainer';
 import DashboardSkeleton from './components/ui/skeletons/DashboardSkeleton';
 
-// App pages load on demand so /voice doesn't download dashboard/chart code.
-const DashboardScreen = lazy(() => import('./pages/Dashboard'));
-const TransactionsScreen = lazy(() => import('./pages/Transactions'));
-const InvestmentsScreen = lazy(() => import('./pages/Investments'));
-const AnalyticsScreen = lazy(() => import('./pages/Analytics'));
-const CategoriesScreen = lazy(() => import('./pages/Categories'));
-const CyclicScreen = lazy(() => import('./pages/Cyclic'));
-const SettingsScreen = lazy(() => import('./pages/Settings'));
+const {
+  '/': DashboardScreen, '/transactions': TransactionsScreen, '/investments': InvestmentsScreen,
+  '/cyclic': CyclicScreen, '/analytics': AnalyticsScreen, '/categories': CategoriesScreen, '/settings': SettingsScreen,
+} = pages;
 
 function App() {
   return (
@@ -53,25 +52,30 @@ function App() {
           <Route
             path="/*"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute optimistic>
                 <AppProvider>
-                  <OnboardingProvider>
-                    <LockScreen />
-                    <Layout>
-                      <Suspense fallback={<DashboardSkeleton />}>
-                      <Routes>
-                        <Route path="/" element={<DashboardScreen />} />
-                        <Route path="/transactions" element={<TransactionsScreen />} />
-                        <Route path="/investments" element={<InvestmentsScreen />} />
-                        <Route path="/cyclic" element={<CyclicScreen />} />
-                        <Route path="/analytics" element={<AnalyticsScreen />} />
-                        <Route path="/categories" element={<CategoriesScreen />} />
-                        <Route path="/settings" element={<SettingsScreen />} />
-                      </Routes>
-                      </Suspense>
-                      <ToastContainer />
-                    </Layout>
-                  </OnboardingProvider>
+                  <LockProvider>
+                    <OnboardingProvider>
+                      {/* The PIN screen renders immediately; data loads behind it. */}
+                      <LockScreen />
+                      <AppShell>
+                        <Layout>
+                          <Suspense fallback={<DashboardSkeleton />}>
+                            <Routes>
+                              <Route path="/" element={<DashboardScreen />} />
+                              <Route path="/transactions" element={<TransactionsScreen />} />
+                              <Route path="/investments" element={<InvestmentsScreen />} />
+                              <Route path="/cyclic" element={<CyclicScreen />} />
+                              <Route path="/analytics" element={<AnalyticsScreen />} />
+                              <Route path="/categories" element={<CategoriesScreen />} />
+                              <Route path="/settings" element={<SettingsScreen />} />
+                            </Routes>
+                          </Suspense>
+                          <ToastContainer />
+                        </Layout>
+                      </AppShell>
+                    </OnboardingProvider>
+                  </LockProvider>
                 </AppProvider>
               </ProtectedRoute>
             }

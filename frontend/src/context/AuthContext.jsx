@@ -5,9 +5,20 @@ const AuthContext = createContext();
 
 // The session lives in an httpOnly cookie set by the server, so nothing
 // sensitive is kept in localStorage. "Logged in" means /auth/me succeeds.
+// Non-sensitive flag ("1") meaning this browser had a session last time. It only
+// decides what to show while /auth/me is in flight (PIN screen vs. skeleton);
+// the server cookie stays the source of truth.
+const HINT_KEY = 'vestor_session_hint';
+const readHint = () => { try { return localStorage.getItem(HINT_KEY) === '1'; } catch { return false; } };
+const writeHint = (on) => {
+  try { if (on) localStorage.setItem(HINT_KEY, '1'); else localStorage.removeItem(HINT_KEY); } catch { /* storage blocked */ }
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUserState] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sessionHint] = useState(readHint);
+  const setUser = useCallback((u) => { setUserState(u); writeHint(!!u); }, []);
 
   useEffect(() => {
     // Remove tokens left behind by older versions that used localStorage
@@ -18,13 +29,13 @@ export const AuthProvider = ({ children }) => {
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setUser]);
 
   const login = useCallback(async (email, password) => {
     const response = await api.loginUser({ email, password });
     setUser(response.user);
     return response;
-  }, []);
+  }, [setUser]);
 
   // Sign-up doesn't log in: the user must verify their email first.
   const register = useCallback(async (name, email, password) => {
@@ -35,10 +46,10 @@ export const AuthProvider = ({ children }) => {
     const response = await api.googleAuth({ credential });
     setUser(response.user);
     return response;
-  }, []);
+  }, [setUser]);
 
   // Called after the email verification link signs the user in
-  const setSessionUser = useCallback((u) => setUser(u), []);
+  const setSessionUser = useCallback((u) => setUser(u), [setUser]);
 
   const logout = useCallback(async () => {
     try {
@@ -47,15 +58,18 @@ export const AuthProvider = ({ children }) => {
       // Clear local state even if the server is unreachable
     }
     setUser(null);
-  }, []);
+  }, [setUser]);
 
   const isAuthenticated = !!user;
+  // True while the session check runs for a browser that was signed in before.
+  const likelyAuthenticated = isAuthenticated || (loading && sessionHint);
 
   return (
     <AuthContext.Provider value={{
       user,
       loading,
       isAuthenticated,
+      likelyAuthenticated,
       login,
       register,
       googleLogin,

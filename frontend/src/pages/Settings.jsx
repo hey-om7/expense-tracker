@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSettings, updateSettings, fetchGroqModels } from '../services/api';
+import { fetchSettings, updateSettings, fetchGroqModels, peekCache } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import SettingsSkeleton from '../components/ui/skeletons/SettingsSkeleton';
@@ -215,9 +215,15 @@ const SettingsScreen = () => {
   };
 
   useEffect(() => {
+    // Revisits paint from the last loaded settings, then refresh quietly.
+    const cached = peekCache('settings');
+    if (cached) {
+      applySaved(cached);
+      setLoading(false);
+    }
     const loadSettings = async () => {
       try {
-        const data = await fetchSettings();
+        const data = await fetchSettings({ fresh: !!cached });
         if (data) applySaved(data);
       } catch (err) {
         console.error('Failed to load settings:', err);
