@@ -5,6 +5,7 @@
  *  GET  /api/gmail/oauth/callback               → Google redirects here (no Bearer token)
  *  GET  /api/gmail/status                       → connection state
  *  POST /api/gmail/scan-bills                   → manual "scan now" (new emails only)
+ *  POST /api/gmail/sync-new                     → quick background check for new emails (app load, Add Expense)
  *  POST /api/gmail/disconnect                   → revoke access + delete token
  *  GET  /api/gmail/statements?status=&cardId=   → saved statements
  *  POST /api/gmail/statements/:id/add-card      → track this untracked card from now on
@@ -75,6 +76,7 @@ router.use(auth);
 // Per-account caps: scans call Gmail (and possibly a paid AI API) many times.
 const { userLimiter } = require('../utils/rateLimits');
 const scanLimiter = userLimiter('gmail-scan', { windowMs: 60 * 60 * 1000, limit: 10, message: 'Too many Gmail scans. Please try again later.' });
+const quickSyncLimiter = userLimiter('gmail-quick-sync', { windowMs: 10 * 60 * 1000, limit: 30, message: 'Checking for new emails too often. Please wait a moment.' });
 const connectLimiter = userLimiter('gmail-connect', { windowMs: 60 * 60 * 1000, limit: 10, message: 'Too many Gmail connection attempts. Please try again later.' });
 
 const publicStatus = (conn) => (conn
@@ -148,6 +150,14 @@ router.post('/scan-bills', scanLimiter, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: 'Gmail scan failed. Please try again later.' });
   }
+});
+
+// Quick check for new emails. Waits up to 15 s so the caller can refresh suggestions;
+// a slower sync keeps running in the background and the 30-minute job picks up the rest.
+router.post('/sync-new', quickSyncLimiter, async (req, res) => {
+  const sync = gmail.syncNewForUser(req.userId).catch(() => ({ synced: false }));
+  const timeout = new Promise(resolve => setTimeout(() => resolve({ synced: false, running: true }), 15000));
+  res.json(await Promise.race([sync, timeout]));
 });
 
 router.post('/disconnect', async (req, res) => {

@@ -61,10 +61,15 @@ router.post('/chat', async (req, res) => {
     // Step 2: load only the other data the question needs.
     const [transactions, investments, subscriptions, creditCards] = await Promise.all([
       search?.transactions ? null : needs('transactions')
-        ? Transaction.find({ userId: req.userId }).sort({ date: -1 }).limit(50).lean() : [],
-      needs('investments') ? Investment.find({ userId: req.userId }).lean() : [],
-      needs('subscriptions') ? Subscription.find({ userId: req.userId }).lean() : [],
-      needs('credit_cards') ? CreditCard.find({ userId: req.userId }).lean() : [],
+        ? Transaction.find({ userId: req.userId }).sort({ date: -1 }).limit(50)
+          .select('-_id type amount title notes categoryId date').lean() : [],
+      // Only the fields the prompt uses, so nothing internal can reach the AI.
+      needs('investments') ? Investment.find({ userId: req.userId })
+        .select('-_id name symbol currentPrice type holdings.type holdings.quantity holdings.price holdings.date').lean() : [],
+      needs('subscriptions') ? Subscription.find({ userId: req.userId })
+        .select('-_id name amount period isActive startDate expiryDate').lean() : [],
+      needs('credit_cards') ? CreditCard.find({ userId: req.userId })
+        .select('-_id name last4Digits billDueDate totalLimit').lean() : [],
     ]);
 
     const userData = {
@@ -77,7 +82,11 @@ router.post('/chat', async (req, res) => {
       search: search ? { ...search, promptLimit: MAX_PROMPT_RECORDS } : null,
     };
 
-    const reply = await chatWithGroq(question, userData, { model: modelName, apiKey: groqApiKey });
+    let reply = await chatWithGroq(question, userData, { model: modelName, apiKey: groqApiKey });
+    // Last line of defence: never return text that echoes the system prompt.
+    if (/<\/?financial_data|SECURITY RULES|SCOPE \(these override|You are Vestor AI/i.test(reply)) {
+      reply = 'I can only help with questions about your own financial data in Vestor.';
+    }
 
     // Send the matched records so the chat can list them under the answer.
     let records;

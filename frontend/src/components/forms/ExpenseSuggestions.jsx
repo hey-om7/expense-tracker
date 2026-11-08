@@ -32,9 +32,14 @@ const ExpenseSuggestions = ({ selectedId, onPick }) => {
 
   useEffect(() => {
     let alive = true;
-    api.fetchExpenseSuggestions()
+    const load = () => api.fetchExpenseSuggestions()
       .then((rows) => { if (alive) setItems(Array.isArray(rows) ? rows : []); })
-      .catch(() => { if (alive) setItems([]); });
+      .catch(() => { if (alive) setItems((prev) => prev ?? []); });
+    // Show what we already have, then check Gmail for anything newer and refresh.
+    load();
+    api.syncNewGmailEmails()
+      .then((r) => { if (alive && r?.synced) load(); })
+      .catch(() => {});
     return () => { alive = false; };
   }, []);
 

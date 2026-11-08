@@ -115,6 +115,8 @@ export const fetchFinancialEmails = (status = 'review') =>
 export const dismissFinancialEmail = (id) => request(`/gmail/emails/${id}/dismiss`, { method: 'POST' });
 export const dismissAllFinancialEmails = () => request('/gmail/emails/dismiss-all', { method: 'POST' });
 export const fetchExpenseSuggestions = () => request('/gmail/suggestions');
+// Asks the server to check Gmail for new emails now. Resolves to { synced }.
+export const syncNewGmailEmails = () => request('/gmail/sync-new', { method: 'POST' });
 export const resolveExpenseSuggestion = (ids, state = 'used', transactionId) =>
   request('/gmail/suggestions/resolve', { method: 'POST', body: { ids, state, transactionId } });
 export const sendAiChat = (message) => request('/ai/chat', { method: 'POST', body: { message } });

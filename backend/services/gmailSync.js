@@ -2,7 +2,7 @@
  * gmailSync.js
  * Per-user Gmail statement sync using Google OAuth (gmail.readonly).
  *  - first connect: backfill the last 90 days
- *  - daily (06:00 IST): fetch only emails newer than the last scan
+ *  - every 30 minutes, and when the user opens the app: fetch only emails newer than the last scan
  * Statements for tracked cards are linked and update the card's current bill,
  * which drives the existing "due tomorrow" reminder in cronJobs.processCreditCards.
  * Statements for untracked cards are stored as "pending" until the user decides.
@@ -359,7 +359,7 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
       await GmailConnection.updateOne({ _id: conn._id }, {
         $set: {
           status: revoked ? 'revoked' : 'error',
-          lastError: revoked ? 'Gmail access was revoked. Please reconnect.' : 'Last scan failed. It will retry tomorrow.',
+          lastError: revoked ? 'Gmail access was revoked. Please reconnect.' : 'Last scan failed. It will retry automatically in a few minutes.',
           ...(backfill ? { backfillStatus: 'failed' } : {}),
         },
       });
@@ -448,7 +448,23 @@ const notifyUser = async (userId, linked, pending, backfill) => {
   await sendEmail(user.email, backfill ? '💳 Gmail connected — statements found' : '💳 New credit card statements', html);
 };
 
-// Daily job: sync every active connection, one at a time.
+/**
+ * Quick incremental sync for one user (on app load / opening Add Expense).
+ * Skips when there is no usable connection, the first backfill isn't done, or the
+ * account was scanned within minAgeMs, so repeated page loads cost nothing.
+ * @returns {{ synced: boolean, newSuggestions?: number }}
+ */
+const syncNewForUser = async (userId, { minAgeMs = 60 * 1000 } = {}) => {
+  const conn = await GmailConnection.findOne({ userId, status: { $in: ['active', 'error'] } })
+    .select('_id backfillStatus lastScannedAt').lean();
+  if (!conn || conn.backfillStatus !== 'done') return { synced: false };
+  if (conn.lastScannedAt && Date.now() - new Date(conn.lastScannedAt).getTime() < minAgeMs) return { synced: false };
+  const result = await syncConnection(conn._id);
+  if (result.busy) return { synced: false };
+  return { synced: true };
+};
+
+// Scheduled job: sync every active connection, one at a time.
 const syncAllConnections = async () => {
   const conns = await GmailConnection.find({ status: { $in: ['active', 'error'] } }).select('_id').lean();
   console.log(`📧 Gmail statement sync: ${conns.length} connected account(s)`);
@@ -465,6 +481,7 @@ module.exports = {
   disconnect,
   syncConnection,
   syncAllConnections,
+  syncNewForUser,
   applyLatestToCard,
   clientForConnection,
   GMAIL_API,

@@ -276,14 +276,15 @@ const initCronJobs = () => {
   cron.schedule('0 * * * *', runReminderCheck);
   console.log('🕐 Hourly reminder checks scheduled.');
 
-  // ─── Daily Gmail statement sync at 06:00 IST ───
-  // Scans each user's connected Gmail for statements newer than their last scan.
-  // The hourly reminder check above then emails users one day before each due date.
-  cron.schedule('0 6 * * *', () => {
-    runExclusive('gmail-daily-sync', 20 * 60 * 60 * 1000, syncAllConnections)
-      .catch(err => console.error('❌ Gmail statement sync error:', err.message));
-  }, { timezone: 'Asia/Kolkata' });
-  console.log('📧 Daily Gmail statement sync scheduled at 06:00 IST.');
+  // ─── Gmail sync every 30 minutes ───
+  // Each run only fetches emails newer than the account's last scan, so it is cheap
+  // when nothing new arrived. The lock keeps one run at a time across instances; if a
+  // run takes longer than 30 minutes, the next tick is skipped instead of piling up.
+  cron.schedule('*/30 * * * *', () => {
+    runExclusive('gmail-sync', 28 * 60 * 1000, syncAllConnections)
+      .catch(err => console.error('❌ Gmail sync error:', err.message));
+  });
+  console.log('📧 Gmail sync scheduled every 30 minutes.');
 };
 
 module.exports = { initCronJobs };
