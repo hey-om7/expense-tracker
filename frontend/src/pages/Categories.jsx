@@ -3,7 +3,20 @@ import { useAppContext } from '../context/AppContext';
 import Modal from '../components/ui/Modal';
 import CategoryForm from '../components/forms/CategoryForm';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import { getContrastingColor } from '../utils/colorUtils';
+import CategoryIcon from '../components/ui/CategoryIcon';
+
+const CategoryRow = ({ category, onEdit, onDelete }) => (
+  <div className="group flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline/5 hover:border-outline/20 transition-colors max-md:p-3">
+    <div className="flex items-center gap-4 min-w-0 max-md:gap-3">
+      <CategoryIcon icon={category.icon} color={category.color} />
+      <span className="font-bold max-md:text-sm truncate">{category.name}</span>
+    </div>
+    <div className="flex gap-1 shrink-0">
+      <button type="button" aria-label={`Edit ${category.name}`} onClick={onEdit} className="p-2 text-on-surface-variant hover:text-primary focus-visible:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"><span className="material-symbols-outlined text-lg">edit</span></button>
+      <button type="button" aria-label={`Delete ${category.name}`} onClick={onDelete} className="p-2 text-on-surface-variant hover:text-error focus-visible:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/50 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"><span className="material-symbols-outlined text-lg">delete</span></button>
+    </div>
+  </div>
+);
 
 const CategoriesScreen = () => {
   const { categories, deleteCategory } = useAppContext();
@@ -30,19 +43,8 @@ const CategoriesScreen = () => {
           <h2 className="text-xl font-bold mb-4 border-b border-outline/10 pb-2 max-md:text-base max-md:mb-3">Expenses</h2>
           <div className="flex flex-col gap-3 max-md:gap-2">
              {expenses.map(c => (
-               <div key={c.id} className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline/5 hover:border-outline/20 transition-all max-md:p-3">
-                  <div className="flex items-center gap-4 min-w-0 max-md:gap-3">
-                     <span className="w-10 h-10 rounded-xl flex justify-center items-center shrink-0 max-md:w-9 max-md:h-9 max-md:rounded-lg" style={{backgroundColor: c.color, color: getContrastingColor(c.color)}}>
-                       <span className="material-symbols-outlined text-sm">{c.icon}</span>
-                     </span>
-                     <span className="font-bold max-md:text-sm truncate">{c.name}</span>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                     <button onClick={() => setModalState({ isOpen: true, data: c })} className="p-2 text-on-surface-variant hover:text-primary transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"><span className="material-symbols-outlined text-lg">edit</span></button>
-                     <button onClick={() => setConfirmState({ isOpen: true, id: c.id })} className="p-2 text-on-surface-variant hover:text-error transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"><span className="material-symbols-outlined text-lg">delete</span></button>
-                  </div>
-               </div>
-             ))}
+              <CategoryRow key={c.id} category={c} onEdit={() => setModalState({ isOpen: true, data: c })} onDelete={() => setConfirmState({ isOpen: true, id: c.id })} />
+            ))}
           </div>
         </div>
 
@@ -50,19 +52,8 @@ const CategoriesScreen = () => {
             <h2 className="text-xl font-bold mb-4 border-b border-outline/10 pb-2 max-md:text-base max-md:mb-3">Income</h2>
             <div className="flex flex-col gap-3 max-md:gap-2">
               {incomes.map(c => (
-                <div key={c.id} className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-outline/5 hover:border-outline/20 transition-all max-md:p-3">
-                   <div className="flex items-center gap-4 min-w-0 max-md:gap-3">
-                      <span className="w-10 h-10 rounded-xl flex justify-center items-center shrink-0 max-md:w-9 max-md:h-9 max-md:rounded-lg" style={{backgroundColor: c.color, color: getContrastingColor(c.color)}}>
-                        <span className="material-symbols-outlined text-sm">{c.icon}</span>
-                      </span>
-                      <span className="font-bold max-md:text-sm truncate">{c.name}</span>
-                   </div>
-                  <div className="flex gap-1 shrink-0">
-                     <button onClick={() => setModalState({ isOpen: true, data: c })} className="p-2 text-on-surface-variant hover:text-primary transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"><span className="material-symbols-outlined text-lg">edit</span></button>
-                     <button onClick={() => setConfirmState({ isOpen: true, id: c.id })} className="p-2 text-on-surface-variant hover:text-error transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"><span className="material-symbols-outlined text-lg">delete</span></button>
-                  </div>
-               </div>
-             ))}
+              <CategoryRow key={c.id} category={c} onEdit={() => setModalState({ isOpen: true, data: c })} onDelete={() => setConfirmState({ isOpen: true, id: c.id })} />
+            ))}
            </div>
         </div>
       </div>

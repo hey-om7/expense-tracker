@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/currency';
-import { getContrastingColor } from '../../utils/colorUtils';
+import CategoryIcon from '../ui/CategoryIcon';
 import { panelClass, SectionHeader, SectionLink, EmptyState, relativeDay } from './dashboardUi';
 
 const RecentActivity = ({ transactions, getCategory, onAdd, className = '' }) => (
@@ -21,9 +21,7 @@ const RecentActivity = ({ transactions, getCategory, onAdd, className = '' }) =>
           const isOut = t.type === 'expense' || t.type === 'buy_investment';
           return (
             <li key={t.id} className="flex items-center gap-3 px-1 py-3 first:pt-0 last:pb-0">
-              <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: cat.color, color: getContrastingColor(cat.color) }} aria-hidden="true">
-                <span className="material-symbols-outlined text-[19px]">{cat.icon}</span>
-              </span>
+              <CategoryIcon icon={cat.icon} color={cat.color} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-on-surface truncate">{t.title}</p>
                 <p className="text-xs text-on-surface-variant truncate">{cat.name} · {relativeDay(t.date)}</p>

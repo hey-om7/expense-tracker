@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/currency';
-import { getContrastingColor } from '../../utils/colorUtils';
+import CategoryIcon from '../ui/CategoryIcon';
 import { groupByDay, dayLabel, isOutflow, isTrade } from './filters';
 
 const TRADE_CATEGORY = { color: '#95CD41', icon: 'monitoring', name: 'Investment trade' };
@@ -19,9 +19,7 @@ const Row = ({ t, getCategory, onOpen, showDate }) => {
         onClick={() => onOpen(t)}
         className="group w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left transition-colors duration-150 hover:bg-surface-container-low active:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       >
-        <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: cat.color, color: getContrastingColor(cat.color) }} aria-hidden="true">
-          <span className="material-symbols-outlined text-[19px]">{cat.icon}</span>
-        </span>
+        <CategoryIcon icon={cat.icon} color={cat.color} />
         <span className="flex-1 min-w-0">
           <span className="block text-[15px] font-semibold text-on-surface truncate">{t.title}</span>
           <span className="block text-xs text-on-surface-variant truncate">
