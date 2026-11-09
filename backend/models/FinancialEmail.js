@@ -36,6 +36,9 @@ const financialEmailSchema = new mongoose.Schema({
   // Payment-parser version that produced `fields`. Open suggestions parsed by an older
   // version are re-read from Gmail on the next sync (see gmailSync.reparseStaleSuggestions).
   parserRevision: { type: Number, default: 0 },
+  // Review items: the last "Analyze with AI" answer, waiting for the user to confirm.
+  // { category, confidence, fields, anchors, analyzedAt }. Labels only, never the body.
+  proposal: { type: mongoose.Schema.Types.Mixed, default: null },
 }, { timestamps: true });
 
 financialEmailSchema.index({ userId: 1, gmailMessageId: 1 }, { unique: true });

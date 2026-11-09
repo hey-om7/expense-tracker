@@ -16,6 +16,7 @@
 const categories = [
   require('./creditCardStatement'),
   require('./transactionAlert'),
+  require('./accountStatement'),
 ];
 
 const register = (category, { before } = {}) => {

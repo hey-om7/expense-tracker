@@ -13,6 +13,13 @@
  *  GET  /api/gmail/emails?status=review|recorded → other financial emails (review queue, transaction alerts)
  *  POST /api/gmail/emails/:id/dismiss           → dismiss one review item
  *  POST /api/gmail/emails/dismiss-all           → dismiss every review item
+ *  POST /api/gmail/emails/:id/analyze           → ask AI what a review email is (proposal only);
+ *                                                 reads an attached PDF, asks for its password if needed
+ *  POST /api/gmail/emails/:id/confirm           → save it and remember the email type (no AI next time)
+ *  GET  /api/gmail/rules                        → remembered email types
+ *  DELETE /api/gmail/rules/:id                  → forget one
+ *  GET  /api/gmail/pdf-passwords                → banks with a saved statement PDF password
+ *  DELETE /api/gmail/pdf-passwords/:id          → remove one
  */
 const express = require('express');
 const crypto = require('crypto');
@@ -25,7 +32,10 @@ const GmailConnection = require('../models/GmailConnection');
 const CardStatement = require('../models/CardStatement');
 const CreditCard = require('../models/CreditCard');
 const FinancialEmail = require('../models/FinancialEmail');
+const EmailRule = require('../models/EmailRule');
 const gmail = require('../services/gmailSync');
+const emailReview = require('../services/emailReview');
+const statementPasswords = require('../services/statementPasswords');
 const { isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 
 const NONCE_COOKIE = 'vestor_gmail_oauth';
@@ -244,14 +254,95 @@ router.post('/statements/:id/ignore', validateId, async (req, res) => {
 router.get('/emails', async (req, res) => {
   try {
     const status = ['review', 'recorded', 'dismissed'].includes(req.query.status) ? req.query.status : 'review';
-    const emails = await FinancialEmail.find({ userId: req.userId, status })
-      .select('-gmailMessageId -userId -__v')
+    const filter = { userId: req.userId, status };
+    // e.g. exclude=transaction_alert to list saved statements without the many payment alerts
+    if (typeof req.query.exclude === 'string' && req.query.exclude) {
+      filter.category = { $nin: req.query.exclude.split(',').slice(0, 5) };
+    }
+    const emails = await FinancialEmail.find(filter)
+      .select('-gmailMessageId -userId -__v -proposal')
       .sort({ receivedAt: -1 })
       .limit(200)
       .lean();
     res.json(emails);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load emails' });
+  }
+});
+
+// ─── Teach Vestor an email type: analyze once with AI, confirm, then read locally ───
+const analyzeLimiter = userLimiter('gmail-analyze', { windowMs: 60 * 60 * 1000, limit: 30, message: 'Too many AI analyses. Please try again later.' });
+const sendReviewError = (res, err, fallback) => {
+  if (err instanceof emailReview.ReviewError) return res.status(err.status).json({ message: err.message });
+  console.error(`${fallback}:`, err.message);
+  return res.status(500).json({ message: fallback });
+};
+
+router.post('/emails/:id/analyze', validateId, analyzeLimiter, async (req, res) => {
+  try {
+    const { password, rememberPassword } = req.body || {};
+    res.json(await emailReview.analyze(req.userId, req.params.id, {
+      password: typeof password === 'string' && password.length ? password.slice(0, 100) : undefined,
+      rememberPassword: rememberPassword !== false,
+    }));
+  } catch (err) {
+    sendReviewError(res, err, 'Failed to analyze email');
+  }
+});
+
+// Saved statement-PDF passwords: only the bank is shown, never the password.
+router.get('/pdf-passwords', async (req, res) => {
+  try {
+    res.json(await statementPasswords.list(req.userId));
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load saved passwords' });
+  }
+});
+
+router.delete('/pdf-passwords/:id', validateId, async (req, res) => {
+  try {
+    const r = await statementPasswords.remove(req.userId, req.params.id);
+    if (!r.deletedCount) return res.status(404).json({ message: 'Not found' });
+    res.json({ message: 'Password removed.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to remove password' });
+  }
+});
+
+router.post('/emails/:id/confirm', validateId, async (req, res) => {
+  try {
+    const body = req.body || {};
+    res.json(await emailReview.confirm(req.userId, req.params.id, {
+      category: typeof body.category === 'string' ? body.category : undefined,
+      amount: body.amount,
+      dueDate: body.dueDate,
+      statementDate: body.statementDate,
+      last4: body.last4 != null ? String(body.last4).replace(/\D/g, '').slice(-4) : undefined,
+      remember: body.remember !== false,
+    }));
+  } catch (err) {
+    sendReviewError(res, err, 'Failed to save email');
+  }
+});
+
+router.get('/rules', async (req, res) => {
+  try {
+    const list = await EmailRule.find({ userId: req.userId })
+      .select('institutionName senderDomain sampleSubject category timesApplied lastAppliedAt createdAt')
+      .sort({ createdAt: -1 }).limit(100).lean();
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load remembered email types' });
+  }
+});
+
+router.delete('/rules/:id', validateId, async (req, res) => {
+  try {
+    const r = await EmailRule.deleteOne({ _id: req.params.id, userId: req.userId });
+    if (!r.deletedCount) return res.status(404).json({ message: 'Not found' });
+    res.json({ message: 'Forgotten. These emails will go through the normal checks again.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to forget email type' });
   }
 });
 

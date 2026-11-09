@@ -67,6 +67,7 @@ const isEncrypted = (value) => typeof value === 'string' && /^v[12]:/.test(value
 const contexts = {
   gmailRefresh: (userId) => `gmail-refresh:${userId}`,
   groqKey: (userId) => `groq-key:${userId}`,
+  statementPdf: (userId, domain) => `statement-pdf:${userId}:${domain}`,
 };
 
 // For user API keys. Returns the usable key, or '' if it can't be decrypted.

@@ -144,6 +144,14 @@ export const fetchFinancialEmails = (status = 'review') =>
   request(`/gmail/emails?${new URLSearchParams({ status }).toString()}`);
 export const dismissFinancialEmail = (id) => request(`/gmail/emails/${id}/dismiss`, { method: 'POST' });
 export const dismissAllFinancialEmails = () => request('/gmail/emails/dismiss-all', { method: 'POST' });
+export const fetchSavedFinancialEmails = () =>
+  request(`/gmail/emails?${new URLSearchParams({ status: 'recorded', exclude: 'transaction_alert' }).toString()}`);
+export const analyzeFinancialEmail = (id, data = {}) => request(`/gmail/emails/${id}/analyze`, { method: 'POST', body: data });
+export const fetchPdfPasswords = () => request('/gmail/pdf-passwords');
+export const deletePdfPassword = (id) => request(`/gmail/pdf-passwords/${id}`, { method: 'DELETE' });
+export const confirmFinancialEmail = (id, data) => request(`/gmail/emails/${id}/confirm`, { method: 'POST', body: data });
+export const fetchEmailRules = () => request('/gmail/rules');
+export const deleteEmailRule = (id) => request(`/gmail/rules/${id}`, { method: 'DELETE' });
 export const fetchExpenseSuggestions = () => request('/gmail/suggestions');
 // Asks the server to check Gmail for new emails now. Resolves to { synced }.
 export const syncNewGmailEmails = () => request('/gmail/sync-new', { method: 'POST' });

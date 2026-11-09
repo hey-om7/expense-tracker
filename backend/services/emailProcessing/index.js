@@ -17,6 +17,7 @@ const ai = require('./processors/ai');
 const categories = require('./categories');
 const sinks = require('./sinks');
 const { OUTCOME } = require('./result');
+const rules = require('./rules');
 
 const processors = new Map([[deterministic.name, deterministic], [ai.name, ai]]);
 
@@ -46,6 +47,9 @@ module.exports = {
   methodForPreferences,
   registerProcessor,
   createAiSession: ai.createAiSession,
+  analyzeWithAi: ai.analyze,
+  normalizeEmail,
+  rules,
   categories,
   sinks,
   OUTCOME,

@@ -18,6 +18,8 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const UserPreferences = require('../models/UserPreferences');
 const FinancialEmail = require('../models/FinancialEmail');
+const EmailRule = require('../models/EmailRule');
+const statementPasswords = require('./statementPasswords');
 const { OFFICIAL_BANK_DOMAINS } = require('./gmailScanner');
 const pipeline = require('./emailProcessing');
 const { rootDomainFor, PAYMENT_SUGGESTION_DOMAINS } = require('./emailProcessing/institutions');
@@ -84,7 +86,7 @@ const reparseStaleSuggestions = async (client, conn) => {
 // The user's saved preference decides the processing method on every job.
 // Read from the database, never from the request.
 const loadProcessingPrefs = (userId) =>
-  UserPreferences.findOne({ userId }).select('userId aiEmailProcessingEnabled groqApiKey').lean();
+  UserPreferences.findOne({ userId }).select('userId aiEmailProcessingEnabled groqApiKey aiModel').lean();
 
 // Groq key for AI processing: server key first, else the user's own key from Settings.
 const groqKeyFrom = (prefs) => process.env.GROQ_API_KEY ||
@@ -249,6 +251,9 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     const known = new Set([...knownStatements, ...knownOther].map(s => s.gmailMessageId));
 
     const cards = await CreditCard.find({ userId: conn.userId }).lean();
+    const rules = await EmailRule.find({ userId: conn.userId }).lean();
+    const pdfPasswords = rules.some(r => r.usesPdf) ? await statementPasswords.loadAll(conn.userId) : new Map();
+    const ruleHits = new Map();
 
     // Resolve the processing method from the saved preference. It is re-read
     // during long jobs so turning AI off takes effect without waiting for the next job.
@@ -297,8 +302,9 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
       try {
         let raw = Buffer.from(msg.raw, 'base64url');
         msg = null; // drop the raw message as early as possible
-        result = await pipeline.processRawEmail(raw, { method, messageId: id, receivedAt: received, aiSession });
+        result = await pipeline.processRawEmail(raw, { method, messageId: id, receivedAt: received, aiSession, rules, pdfPasswords });
         raw = null;
+        if (result.ruleId) ruleHits.set(result.ruleId, (ruleHits.get(result.ruleId) || 0) + 1);
       } catch (err) {
         // Unreadable email from a bank sender: keep a review entry rather than dropping it.
         console.warn(`Email processing failed for one message: ${err.message}`);
@@ -321,6 +327,9 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     }
 
     for (const cardId of touchedCards) await applyLatestToCard(cardId);
+    for (const [ruleId, n] of ruleHits) {
+      await EmailRule.updateOne({ _id: ruleId }, { $inc: { timesApplied: n }, $set: { lastAppliedAt: new Date() } });
+    }
     try {
       await reparseStaleSuggestions(client, conn);
     } catch (err) {
@@ -484,6 +493,8 @@ module.exports = {
   syncNewForUser,
   applyLatestToCard,
   clientForConnection,
+  loadProcessingPrefs,
+  groqKeyFrom,
   GMAIL_API,
   rootDomainFor,
 };

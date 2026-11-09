@@ -9,6 +9,7 @@ const { identifyInstitution } = require('../institutions');
 const { OUTCOME, buildResult, sanitizeFields } = require('../result');
 const { CURRENCY_AMOUNT } = require('../textUtils');
 const { isPromotional } = require('../promotional');
+const rules = require('../rules');
 
 const NAME = 'deterministic';
 
@@ -47,10 +48,14 @@ const classifyLocally = (email, institution) => {
   return null;
 };
 
-const processEmail = async (email) => {
+const processEmail = async (email, ctx = {}) => {
   const institution = identifyInstitution(email.domain);
   const stop = gate(email, institution, NAME);
   if (stop) return stop;
+
+  // An email type the user taught Vestor: read it with the learned rule.
+  const rule = rules.matchRule(email, ctx.rules);
+  if (rule) return rules.applyRule(email, institution, rule, NAME, ctx.pdfPasswords);
 
   const base = { email, institution, processor: NAME };
   const local = classifyLocally(email, institution);

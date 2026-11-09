@@ -3,6 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import * as api from '../../services/api';
 import { formatCurrency } from '../../utils/currency';
 import Modal from './Modal';
+import EmailAnalysisModal, { EMAIL_CATEGORY_LABELS } from './EmailAnalysisModal';
+import PdfPasswordModal from './PdfPasswordModal';
+
+const REVIEW_NOTES = {
+  unauthenticated_sender: ' · sender not verified',
+  pdf_password_needed: ' · statement PDF needs its password',
+};
 
 const fmtDate = (d) => {
   if (!d) return '—';
@@ -42,22 +49,34 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const [busy, setBusy] = useState('');
   const [banner, setBanner] = useState(null);
   const [addModal, setAddModal] = useState(null); // { statement, name, last4Digits }
-  const [sheet, setSheet] = useState(null); // mobile: about | gmail | pending | review | history
+  const [sheet, setSheet] = useState(null); // mobile: about | gmail | pending | review | history | saved
+  const [saved, setSaved] = useState(snapshot?.saved ?? []);
+  const [emailRules, setEmailRules] = useState(snapshot?.emailRules ?? []);
+  const [showSaved, setShowSaved] = useState(false);
+  const [analysis, setAnalysis] = useState(null); // { email, proposal }
+  const [pwPrompt, setPwPrompt] = useState(null); // { email, filename, savedPasswordFailed, error }
+  const [pdfPasswords, setPdfPasswords] = useState(snapshot?.pdfPasswords ?? []);
 
   const load = useCallback(async () => {
     try {
-      // All four in parallel instead of status first, then the lists.
-      const [s, p, h, r] = await Promise.all([
+      // All in parallel instead of status first, then the lists.
+      const [s, p, h, r, sv, rl, pw] = await Promise.all([
         api.fetchGmailStatus(),
         api.fetchCardStatements({ status: 'pending' }).catch(() => []),
         api.fetchCardStatements({ status: 'linked' }).catch(() => []),
         api.fetchFinancialEmails('review').catch(() => []),
+        api.fetchSavedFinancialEmails().catch(() => []),
+        api.fetchEmailRules().catch(() => []),
+        api.fetchPdfPasswords().catch(() => []),
       ]);
       setStatus(s);
       setPending(p);
       setHistory(h);
       setReview(r);
-      api.setCache('gmail-panel', { status: s, pending: p, history: h, review: r });
+      setSaved(sv);
+      setEmailRules(rl);
+      setPdfPasswords(pw);
+      api.setCache('gmail-panel', { status: s, pending: p, history: h, review: r, saved: sv, emailRules: rl, pdfPasswords: pw });
       return s;
     } catch {
       setStatus({ connected: false, available: false });
@@ -141,6 +160,68 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
     await api.dismissFinancialEmail(id);
     await load();
   });
+
+  const handleAnalyze = (email) => run(`analyze-${email._id}`, async () => {
+    let proposal;
+    try {
+      proposal = await api.analyzeFinancialEmail(email._id);
+    } finally {
+      setSheet(null); // on mobile, close the sheet so the result or the error banner is visible
+    }
+    if (proposal.needsPassword) {
+      setPwPrompt({ email, filename: proposal.filename, savedPasswordFailed: proposal.savedPasswordFailed, error: '' });
+      return;
+    }
+    setAnalysis({ email, proposal });
+  });
+
+  // Retry the analysis with the PDF password. Errors stay inside the password dialog.
+  const handlePasswordSubmit = async ({ password, rememberPassword }) => {
+    const email = pwPrompt.email;
+    setBusy('pdf-password');
+    try {
+      const proposal = await api.analyzeFinancialEmail(email._id, { password, rememberPassword });
+      setPwPrompt(null);
+      setAnalysis({ email, proposal });
+      if (proposal.pdf?.passwordSaved) load();
+    } catch (err) {
+      setPwPrompt((p) => p && { ...p, error: err.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleRemovePassword = (pw) => {
+    if (!window.confirm(`Remove the saved statement password for ${pw.senderDomain}?`)) return;
+    run(`pw-${pw._id}`, async () => {
+      await api.deletePdfPassword(pw._id);
+      await load();
+    });
+  };
+
+  const handleConfirm = (data) => run('confirm', async () => {
+    const r = await api.confirmFinancialEmail(analysis.email._id, data);
+    setAnalysis(null);
+    const what = {
+      linked: 'Saved to your credit card.', pending: 'Saved. The card is listed under untracked cards.',
+      dismissed: 'Ignored.', recorded: 'Saved under Saved bank emails.',
+    }[r.action] || 'Saved.';
+    setBanner({
+      ok: true,
+      text: `${what}${r.remembered ? ' Vestor will handle emails like this on its own from now on.' : ''}`,
+      detail: r.similarResolved ? `${r.similarResolved} similar email(s) waiting for review were handled the same way.` : '',
+    });
+    await load();
+    if (['linked', 'pending'].includes(r.action)) onCardsChanged?.();
+  });
+
+  const handleForgetRule = (rule) => {
+    if (!window.confirm(`Forget "${rule.sampleSubject}"? Emails like it will go through the normal checks again.`)) return;
+    run(`forget-${rule._id}`, async () => {
+      await api.deleteEmailRule(rule._id);
+      await load();
+    });
+  };
 
   const handleDismissAllReview = () => {
     if (!window.confirm('Dismiss all emails waiting for review?')) return;
@@ -277,7 +358,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <p className="font-bold text-sm text-on-surface">Bank emails to review ({review.length})</p>
-              <p className="text-xs text-on-surface-variant mt-1">Vestor couldn&apos;t read these reliably, so nothing was recorded from them. Check them in Gmail and add anything relevant by hand.</p>
+              <p className="text-xs text-on-surface-variant mt-1">Vestor couldn&apos;t read these on its own, so nothing was recorded from them. Analyze one with AI to save it and teach Vestor that type of email. Analysis sends that one email to Groq, with card and account numbers masked.</p>
             </div>
             <button disabled={!!busy} onClick={handleDismissAllReview} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
               Dismiss all
@@ -291,15 +372,94 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                   <p className="text-on-surface-variant">
                     {e.institutionName || e.senderDomain || 'Unknown sender'} · {fmtDate(e.receivedAt)}
                     {e.fields?.amount != null ? ` · ${formatCurrency(e.fields.amount)}?` : ''}
-                    {e.reason === 'unauthenticated_sender' ? ' · sender not verified' : ''}
+                    {REVIEW_NOTES[e.reason] || ''}
                   </p>
                 </div>
-                <button disabled={!!busy} onClick={() => handleDismissReview(e._id)} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
-                  Dismiss
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {e.reason !== 'unauthenticated_sender' && (
+                    <button disabled={!!busy} onClick={() => handleAnalyze(e)} className={`${btn} text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20`}>
+                      {busy === `analyze-${e._id}`
+                        ? <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                        : <span className="material-symbols-outlined text-sm" aria-hidden="true">auto_awesome</span>}
+                      {busy === `analyze-${e._id}` ? 'Analyzing…' : 'Analyze with AI'}
+                    </button>
+                  )}
+                  <button disabled={!!busy} onClick={() => handleDismissReview(e._id)} className={`${btn} text-on-surface-variant border border-outline/20`}>
+                    Dismiss
+                  </button>
+                </div>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Bank emails saved after review, and the email types Vestor remembers */}
+      {(saved.length > 0 || emailRules.length > 0 || pdfPasswords.length > 0) && (
+        <div className="max-md:hidden bg-surface-container-low rounded-xl border border-outline/10">
+          <button onClick={() => setShowSaved((v) => !v)} aria-expanded={showSaved} className="w-full flex items-center justify-between p-4 text-sm font-bold text-on-surface">
+            <span>Saved bank emails ({saved.length}){emailRules.length > 0 && <span className="font-normal text-on-surface-variant"> · {emailRules.length} remembered {emailRules.length === 1 ? 'type' : 'types'}</span>}</span>
+            <span className="material-symbols-outlined text-base" aria-hidden="true">{showSaved ? 'expand_less' : 'expand_more'}</span>
+          </button>
+          {showSaved && (
+            <div className="px-4 pb-4 flex flex-col gap-4">
+              {saved.length > 0 && (
+                <div className="flex flex-col divide-y divide-outline/10">
+                  {saved.map((e) => (
+                    <div key={e._id} className="py-2 flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-bold text-on-surface truncate">{e.subject}</p>
+                        <p className="text-on-surface-variant">
+                          {EMAIL_CATEGORY_LABELS[e.category] || 'Bank email'} · {e.institutionName || e.senderDomain} · {fmtDate(e.receivedAt)}
+                        </p>
+                      </div>
+                      <span className="font-headline font-extrabold text-on-surface shrink-0">{e.fields?.amount != null ? formatCurrency(e.fields.amount) : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {emailRules.length > 0 && (
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-on-surface-variant mb-1">Remembered email types</p>
+                  <div className="flex flex-col divide-y divide-outline/10">
+                    {emailRules.map((rl) => (
+                      <div key={rl._id} className="py-2 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-bold text-on-surface truncate">{rl.sampleSubject}</p>
+                          <p className="text-on-surface-variant">
+                            {rl.institutionName || rl.senderDomain} · {rl.category === 'not_financial' ? 'Skipped' : `Saved as ${(EMAIL_CATEGORY_LABELS[rl.category] || 'bank email').toLowerCase()}`}
+                            {rl.timesApplied ? ` · used ${rl.timesApplied}×` : ''}
+                          </p>
+                        </div>
+                        <button disabled={!!busy} onClick={() => handleForgetRule(rl)} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
+                          Forget
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pdfPasswords.length > 0 && (
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-on-surface-variant mb-1">Saved PDF passwords</p>
+                  <div className="flex flex-col divide-y divide-outline/10">
+                    {pdfPasswords.map((pw) => (
+                      <div key={pw._id} className="py-2 flex items-center justify-between gap-3 text-xs">
+                        <p className="min-w-0 flex items-center gap-2 text-on-surface">
+                          <span className="material-symbols-outlined text-sm text-on-surface-variant" aria-hidden="true">lock</span>
+                          <span className="font-bold truncate">{pw.senderDomain}</span>
+                          {pw.lastUsedAt && <span className="text-on-surface-variant">· last used {fmtDate(pw.lastUsedAt)}</span>}
+                        </p>
+                        <button disabled={!!busy} onClick={() => handleRemovePassword(pw)} className={`${btn} text-on-surface-variant border border-outline/20 shrink-0`}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -349,6 +509,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
           pendingGroups.length > 0 && { key: 'pending', icon: 'add_card', tone: 'text-primary', label: `${pendingGroups.length} untracked ${pendingGroups.length === 1 ? 'card' : 'cards'} found` },
           review.length > 0 && { key: 'review', icon: 'help', tone: 'text-on-surface-variant', label: `${review.length} bank ${review.length === 1 ? 'email' : 'emails'} to review` },
           history.length > 0 && { key: 'history', icon: 'history', tone: 'text-on-surface-variant', label: `Statement history · ${history.length}` },
+          (saved.length > 0 || emailRules.length > 0 || pdfPasswords.length > 0) && { key: 'saved', icon: 'inventory_2', tone: 'text-on-surface-variant', label: `Saved bank emails · ${saved.length}` },
         ].filter(Boolean).map(row => (
           <li key={row.key}>
             <button type="button" onClick={() => setSheet(row.key)} className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-surface-container transition-colors">
@@ -413,25 +574,95 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
 
       <Modal isOpen={sheet === 'review'} onClose={() => setSheet(null)} title="Emails to review"
         footer={<button type="button" disabled={!!busy} onClick={handleDismissAllReview} className="w-full min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface disabled:opacity-50">Dismiss all</button>}>
-        <p className="text-xs text-on-surface-variant mb-2">Vestor couldn&apos;t read these reliably, so nothing was recorded. Check them in Gmail and add anything relevant by hand.</p>
+        <p className="text-xs text-on-surface-variant mb-2">Vestor couldn&apos;t read these on its own. Analyze one with AI to save it and teach Vestor that type of email. This sends that one email to Groq, with card and account numbers masked.</p>
         <ul className="divide-y divide-outline/10">
           {review.map(e => (
-            <li key={e._id} className="py-3 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-on-surface line-clamp-2">{e.subject || '(unreadable email)'}</p>
-                <p className="mt-0.5 text-xs text-on-surface-variant">
-                  {e.institutionName || e.senderDomain || 'Unknown sender'} · {fmtDate(e.receivedAt)}
-                  {e.fields?.amount != null ? ` · ${formatCurrency(e.fields.amount)}?` : ''}
-                  {e.reason === 'unauthenticated_sender' ? ' · sender not verified' : ''}
-                </p>
+            <li key={e._id} className="py-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-on-surface line-clamp-2">{e.subject || '(unreadable email)'}</p>
+                  <p className="mt-0.5 text-xs text-on-surface-variant">
+                    {e.institutionName || e.senderDomain || 'Unknown sender'} · {fmtDate(e.receivedAt)}
+                    {e.fields?.amount != null ? ` · ${formatCurrency(e.fields.amount)}?` : ''}
+                    {REVIEW_NOTES[e.reason] || ''}
+                  </p>
+                </div>
+                <button type="button" disabled={!!busy} onClick={() => handleDismissReview(e._id)} aria-label="Dismiss" className="shrink-0 w-10 h-10 -mt-1 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-50">
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
               </div>
-              <button type="button" disabled={!!busy} onClick={() => handleDismissReview(e._id)} aria-label="Dismiss" className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-50">
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
+              {e.reason !== 'unauthenticated_sender' && (
+                <button type="button" disabled={!!busy} onClick={() => handleAnalyze(e)} className="mt-2 min-h-[40px] px-4 rounded-full border border-primary/30 text-primary text-xs font-bold inline-flex items-center gap-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50">
+                  {busy === `analyze-${e._id}`
+                    ? <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                    : <span className="material-symbols-outlined text-[16px]" aria-hidden="true">auto_awesome</span>}
+                  {busy === `analyze-${e._id}` ? 'Analyzing…' : 'Analyze with AI'}
+                </button>
+              )}
             </li>
           ))}
         </ul>
       </Modal>
+
+      <Modal isOpen={sheet === 'saved'} onClose={() => setSheet(null)} title="Saved bank emails">
+        {saved.length === 0 && <p className="text-sm text-on-surface-variant">Nothing saved yet.</p>}
+        <ul className="divide-y divide-outline/10">
+          {saved.map(e => (
+            <li key={e._id} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-on-surface line-clamp-2">{e.subject}</p>
+                <p className="mt-0.5 text-xs text-on-surface-variant">{EMAIL_CATEGORY_LABELS[e.category] || 'Bank email'} · {fmtDate(e.receivedAt)}</p>
+              </div>
+              {e.fields?.amount != null && <span className="shrink-0 font-headline font-bold tabular-nums text-sm text-on-surface">{formatCurrency(e.fields.amount)}</span>}
+            </li>
+          ))}
+        </ul>
+        {emailRules.length > 0 && (
+          <>
+            <p className="mt-5 text-[11px] uppercase tracking-[0.14em] font-bold text-on-surface-variant">Remembered email types</p>
+            <ul className="divide-y divide-outline/10">
+              {emailRules.map(rl => (
+                <li key={rl._id} className="py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-on-surface line-clamp-2">{rl.sampleSubject}</p>
+                    <p className="mt-0.5 text-xs text-on-surface-variant">
+                      {rl.category === 'not_financial' ? 'Skipped' : `Saved as ${(EMAIL_CATEGORY_LABELS[rl.category] || 'bank email').toLowerCase()}`}
+                      {rl.timesApplied ? ` · used ${rl.timesApplied}×` : ''}
+                    </p>
+                  </div>
+                  <button type="button" disabled={!!busy} onClick={() => handleForgetRule(rl)} className="shrink-0 min-h-[40px] px-3.5 rounded-full border border-outline/20 text-xs font-semibold text-on-surface-variant disabled:opacity-50">Forget</button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {pdfPasswords.length > 0 && (
+          <>
+            <p className="mt-5 text-[11px] uppercase tracking-[0.14em] font-bold text-on-surface-variant">Saved PDF passwords</p>
+            <ul className="divide-y divide-outline/10">
+              {pdfPasswords.map(pw => (
+                <li key={pw._id} className="py-3 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[20px] text-on-surface-variant" aria-hidden="true">lock</span>
+                  <span className="flex-1 min-w-0 text-sm text-on-surface truncate">{pw.senderDomain}</span>
+                  <button type="button" disabled={!!busy} onClick={() => handleRemovePassword(pw)} className="shrink-0 min-h-[40px] px-3.5 rounded-full border border-outline/20 text-xs font-semibold text-on-surface-variant disabled:opacity-50">Remove</button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Modal>
+        analysis={analysis}
+        saving={busy === 'confirm'}
+        onClose={() => setAnalysis(null)}
+        onConfirm={handleConfirm}
+      />
+
+      <PdfPasswordModal
+        prompt={pwPrompt}
+        busy={busy === 'pdf-password'}
+        onClose={() => setPwPrompt(null)}
+        onSubmit={handlePasswordSubmit}
+      />
 
       <Modal isOpen={sheet === 'history'} onClose={() => setSheet(null)} title="Statement history">
         <ul className="divide-y divide-outline/10">

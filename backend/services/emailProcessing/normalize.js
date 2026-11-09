@@ -1,13 +1,15 @@
 /**
  * Turn a raw RFC822 email into the small, normalized object processors work on.
- * HTML is converted to text, whitespace collapsed, and the text capped. Attachments
- * and the raw message are not kept; the caller should drop the raw buffer after this.
+ * HTML is converted to text, whitespace collapsed, and the text capped. PDF attachments
+ * are kept in memory for statement parsing; other attachments and the raw message are
+ * not kept. The caller should drop the raw buffer after this.
  */
 const { simpleParser } = require('mailparser');
 const { emailBodyText, extractDomain, isBankDomain } = require('../gmailScanner');
 const { rootDomainFor } = require('./institutions');
 
 const MAX_TEXT = 20000;
+const MAX_PDFS = 2;
 
 // Gmail adds its own Authentication-Results header at the top of every message it
 // receives. A sender can put any number of fake ones further down, so only the
@@ -75,6 +77,11 @@ const normalizeEmail = async (raw, { messageId = null, receivedAt = null } = {})
     date,
     receivedAt: receivedAt || date,
     text: normalizeText(emailBodyText(parsed)).slice(0, MAX_TEXT),
+    // Statement PDFs, kept in memory only for this processing run (never stored).
+    pdfs: (parsed.attachments || [])
+      .filter(a => a.contentType === 'application/pdf' || /\.pdf$/i.test(a.filename || ''))
+      .slice(0, MAX_PDFS)
+      .map(a => ({ filename: String(a.filename || 'statement.pdf').slice(0, 120), content: a.content })),
   });
 };
 
