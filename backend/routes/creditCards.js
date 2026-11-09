@@ -17,6 +17,11 @@ const pickFields = (body) => {
     if (isNaN(clean.totalLimit) || clean.totalLimit < 0) clean.totalLimit = 0;
   }
   if (body.notes !== undefined) clean.notes = String(body.notes).slice(0, 500);
+  if (body.paidDueDate !== undefined) {
+    const d = body.paidDueDate ? new Date(body.paidDueDate) : null;
+    clean.paidDueDate = d && !isNaN(d.getTime()) ? d : null;
+    clean.paidAt = clean.paidDueDate ? new Date() : null;
+  }
   return clean;
 };
 

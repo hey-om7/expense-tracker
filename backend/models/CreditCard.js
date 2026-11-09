@@ -10,6 +10,10 @@ const creditCardSchema = new mongoose.Schema({
   totalLimit: { type: Number, default: 0, min: 0 },
   notes: { type: String, default: '', maxlength: 500 },
   lastReminderSentDate: { type: Date, default: null },
+  // The bill is paid while paidDueDate matches billDueDate. A new statement
+  // moves billDueDate forward, so the card becomes unpaid again on its own.
+  paidDueDate: { type: Date, default: null },
+  paidAt: { type: Date, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('CreditCard', creditCardSchema);

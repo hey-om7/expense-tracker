@@ -9,6 +9,7 @@ import SpendingBreakdown from '../components/dashboard/SpendingBreakdown';
 import RecentActivity from '../components/dashboard/RecentActivity';
 import PortfolioSnapshot from '../components/dashboard/PortfolioSnapshot';
 import UpcomingBills from '../components/dashboard/UpcomingBills';
+import { isCardPaid } from '../utils/creditCard';
 
 // Cycles a recurring start date forward to the next upcoming occurrence.
 const getNextCycleDate = (startDate, periodString) => {
@@ -76,7 +77,7 @@ const DashboardScreen = () => {
       bills.push({ id: `sub-${sub.id}`, title: sub.name, amount: sub.amount, date: targetDate, icon: 'event_repeat', color: '#95CD41' });
     });
     creditCards.forEach(cc => {
-      if (!cc.billDueDate) return;
+      if (!cc.billDueDate || isCardPaid(cc)) return;
       bills.push({ id: `cc-${cc.id}`, title: cc.name, amount: 'Pending', date: new Date(cc.billDueDate), icon: 'credit_card', color: '#E5BA73' });
     });
     return bills.sort((a, b) => a.date - b.date).slice(0, 4);

@@ -186,6 +186,13 @@ const processCreditCards = async () => {
     const dueDate = new Date(card.billDueDate);
     dueDate.setHours(0, 0, 0, 0);
 
+    // Bill already marked paid for this due date
+    if (card.paidDueDate) {
+      const paid = new Date(card.paidDueDate);
+      paid.setHours(0, 0, 0, 0);
+      if (isSameDay(paid, dueDate)) continue;
+    }
+
     if (isSameDay(dueDate, tomorrow)) {
       const user = await User.findById(card.userId).select('email name');
       const prefs = await UserPreferences.findOne({ userId: card.userId }).lean();

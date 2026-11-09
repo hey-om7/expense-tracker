@@ -6,6 +6,7 @@ import AddSubscriptionForm from '../components/forms/AddSubscriptionForm';
 import AddCreditCardForm from '../components/forms/AddCreditCardForm';
 import FeatureTour from '../components/ui/FeatureTour';
 import GmailStatementsPanel from '../components/ui/GmailStatementsPanel';
+import { isCardPaid } from '../utils/creditCard';
 
 // Helper function to force DD/MM/YYYY format
 const formatDateToDDMMYYYY = (dateString) => {
@@ -21,7 +22,21 @@ const formatDateToDDMMYYYY = (dateString) => {
 };
 
 const CyclicScreen = () => {
-  const { subscriptions, creditCards, updateSubscription, refetchCreditCards } = useAppContext();
+  const { subscriptions, creditCards, updateSubscription, updateCreditCard, refetchCreditCards } = useAppContext();
+  const [payingId, setPayingId] = useState(null);
+
+  // Marks the current bill paid (or undoes it). Paid status is tied to the
+  // current due date, so the next statement makes the card unpaid again.
+  const togglePaid = async (cc) => {
+    setPayingId(cc.id);
+    try {
+      await updateCreditCard(cc.id, { paidDueDate: isCardPaid(cc) ? null : cc.billDueDate });
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  const paidText = (cc) => cc.paidAt ? `Paid on ${formatDateToDDMMYYYY(cc.paidAt)}` : 'Paid';
   
   const [activeTab, setActiveTab] = useState('SUBSCRIPTIONS');
   const [subModal, setSubModal] = useState({ isOpen: false, data: null });
@@ -70,13 +85,13 @@ const CyclicScreen = () => {
     });
   }, [subscriptions]);
 
-  // ─── Sort credit cards: non-past-due first, past due last ───
+  // ─── Sort credit cards: unpaid first (soonest due on top), paid last ───
   const sortedCreditCards = useMemo(() => {
     return [...creditCards].sort((a, b) => {
-      const aPast = isPastDue(a.billDueDate);
-      const bPast = isPastDue(b.billDueDate);
-      if (aPast !== bPast) return aPast ? 1 : -1;
-      return 0;
+      const aPaid = isCardPaid(a);
+      const bPaid = isCardPaid(b);
+      if (aPaid !== bPaid) return aPaid ? 1 : -1;
+      return new Date(a.billDueDate) - new Date(b.billDueDate);
     });
   }, [creditCards]);
 
@@ -266,15 +281,18 @@ const CyclicScreen = () => {
             ) : (
                <div className="flex flex-col md:gap-4">
                   {sortedCreditCards.map(cc => {
-                    const warning = isApproaching(cc.billDueDate, 5);
-                    const past = isPastDue(cc.billDueDate);
+                    const paid = isCardPaid(cc);
+                    const warning = !paid && isApproaching(cc.billDueDate, 5);
+                    const past = !paid && isPastDue(cc.billDueDate);
+                    const busy = payingId === cc.id;
                     
                     return (
                       <React.Fragment key={cc.id}>
                         {/* Desktop credit card row */}
                         <div 
-                          className={`hidden md:flex group cursor-pointer bg-surface-container-low rounded-xl p-5 border border-outline/5 hover:border-outline/20 transition-all flex-col md:flex-row md:items-center justify-between gap-6
-                            ${past ? 'opacity-40 grayscale' : ''}
+                          className={`hidden md:flex group cursor-pointer bg-surface-container-low rounded-xl p-5 border transition-all flex-col md:flex-row md:items-center justify-between gap-6
+                            ${past ? 'border-error/30 hover:border-error/50' : 'border-outline/5 hover:border-outline/20'}
+                            ${paid ? 'opacity-60' : ''}
                           `}
                           onClick={() => setCcModal({ isOpen: true, data: cc })}
                         >
@@ -290,13 +308,19 @@ const CyclicScreen = () => {
                           <div className="flex items-center gap-10">
                              <div className="text-right">
                                 <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Bill Due Date</span>
-                                <span className={`font-body text-sm font-bold ${(warning || past) ? 'text-error animate-pulse' : 'text-on-surface'}`}>
-                                   {formatDateToDDMMYYYY(cc.billDueDate)} {past ? '(Past Due)' : warning ? '(Soon)' : ''}
+                                <span className={`font-body text-sm font-bold ${past ? 'text-error' : warning ? 'text-error' : 'text-on-surface'}`}>
+                                   {formatDateToDDMMYYYY(cc.billDueDate)} {paid ? '' : past ? '(Past Due)' : warning ? '(Soon)' : ''}
                                 </span>
+                                {paid && (
+                                  <span className="flex items-center justify-end gap-1 text-[11px] font-semibold text-[#95CD41] mt-0.5">
+                                    <span className="material-symbols-outlined text-[14px]" aria-hidden="true">check_circle</span>
+                                    {paidText(cc)}
+                                  </span>
+                                )}
                              </div>
                              <div className="text-right border-l border-outline/10 pl-6">
-                                <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Amount Pending</span>
-                                <span className={`font-headline font-extrabold text-xl ${cc.billAmount ? 'text-error' : 'text-outline'}`}>
+                                <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">{paid ? 'Bill Amount' : 'Amount Pending'}</span>
+                                <span className={`font-headline font-extrabold text-xl ${cc.billAmount && !paid ? 'text-error' : 'text-outline'}`}>
                                   {cc.billAmount ? formatCurrency(cc.billAmount) : 'N/A'}
                                 </span>
                                 {cc.billGeneratedDate && (
@@ -305,6 +329,17 @@ const CyclicScreen = () => {
                                   </span>
                                 )}
                              </div>
+                             <button
+                               type="button"
+                               disabled={busy}
+                               aria-pressed={paid}
+                               onClick={(e) => { e.stopPropagation(); togglePaid(cc); }}
+                               className={`min-w-[120px] h-10 px-4 rounded-full text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:cursor-wait
+                                 ${paid ? 'border border-outline/20 text-on-surface-variant hover:text-on-surface hover:border-outline/40' : 'bg-[#95CD41] text-[#1A120B] hover:brightness-110 active:brightness-95'}`}
+                             >
+                               <span className="material-symbols-outlined text-[16px]" aria-hidden="true">{busy ? 'progress_activity' : paid ? 'undo' : 'check'}</span>
+                               {busy ? 'Saving…' : paid ? 'Mark unpaid' : 'Mark paid'}
+                             </button>
                              <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100 hidden md:block">edit</span>
                           </div>
                         </div>
@@ -313,14 +348,14 @@ const CyclicScreen = () => {
                         <button
                           type="button"
                           onClick={() => setCcDetailId(cc.id)}
-                          className={`md:hidden w-full flex items-center gap-3 py-3.5 text-left border-b border-outline/[0.07] last:border-0 active:bg-surface-container-low transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${past ? 'opacity-50' : ''}`}
+                          className={`md:hidden w-full flex items-center gap-3 py-3.5 text-left border-b border-outline/[0.07] last:border-0 active:bg-surface-container-low transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${paid ? 'opacity-60' : ''}`}
                         >
                           <span className="w-11 h-8 shrink-0 rounded-md bg-gradient-to-br from-[#E5BA73] to-[#67490b] flex items-end justify-end p-1" aria-hidden="true">
                             <span className="text-[9px] font-bold text-white tracking-wider leading-none">{cc.last4Digits}</span>
                           </span>
                           <span className="flex-1 min-w-0">
                             <span className="block text-[15px] font-semibold leading-snug text-on-surface line-clamp-2 break-words">{cc.name}</span>
-                            <span className={`block mt-0.5 text-xs font-semibold ${(warning || past) ? 'text-error' : 'text-on-surface-variant'}`}>{dueText(cc.billDueDate)}</span>
+                            <span className={`block mt-0.5 text-xs font-semibold ${paid ? 'text-[#95CD41]' : (warning || past) ? 'text-error' : 'text-on-surface-variant'}`}>{paid ? paidText(cc) : dueText(cc.billDueDate)}</span>
                           </span>
                           <span className={`shrink-0 font-headline font-bold tabular-nums text-[15px] ${cc.billAmount ? 'text-on-surface' : 'text-on-surface-variant text-xs font-semibold'}`}>
                             {cc.billAmount ? formatCurrency(cc.billAmount) : 'No bill'}
@@ -348,26 +383,40 @@ const CyclicScreen = () => {
         onClose={() => setCcDetailId(null)}
         title={ccDetail?.name || ''}
         footer={ccDetail && (
-          <button type="button" onClick={() => { setCcDetailId(null); setCcModal({ isOpen: true, data: ccDetail }); }} className="w-full min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface hover:bg-surface-container-highest transition-colors inline-flex items-center justify-center gap-1.5">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span> Edit card
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={payingId === ccDetail.id}
+              aria-pressed={isCardPaid(ccDetail)}
+              onClick={() => togglePaid(ccDetail)}
+              className={`w-full min-h-[48px] rounded-full text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-[filter,background-color] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:cursor-wait
+                ${isCardPaid(ccDetail) ? 'border border-outline/20 text-on-surface hover:bg-surface-container-highest' : 'bg-[#95CD41] text-[#1A120B] hover:brightness-110 active:brightness-95'}`}
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{payingId === ccDetail.id ? 'progress_activity' : isCardPaid(ccDetail) ? 'undo' : 'check'}</span>
+              {payingId === ccDetail.id ? 'Saving…' : isCardPaid(ccDetail) ? 'Mark as unpaid' : 'Mark bill as paid'}
+            </button>
+            <button type="button" onClick={() => { setCcDetailId(null); setCcModal({ isOpen: true, data: ccDetail }); }} className="w-full min-h-[48px] rounded-full border border-outline/20 text-sm font-semibold text-on-surface hover:bg-surface-container-highest transition-colors inline-flex items-center justify-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span> Edit card
+            </button>
+          </div>
         )}
       >
         {ccDetail && (() => {
-          const past = isPastDue(ccDetail.billDueDate);
-          const soon = isApproaching(ccDetail.billDueDate, 5);
+          const paid = isCardPaid(ccDetail);
+          const past = !paid && isPastDue(ccDetail.billDueDate);
+          const soon = !paid && isApproaching(ccDetail.billDueDate, 5);
           return (
             <div>
               <p className="text-xs text-on-surface-variant">Card ending {ccDetail.last4Digits || '—'}</p>
-              <p className={`mt-1 font-manrope font-extrabold text-[2rem] leading-none tracking-tight ${ccDetail.billAmount ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+              <p className={`mt-1 font-manrope font-extrabold text-[2rem] leading-none tracking-tight ${ccDetail.billAmount && !paid ? 'text-on-surface' : 'text-on-surface-variant'}`}>
                 {ccDetail.billAmount ? formatCurrency(ccDetail.billAmount) : 'No bill yet'}
               </p>
-              <p className={`mt-1.5 text-sm font-semibold ${(past || soon) ? 'text-error' : 'text-on-surface-variant'}`}>{dueText(ccDetail.billDueDate)}</p>
+              <p className={`mt-1.5 text-sm font-semibold ${paid ? 'text-[#95CD41]' : (past || soon) ? 'text-error' : 'text-on-surface-variant'}`}>{paid ? paidText(ccDetail) : dueText(ccDetail.billDueDate)}</p>
               <dl className="mt-5">
                 {[
                   ['Due date', formatDateToDDMMYYYY(ccDetail.billDueDate)],
                   ['Bill generated', ccDetail.billGeneratedDate ? formatDateToDDMMYYYY(ccDetail.billGeneratedDate) : '—'],
-                  ['Amount pending', ccDetail.billAmount ? formatCurrency(ccDetail.billAmount) : '—'],
+                  [paid ? 'Bill amount' : 'Amount pending', ccDetail.billAmount ? formatCurrency(ccDetail.billAmount) : '—'],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-baseline justify-between gap-4 py-3 border-b border-outline/10 last:border-0">
                     <dt className="text-sm text-on-surface-variant">{label}</dt>
