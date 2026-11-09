@@ -136,11 +136,36 @@ const AiChatbot = () => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-    return safe
+    const inline = (s) => s
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code style="background:rgba(229,186,115,0.15);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>')
-      .replace(/\n/g, '<br/>');
+      .replace(/`(.*?)`/g, '<code style="background:rgba(229,186,115,0.15);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>');
+
+    // Markdown tables (| a | b |) render as real HTML tables; everything
+    // else keeps the line-break formatting. Input is already escaped.
+    const isRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+    const isSep = (l) => /^\s*\|(\s*:?-{2,}:?\s*\|)+\s*$/.test(l);
+    const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => inline(c.trim()));
+    const isAmount = (c) => /^[-+]?(₹|Rs\.?|\$)?\s?[\d,]+(\.\d+)?$/.test(c.replace(/<[^>]+>/g, ''));
+
+    const lines = safe.split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      if (isRow(lines[i]) && i + 1 < lines.length && isSep(lines[i + 1])) {
+        const head = cells(lines[i]);
+        i += 2;
+        const body = [];
+        while (i < lines.length && isRow(lines[i])) body.push(cells(lines[i++]));
+        const th = head.map((h) => `<th style="text-align:left;padding:6px 10px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;opacity:0.7;border-bottom:1px solid rgba(128,128,128,0.25);white-space:nowrap">${h}</th>`).join('');
+        const tr = body.map((r) => `<tr>${r.map((c) => `<td style="padding:6px 10px;border-bottom:1px solid rgba(128,128,128,0.12);vertical-align:top;${isAmount(c) ? 'text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;' : ''}">${c}</td>`).join('')}</tr>`).join('');
+        out.push(`<div style="overflow-x:auto;margin:6px 0"><table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`);
+      } else {
+        out.push(inline(lines[i]) + (i < lines.length - 1 && !(isRow(lines[i + 1]) && isSep(lines[i + 2] || '')) ? '<br/>' : ''));
+        i++;
+      }
+    }
+    return out.join('');
   };
 
   if (!aiEnabled) return null;
