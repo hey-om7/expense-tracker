@@ -17,7 +17,7 @@ const UpcomingBills = ({ bills, className = '' }) => (
     {bills.length === 0 ? (
       <EmptyState icon="event_available" title="No bills due" hint="Subscriptions and card due dates show up here." />
     ) : (
-      <ul className="flex md:flex-col gap-2.5 md:gap-0 overflow-x-auto md:overflow-visible snap-x snap-mandatory no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:divide-y md:divide-outline/10">
+      <ul className="flex md:flex-col gap-2.5 md:gap-0 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-4 md:scroll-px-0 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:divide-y md:divide-outline/10">
         {bills.map(bill => {
           const due = dueLabel(daysUntil(bill.date));
           return (
