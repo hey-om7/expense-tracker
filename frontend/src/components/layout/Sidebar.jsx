@@ -1,6 +1,5 @@
 import React from 'react';
 import VestorLogo from '../ui/VestorLogo';
-import LegalLinks from '../legal/LegalLinks';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -73,7 +72,6 @@ const Sidebar = () => {
             Sign Out
           </button>
         </div>
-        <LegalLinks className="justify-center mt-3 text-[11px]" />
       </div>
     </aside>
   );

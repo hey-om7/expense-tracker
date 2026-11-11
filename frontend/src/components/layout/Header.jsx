@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import VestorLogo from '../ui/VestorLogo';
-import LegalLinks from '../legal/LegalLinks';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -123,9 +122,6 @@ const Header = () => {
                 <span className="material-symbols-outlined text-base">logout</span>
                 Sign Out
               </button>
-              <div className="px-4 py-3 border-t border-outline/10">
-                <LegalLinks className="text-[11px]" />
-              </div>
             </div>
           )}
         </div>
