@@ -14,6 +14,7 @@ const { OUTCOME, buildResult, sanitizeFields } = require('./result');
 const { parseFlexibleDate, toAmount } = require('./textUtils');
 const { rootDomainFor } = require('./institutions');
 const { readStatementPdf, withPdfText } = require('./pdfText');
+const { extractWithPatterns } = require('./trainedPatterns');
 
 const ANCHOR_FIELDS = ['amount', 'dueDate', 'statementDate', 'transactionDate', 'last4'];
 const IGNORE_CATEGORY = 'not_financial';
@@ -133,7 +134,7 @@ const resultFromRule = (email, institution, rule, processor) => {
   }
   const category = categories.get(rule.category);
   const local = category ? sanitizeFields(category.extract(email, institution.template)) : sanitizeFields({});
-  const learned = extractWithAnchors(email, rule.anchors);
+  const learned = { ...extractWithAnchors(email, rule.anchors), ...extractWithPatterns(email, rule.patterns) };
   const fields = { ...local };
   Object.entries(learned).forEach(([k, v]) => { if (v != null) fields[k] = v; });
   if (rule.category === 'credit_card_statement') {

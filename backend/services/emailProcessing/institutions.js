@@ -40,8 +40,17 @@ const BANK_IN_NAMES = {
 const rootDomainFor = (domain = '') => {
   if (!domain) return '';
   if (domain.endsWith('.bank.in')) return domain.split('.').slice(-3).join('.');
-  return OFFICIAL_BANK_DOMAINS.find(d => domain === d || domain.endsWith('.' + d)) || domain;
+  return OFFICIAL_BANK_DOMAINS.find(d => domain === d || domain.endsWith('.' + d)) || registrableDomain(domain);
 };
+
+// Senders outside the bank list: "alerts.newbank.co.in" -> "newbank.co.in", "mail.card.com" -> "card.com".
+const SECOND_LEVEL = /^(?:co|com|net|org|gov|ac|edu|firm|gen|ind|nic|res|ltd|plc)$/;
+function registrableDomain(domain) {
+  const parts = domain.split('.');
+  if (parts.length <= 2) return domain;
+  const n = parts[parts.length - 1].length === 2 && SECOND_LEVEL.test(parts[parts.length - 2]) ? 3 : 2;
+  return parts.slice(-n).join('.');
+}
 
 const bankNameFor = (domain = '') => {
   const root = rootDomainFor(domain);

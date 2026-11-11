@@ -26,9 +26,13 @@ const FINANCIAL_SUBJECT = /\b(statement|bill|due|payment|transaction|txn|debit(e
 /** Checks that run before any processor. Returns a result to stop, or null to continue. */
 const gate = (email, institution, processor) => {
   const base = { email, institution, processor };
-  if (!email.knownSender) return buildResult({ ...base, outcome: OUTCOME.IGNORED, reason: 'unknown_sender' });
+  if (!email.knownSender && email.senderStatus !== 'candidate') return buildResult({ ...base, outcome: OUTCOME.IGNORED, reason: 'unknown_sender' });
   // Possibly spoofed: never turned into data automatically, but kept for the user to see.
-  if (!email.authenticated) return buildResult({ ...base, outcome: OUTCOME.REVIEW, reason: 'unauthenticated_sender' });
+  // A new sender that can't be verified is just ignored (anyone can forge an unknown domain).
+  if (!email.authenticated) {
+    if (email.senderStatus === 'candidate') return buildResult({ ...base, outcome: OUTCOME.IGNORED, reason: 'unauthenticated_new_sender' });
+    return buildResult({ ...base, outcome: OUTCOME.REVIEW, reason: 'unauthenticated_sender' });
+  }
   if (NOISE_SUBJECT.some(p => p.test(email.subject))) {
     return buildResult({ ...base, outcome: OUTCOME.IGNORED, reason: 'non_financial' });
   }
@@ -37,6 +41,34 @@ const gate = (email, institution, processor) => {
     return buildResult({ ...base, outcome: OUTCOME.IGNORED, reason: 'promotional' });
   }
   return null;
+};
+
+/**
+ * Apply what AI already concluded for this email type (any user, see shared.js).
+ * Returns a result, or null when nothing usable is known.
+ * Financial patterns are applied only to trusted senders; a new sender's records are
+ * still verified by AI (or the user) until the sender is confirmed.
+ */
+const fromSharedPattern = async (email, institution, ctx, processor, local) => {
+  if (!ctx.shared) return null;
+  const pattern = await ctx.shared.findPattern(email);
+  if (!pattern) return null;
+  if (pattern.verdict === 'not_financial') {
+    if (local) return null; // local rules see a record here; don't drop it on an old verdict
+    ctx.shared.countHit(pattern._id);
+    return buildResult({ email, institution, processor, outcome: OUTCOME.IGNORED, reason: 'shared_pattern' });
+  }
+  if (!email.knownSender || !categories.get(pattern.category)) return null;
+  const { ruleId, ...result } = rules.resultFromRule(email, institution, pattern, processor);
+  if (result.outcome !== OUTCOME.EXTRACTED) return null;
+  ctx.shared.countHit(pattern._id);
+  return { ...result, reason: 'shared_pattern' };
+};
+
+const withLearnedName = (institution, email, ctx) => {
+  if (email.senderStatus === 'known') return institution;
+  const name = ctx.shared?.nameFor(email.domain);
+  return name ? { ...institution, name } : institution;
 };
 
 /** Run category detection + extraction locally. Exported so the AI processor can reuse it. */
@@ -49,7 +81,7 @@ const classifyLocally = (email, institution) => {
 };
 
 const processEmail = async (email, ctx = {}) => {
-  const institution = identifyInstitution(email.domain);
+  const institution = withLearnedName(identifyInstitution(email.domain), email, ctx);
   const stop = gate(email, institution, NAME);
   if (stop) return stop;
 
@@ -59,6 +91,15 @@ const processEmail = async (email, ctx = {}) => {
 
   const base = { email, institution, processor: NAME };
   const local = classifyLocally(email, institution);
+
+  const known = await fromSharedPattern(email, institution, ctx, NAME, local);
+  if (known) return known;
+
+  // New sender without AI: never recorded automatically; the user can check it in review.
+  if (email.senderStatus === 'candidate') {
+    return buildResult({ ...base, outcome: OUTCOME.REVIEW, category: local?.category.id || null, reason: 'new_sender', fields: local?.fields, confidence: 'low' });
+  }
+
   if (local) {
     const { category, fields } = local;
     if (!category.isUsable(fields)) {
@@ -77,4 +118,4 @@ const processEmail = async (email, ctx = {}) => {
   return buildResult({ ...base, outcome: OUTCOME.IGNORED, reason: 'no_financial_content' });
 };
 
-module.exports = { name: NAME, usesExternalServices: false, process: processEmail, gate, classifyLocally };
+module.exports = { name: NAME, usesExternalServices: false, process: processEmail, gate, classifyLocally, fromSharedPattern, withLearnedName };

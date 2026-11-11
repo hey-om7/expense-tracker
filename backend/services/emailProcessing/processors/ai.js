@@ -5,7 +5,10 @@
  * contacts an AI service and falls back to the deterministic processor.
  *
  * Privacy:
- *  - Only authenticated emails from known bank domains reach the model.
+ *  - Only authenticated emails reach the model: from known bank domains, learned
+ *    senders, or new senders whose content scored as a bank email (discovery.js).
+ *  - Email types AI already judged are read from the shared store (shared.js), and
+ *    emails the local parser reads completely are not sent at all.
  *  - Long digit runs (card/account numbers) are masked before sending.
  *  - The text is capped at MAX_CHARS. Nothing is stored by this module.
  * Every value the model returns is checked against the original email and
@@ -114,13 +117,20 @@ const fallback = async (email, ctx, reason) => {
 };
 
 const processEmail = async (email, ctx = {}) => {
-  const institution = identifyInstitution(email.domain);
-  // Same gates as the deterministic path: unauthenticated or non-bank emails are never sent to AI.
+  const institution = deterministic.withLearnedName(identifyInstitution(email.domain), email, ctx);
+  // Same gates as the deterministic path: unauthenticated or unknown senders are never sent to AI.
   const stop = deterministic.gate(email, institution, NAME);
   if (stop) return stop;
   // Email types the user already confirmed are read locally; no AI call.
   const rule = rules.matchRule(email, ctx.rules);
   if (rule) return rules.applyRule(email, institution, rule, deterministic.name, ctx.pdfPasswords);
+
+  const local = deterministic.classifyLocally(email, institution);
+  // Email types AI already judged (for any user) are not sent again.
+  const known = await deterministic.fromSharedPattern(email, institution, ctx, 'shared', local);
+  if (known) return known;
+  // Trusted sender and the local parser read every field: AI would add nothing.
+  if (email.knownSender && local && local.category.isComplete(local.fields)) return deterministic.process(email, ctx);
   if (!ctx.aiSession) return fallback(email, ctx, 'ai_unavailable');
 
   let out;
@@ -131,9 +141,17 @@ const processEmail = async (email, ctx = {}) => {
     return fallback(email, ctx, 'ai_error');
   }
   if (out === undefined) return fallback(email, ctx, 'ai_budget_exhausted');
+  if (!out || typeof out !== 'object') out = {};
 
+  const result = interpret(out, email, institution, local);
+  await remember(ctx, email, out, result);
+  return result;
+};
+
+const interpret = (out, email, institution, local) => {
+  const aiName = typeof out.institution_name === 'string' ? out.institution_name.trim().slice(0, 120) : '';
+  if (email.senderStatus !== 'known' && aiName && institution.name === institution.rootDomain) institution = { ...institution, name: aiName };
   const base = { email, institution, processor: NAME };
-  const local = deterministic.classifyLocally(email, institution);
   const category = categories.get(out.category);
 
   if (out.category === 'not_financial') {
@@ -163,6 +181,27 @@ const processEmail = async (email, ctx = {}) => {
     return buildResult({ ...base, outcome: OUTCOME.REVIEW, category: category.id, reason: 'low_confidence', fields, confidence });
   }
   return buildResult({ ...base, outcome: OUTCOME.EXTRACTED, category: category.id, reason: 'ai', fields, confidence });
+};
+
+/**
+ * Save the AI verdict in the shared store so this email type never needs AI again,
+ * and (for new senders) record whether the sender is a real financial institution.
+ * Only clear answers are stored; low-confidence or disputed answers are not.
+ */
+const remember = async (ctx, email, out, result) => {
+  if (!ctx.shared) return;
+  try {
+    if (result.outcome === OUTCOME.IGNORED && result.reason === 'non_financial') {
+      await ctx.shared.learn(email, { financial: false });
+    } else if (result.outcome === OUTCOME.EXTRACTED) {
+      await ctx.shared.learn(email, {
+        financial: true, category: result.category, fields: result.fields,
+        institutionName: typeof out.institution_name === 'string' ? out.institution_name : '',
+      });
+    }
+  } catch (err) {
+    console.warn(`[email-ai] could not save shared verdict: ${err.message}`);
+  }
 };
 
 /**

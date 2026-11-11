@@ -12,6 +12,8 @@ const gmailConnectionSchema = new mongoose.Schema({
   // Only emails received after this moment are fetched on the next scan.
   lastEmailDate: { type: Date, default: null },
   lastScannedAt: { type: Date, default: null },
+  // Filter version of the last full scan; an older one triggers a one-time re-read of the backfill window.
+  scanVersion: { type: Number, default: 0 },
   backfillStatus: { type: String, enum: ['pending', 'running', 'done', 'failed'], default: 'pending' },
   lastError: { type: String, default: '' },
   // Cards the user chose NOT to track; their statements are ignored in future.

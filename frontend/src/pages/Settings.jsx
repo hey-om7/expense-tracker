@@ -462,6 +462,14 @@ const SettingsScreen = () => {
             </p>
           )}
           <p className="text-[10px] text-outline mt-3 italic">Applies from the next Gmail scan. Emails that can&apos;t be read reliably are listed for review in the Bills tab instead of being recorded.</p>
+          <Link to="/settings/ai-training" className="group mt-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/15 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
+            <span className="material-symbols-outlined text-lg text-primary" aria-hidden="true">school</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-on-surface">AI training</span>
+              <span className="block text-xs text-on-surface-variant">See which emails feed expense suggestions and correct how they&apos;re read.</span>
+            </span>
+            <span className="material-symbols-outlined text-base text-on-surface-variant ml-auto transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_forward</span>
+          </Link>
         </section>
 
         {/* ADDED: Security Settings */}

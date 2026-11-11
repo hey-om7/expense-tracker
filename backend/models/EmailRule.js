@@ -23,6 +23,14 @@ const emailRuleSchema = new mongoose.Schema({
     last4: { type: String, default: null },
   },
   institutionName: { type: String, default: '' },
+  // Patterns taught in Settings → AI training (emailProcessing/trainedPatterns.js), per field.
+  patterns: {
+    amount: { type: String, default: null, maxlength: 400 },
+    transactionDate: { type: String, default: null, maxlength: 400 },
+    merchant: { type: String, default: null, maxlength: 400 },
+    last4: { type: String, default: null, maxlength: 400 },
+  },
+  trainedAt: { type: Date, default: null },
   sampleSubject: { type: String, default: '', maxlength: 300 },
   // Learned from the attached statement PDF: read the PDF (with the saved password) next time.
   usesPdf: { type: Boolean, default: false },

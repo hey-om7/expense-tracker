@@ -9,6 +9,7 @@ import PdfPasswordModal from './PdfPasswordModal';
 const REVIEW_NOTES = {
   unauthenticated_sender: ' · sender not verified',
   pdf_password_needed: ' · statement PDF needs its password',
+  new_sender: ' · new sender, not in the bank list yet',
 };
 
 const fmtDate = (d) => {

@@ -38,11 +38,19 @@ const PROMO_WEAK = [
   /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u, // emoji in a bank email
 ];
 
+// A completed card/account transaction in the body: amount + past-tense movement, plus a
+// masked card/account number. Bank alerts with generic subjects ("Alert: update on your
+// card") carry marketing footers too, so this wins over weak signals.
+const RECORD_BODY_MOVEMENT = /(?:(?:INR|Rs\.?|₹)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:spent|debited|charged|deducted|withdrawn|used))|(?:(?:spent|debited|charged|deducted|withdrawn|transaction|txn)\s*(?:of|for|with|:)?\s*(?:INR|Rs\.?|₹)\s*[0-9])/i;
+const RECORD_BODY_ACCOUNT = /[xX*]{2,}[\sxX*-]*\d{2,4}\b|\bending\s*(?:in|with)?\s*[xX*]*\d{2,4}\b/i;
+const isRecordBody = (text) => RECORD_BODY_MOVEMENT.test(text) && RECORD_BODY_ACCOUNT.test(text);
+
 const isPromotional = (email) => {
   const subject = email.subject || '';
   if (RECORD_SUBJECT.test(subject) || BILL_SUBJECT_PATTERNS.some(p => p.test(subject))) return false;
   if (PROMO_SUBJECT_STRONG.some(p => p.test(subject))) return true;
   const head = `${subject}\n${(email.text || '').slice(0, 6000)}`;
+  if (isRecordBody(head.slice(0, 3000))) return false;
   return PROMO_WEAK.filter(p => p.test(head)).length >= 2;
 };
 

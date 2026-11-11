@@ -11,6 +11,7 @@ const loaders = {
   '/analytics': () => import('./Analytics'),
   '/categories': () => import('./Categories'),
   '/settings': () => import('./Settings'),
+  '/settings/ai-training': () => import('./AiTraining'),
 };
 
 // One import per page: preloading and React.lazy share the same promise.

@@ -20,7 +20,7 @@ const UserPreferences = require('../models/UserPreferences');
 const FinancialEmail = require('../models/FinancialEmail');
 const EmailRule = require('../models/EmailRule');
 const statementPasswords = require('./statementPasswords');
-const { OFFICIAL_BANK_DOMAINS } = require('./gmailScanner');
+const { OFFICIAL_BANK_DOMAINS, isBankDomain, extractDomain } = require('./gmailScanner');
 const pipeline = require('./emailProcessing');
 const { rootDomainFor, PAYMENT_SUGGESTION_DOMAINS } = require('./emailProcessing/institutions');
 const { applyLatestToCard } = pipeline.sinks;
@@ -34,6 +34,13 @@ const BACKFILL_DAYS = 90;
 const MAX_MESSAGES_PER_SYNC = 500;
 const MAX_AI_CALLS_PER_SYNC = 60;
 const PREF_RECHECK_EVERY = 25;
+// Discovery of financial emails from senders outside the bank list (see listDiscoveryIds).
+const MAX_DISCOVERY_LIST = 400;     // ids from the wide Gmail search
+const MAX_DISCOVERY_PER_SYNC = 120; // full downloads after the metadata check
+const DISCOVERY_BATCH = 10;
+// Bump to re-read the last BACKFILL_DAYS once, e.g. after the filters improved.
+// Emails already stored are skipped; only previously ignored ones are re-read.
+const SCAN_VERSION = 2;
 
 // Bump when the payment-alert parsing (institutions.js templates) improves. Open expense
 // suggestions stored with a lower revision and missing details are re-read from Gmail.
@@ -203,10 +210,14 @@ const disconnect = async (userId) => {
   return revoked;
 };
 
-const listMessageIds = async (client, since) => {
+const listMessageIds = async (client, since, extraDomains = []) => {
   const afterSec = Math.floor(since.getTime() / 1000);
-  const fromClause = OFFICIAL_BANK_DOMAINS.join(' OR ');
+  const fromClause = [...new Set([...OFFICIAL_BANK_DOMAINS, ...extraDomains])].join(' OR ');
   const q = `after:${afterSec} from:(${fromClause})`;
+  return listByQuery(client, q, MAX_MESSAGES_PER_SYNC);
+};
+
+const listByQuery = async (client, q, max) => {
   const ids = [];
   let pageToken;
   do {
@@ -216,8 +227,40 @@ const listMessageIds = async (client, since) => {
     });
     (data.messages || []).forEach(m => ids.push(m.id));
     pageToken = data.nextPageToken;
-  } while (pageToken && ids.length < MAX_MESSAGES_PER_SYNC);
-  return ids.slice(0, MAX_MESSAGES_PER_SYNC);
+  } while (pageToken && ids.length < max);
+  return ids.slice(0, max);
+};
+
+/**
+ * Discovery: emails from senders outside the bank list that look like bank emails.
+ * A wide Gmail search, then a metadata-only check (From, Subject, snippet) decides
+ * which messages are downloaded at all. See emailProcessing/discovery.js.
+ * @returns {Promise<string[]>} message ids worth processing
+ */
+const listDiscoveryIds = async (client, since, skip) => {
+  const { discovery } = pipeline;
+  const ids = (await listByQuery(client, discovery.buildGmailQuery(Math.floor(since.getTime() / 1000)), MAX_DISCOVERY_LIST))
+    .filter(id => !skip.has(id));
+  const picked = [];
+  for (let i = 0; i < ids.length && picked.length < MAX_DISCOVERY_PER_SYNC; i += DISCOVERY_BATCH) {
+    const batch = await Promise.all(ids.slice(i, i + DISCOVERY_BATCH).map(async (id) => {
+      try {
+        const { data } = await client.request({
+          url: `${GMAIL_API}/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+        });
+        const header = (n) => (data.payload?.headers || []).find(h => h.name.toLowerCase() === n)?.value || '';
+        const from = header('from');
+        const domain = extractDomain(from) || '';
+        if (!domain || isBankDomain(domain) || discovery.isFreemail(domain)) return null;
+        const snippet = String(data.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+        return discovery.prefilter({ from, subject: header('subject'), snippet }) ? id : null;
+      } catch (err) {
+        return null; // a failed metadata read only skips discovery for this message
+      }
+    }));
+    batch.forEach(id => id && picked.push(id));
+  }
+  return { picked: picked.slice(0, MAX_DISCOVERY_PER_SYNC), listed: ids.length };
 };
 
 const syncLocks = new Set();
@@ -239,10 +282,24 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     if (conn.status === 'revoked') return { linked: [], pending: [] };
 
     const backfillStart = new Date(Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000);
-    const since = backfill || !conn.lastEmailDate ? backfillStart : conn.lastEmailDate;
+    const rescan = (conn.scanVersion || 0) < SCAN_VERSION;
+    const since = backfill || rescan || !conn.lastEmailDate ? backfillStart : conn.lastEmailDate;
     if (backfill) await GmailConnection.updateOne({ _id: conn._id }, { $set: { backfillStatus: 'running' } });
 
-    const ids = await listMessageIds(client, since);
+    const rules = await EmailRule.find({ userId: conn.userId }).lean();
+    const shared = await pipeline.createSharedKnowledge(conn.userId);
+    // Senders learned earlier (by AI for this user or several users, or a rule the user confirmed)
+    // are fetched like built-in banks.
+    const extraDomains = [...new Set([...shared.trustedDomains(), ...rules.map(r => r.senderDomain)])]
+      .filter(d => d && !isBankDomain(d) && !pipeline.discovery.isFreemail(d));
+    const bankIds = await listMessageIds(client, since, extraDomains);
+    let discovery = { picked: [], listed: 0 };
+    try {
+      discovery = await listDiscoveryIds(client, since, new Set(bankIds));
+    } catch (err) {
+      console.warn(`Gmail discovery search skipped: ${err.message}`);
+    }
+    const ids = [...bankIds, ...discovery.picked];
     // Duplicate detection: a Gmail message is processed once per user, whichever store it ended up in.
     const [knownStatements, knownOther] = await Promise.all([
       CardStatement.find({ userId: conn.userId, gmailMessageId: { $in: ids } }, { gmailMessageId: 1 }).lean(),
@@ -251,7 +308,6 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     const known = new Set([...knownStatements, ...knownOther].map(s => s.gmailMessageId));
 
     const cards = await CreditCard.find({ userId: conn.userId }).lean();
-    const rules = await EmailRule.find({ userId: conn.userId }).lean();
     const pdfPasswords = rules.some(r => r.usesPdf) ? await statementPasswords.loadAll(conn.userId) : new Map();
     const ruleHits = new Map();
 
@@ -302,7 +358,7 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
       try {
         let raw = Buffer.from(msg.raw, 'base64url');
         msg = null; // drop the raw message as early as possible
-        result = await pipeline.processRawEmail(raw, { method, messageId: id, receivedAt: received, aiSession, rules, pdfPasswords });
+        result = await pipeline.processRawEmail(raw, { method, messageId: id, receivedAt: received, aiSession, rules, pdfPasswords, shared });
         raw = null;
         if (result.ruleId) ruleHits.set(result.ruleId, (ruleHits.get(result.ruleId) || 0) + 1);
       } catch (err) {
@@ -327,6 +383,7 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     }
 
     for (const cardId of touchedCards) await applyLatestToCard(cardId);
+    await shared.flush().catch(err => console.warn(`Shared pattern stats skipped: ${err.message}`));
     for (const [ruleId, n] of ruleHits) {
       await EmailRule.updateOne({ _id: ruleId }, { $inc: { timesApplied: n }, $set: { lastAppliedAt: new Date() } });
     }
@@ -335,13 +392,14 @@ const syncConnection = async (connectionId, { backfill = false } = {}) => {
     } catch (err) {
       console.warn(`Payment re-parse skipped: ${err.message}`);
     }
-    console.log(`📧 Gmail sync ${key}: ${ids.length} bank email(s), ${linked.length} linked, ${pending.length} pending, ` +
+    console.log(`📧 Gmail sync ${key}: ${bankIds.length} bank email(s), discovery ${discovery.picked.length}/${discovery.listed}, ` +
+      `${linked.length} linked, ${pending.length} pending, ` +
       `method ${method}${aiRequested ? `, AI calls ${aiSession?.calls || 0}${aiAvailable ? '' : ' (no Groq key)'}` : ''}, ` +
       `outcomes ${JSON.stringify(counts)}`);
 
     await GmailConnection.updateOne({ _id: conn._id }, {
       $set: {
-        ...(fetchFailed ? {} : { lastEmailDate: newest }),
+        ...(fetchFailed ? {} : { lastEmailDate: newest, scanVersion: SCAN_VERSION }),
         lastScannedAt: new Date(),
         lastError: '',
         status: 'active',

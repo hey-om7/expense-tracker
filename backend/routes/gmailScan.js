@@ -397,12 +397,18 @@ const cleanMerchant = (m) => {
 router.get('/suggestions', async (req, res) => {
   try {
     const since = new Date(Date.now() - SUGGESTION_DAYS * 864e5);
+    // Payment apps and UPI alert senders, plus card spends from any bank (including
+    // banks found by the discovery scan). Same-payment twins are merged below.
     const rows = await FinancialEmail.find({
       userId: req.userId,
       status: 'recorded',
       category: 'transaction_alert',
       suggestionState: null,
-      senderDomain: { $in: PAYMENT_SUGGESTION_DOMAINS },
+      $or: [
+        { senderDomain: { $in: PAYMENT_SUGGESTION_DOMAINS } },
+        { 'fields.paymentMethod': { $in: ['credit_card', 'debit_card'] } },
+        { processor: { $in: ['ai', 'shared'] } },
+      ],
       'fields.amount': { $gt: 0 },
       'fields.transactionType': { $in: ['debit', null] },
       receivedAt: { $gte: since },
@@ -450,6 +456,55 @@ router.post('/suggestions/resolve', async (req, res) => {
     res.json({ updated: r.modifiedCount });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update suggestion' });
+  }
+});
+
+// ─── Settings → AI training: check and correct how expense emails are read ───
+const emailTraining = require('../services/emailTraining');
+const trainLimiter = userLimiter('gmail-train', { windowMs: 60 * 60 * 1000, limit: 120, message: 'Too many training requests. Please try again later.' });
+const sendTrainingError = (res, err, fallback) => {
+  if (err instanceof emailTraining.TrainingError) return res.status(err.status).json({ message: err.message });
+  console.error(`${fallback}:`, err.message);
+  return res.status(500).json({ message: fallback });
+};
+
+router.get('/training/types', async (req, res) => {
+  try {
+    res.json(await emailTraining.listTypes(req.userId));
+  } catch (err) {
+    sendTrainingError(res, err, 'Failed to load tracked emails');
+  }
+});
+
+router.get('/training/emails/:id', validateId, trainLimiter, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store'); // contains the email body
+    res.json(await emailTraining.getSample(req.userId, req.params.id));
+  } catch (err) {
+    sendTrainingError(res, err, 'Failed to load email');
+  }
+});
+
+router.post('/training/emails/:id', validateId, trainLimiter, async (req, res) => {
+  try {
+    const raw = req.body?.marks && typeof req.body.marks === 'object' ? req.body.marks : {};
+    const marks = {};
+    ['amount', 'transactionDate', 'merchant', 'last4'].forEach((f) => {
+      if (!(f in raw)) return;
+      const m = raw[f];
+      marks[f] = m === null ? null : { start: Number(m?.start), end: Number(m?.end) };
+    });
+    res.json(await emailTraining.train(req.userId, req.params.id, marks));
+  } catch (err) {
+    sendTrainingError(res, err, 'Failed to save training');
+  }
+});
+
+router.delete('/training/emails/:id', validateId, async (req, res) => {
+  try {
+    res.json(await emailTraining.reset(req.userId, req.params.id));
+  } catch (err) {
+    sendTrainingError(res, err, 'Failed to reset training');
   }
 });
 

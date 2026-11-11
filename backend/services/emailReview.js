@@ -60,9 +60,14 @@ const analyze = async (userId, id, { password, rememberPassword = true } = {}) =
   if (!aiSession) throw new ReviewError(400, 'Add a Groq API key in Settings to analyze emails with AI.');
 
   const { client } = await gmailClient(userId);
-  const email = await fetchEmail(client, doc);
-  // Same protection as automatic processing: forged or non-bank emails never reach AI.
-  if (!email.knownSender || !email.authenticated) {
+  const [userRules, shared] = await Promise.all([
+    EmailRule.find({ userId }).select('senderDomain').lean(),
+    pipeline.createSharedKnowledge(userId),
+  ]);
+  const email = pipeline.classifySender(await fetchEmail(client, doc), { rules: userRules, shared });
+  // Same protection as automatic processing: forged or unrelated emails never reach AI.
+  // New senders are allowed when their content looks like a bank email (discovery.js).
+  if (!(email.knownSender || email.senderStatus === 'candidate') || !email.authenticated) {
     throw new ReviewError(422, "This email's sender couldn't be verified, so it won't be sent to AI.");
   }
 
@@ -186,9 +191,9 @@ const applyToSimilar = async (userId, rule, exceptId, client, ctx) => {
   const passwords = rule.usesPdf ? await statementPasswords.loadAll(userId) : new Map();
   for (const doc of same) {
     try {
-      const email = await fetchEmail(client, doc);
-      const institution = identifyInstitution(email.domain);
+      const email = pipeline.classifySender(await fetchEmail(client, doc), { rules: [rule] });
       if (!email.knownSender || !email.authenticated) continue;
+      const institution = identifyInstitution(email.domain);
       const result = await rules.applyRule(email, institution, rule, 'deterministic', passwords);
       if ((await resolveReviewDoc(doc, result, ctx)) !== 'review') resolved += 1;
     } catch (err) {

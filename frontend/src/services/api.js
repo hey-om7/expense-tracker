@@ -153,6 +153,11 @@ export const confirmFinancialEmail = (id, data) => request(`/gmail/emails/${id}/
 export const fetchEmailRules = () => request('/gmail/rules');
 export const deleteEmailRule = (id) => request(`/gmail/rules/${id}`, { method: 'DELETE' });
 export const fetchExpenseSuggestions = () => request('/gmail/suggestions');
+// Settings → AI training
+export const fetchTrainingTypes = () => request('/gmail/training/types');
+export const fetchTrainingEmail = (id) => request(`/gmail/training/emails/${id}`);
+export const trainEmail = (id, marks) => request(`/gmail/training/emails/${id}`, { method: 'POST', body: { marks } });
+export const resetEmailTraining = (id) => request(`/gmail/training/emails/${id}`, { method: 'DELETE' });
 // Asks the server to check Gmail for new emails now. Resolves to { synced }.
 export const syncNewGmailEmails = () => request('/gmail/sync-new', { method: 'POST' });
 export const resolveExpenseSuggestion = (ids, state = 'used', transactionId) => {
