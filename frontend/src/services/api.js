@@ -75,7 +75,10 @@ export const resetPassword = (token, password) => request(`/auth/reset-password/
 export const fetchTransactions = () => request('/transactions');
 export const createTransaction = (data) => request('/transactions', { method: 'POST', body: data });
 export const updateTransaction = (id, data) => request(`/transactions/${id}`, { method: 'PUT', body: data });
-export const deleteTransaction = (id) => request(`/transactions/${id}`, { method: 'DELETE' });
+export const deleteTransaction = (id) => {
+  invalidateCache('expense-suggestions'); // its Gmail suggestion may be offered again
+  return request(`/transactions/${id}`, { method: 'DELETE' });
+};
 
 // ─── Settings APIs ───
 // Shared by the Settings page and the AI chatbot; one request serves both.

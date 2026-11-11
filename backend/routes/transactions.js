@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const Category = require('../models/Category');
 const Investment = require('../models/Investment');
 const Subscription = require('../models/Subscription');
+const FinancialEmail = require('../models/FinancialEmail');
 
 // Linked records must belong to the same user. categoryId may also be a
 // built-in key (e.g. "trade"), which isn't an ObjectId and needs no check.
@@ -99,6 +100,11 @@ router.delete('/:id', validateId, async (req, res) => {
   try {
     const deleted = await Transaction.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!deleted) return res.status(404).json({ message: 'Transaction not found' });
+    // An expense added from a Gmail suggestion: offer that suggestion again.
+    await FinancialEmail.updateMany(
+      { userId: req.userId, transactionId: deleted._id, suggestionState: 'used' },
+      { $set: { suggestionState: null, transactionId: null } },
+    );
     res.json({ message: 'Deleted' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete transaction' });

@@ -32,6 +32,7 @@ const GmailConnection = require('../models/GmailConnection');
 const CardStatement = require('../models/CardStatement');
 const CreditCard = require('../models/CreditCard');
 const FinancialEmail = require('../models/FinancialEmail');
+const Transaction = require('../models/Transaction');
 const EmailRule = require('../models/EmailRule');
 const gmail = require('../services/gmailSync');
 const emailReview = require('../services/emailReview');
@@ -397,6 +398,16 @@ const cleanMerchant = (m) => {
 router.get('/suggestions', async (req, res) => {
   try {
     const since = new Date(Date.now() - SUGGESTION_DAYS * 864e5);
+    // Reopen suggestions whose expense no longer exists (deleted outside the app's delete route).
+    const used = await FinancialEmail.find({
+      userId: req.userId, suggestionState: 'used', transactionId: { $ne: null }, receivedAt: { $gte: since },
+    }).select('transactionId').lean();
+    if (used.length) {
+      const ids = used.map(u => u.transactionId);
+      const alive = new Set((await Transaction.find({ _id: { $in: ids }, userId: req.userId }).select('_id').lean()).map(t => String(t._id)));
+      const gone = used.filter(u => !alive.has(String(u.transactionId))).map(u => u._id);
+      if (gone.length) await FinancialEmail.updateMany({ _id: { $in: gone } }, { $set: { suggestionState: null, transactionId: null } });
+    }
     // Payment apps and UPI alert senders, plus card spends from any bank (including
     // banks found by the discovery scan). Same-payment twins are merged below.
     const rows = await FinancialEmail.find({
