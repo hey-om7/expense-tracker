@@ -341,7 +341,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
               <p className="font-bold text-on-surface text-sm">Track statements from Gmail</p>
               <p className="text-xs text-on-surface-variant mt-1">
                 With your permission, Vestor reads (never sends or deletes) credit card statement emails from known banks:
-                the last 90 days now, then new ones about every 30 minutes and when you open the app. You get an email one day before each due date.
+                the last 90 days now, then new ones about every 30 minutes and when you open the app. You get an email before each due date (choose when in Settings → Notifications).
                 Emails are read by built-in rules unless you turn on &quot;Allow AI to process my emails&quot; in Settings.
               </p>
             </div>
@@ -627,7 +627,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
         <ul className="flex flex-col gap-3 text-sm text-on-surface-variant">
           <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">visibility</span>Vestor only reads credit card statement emails from known banks. It never sends or deletes anything.</li>
           <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">schedule</span>It reads the last 90 days now, then new emails about every 30 minutes and when you open the app.</li>
-          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">notifications</span>You get an email one day before each due date.</li>
+          <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">notifications</span>You get an email before each due date (choose when in Settings → Notifications).</li>
           <li className="flex gap-3"><span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">rule</span>Emails are read by built-in rules unless you turn on &quot;Allow AI to process my emails&quot; in Settings.</li>
         </ul>
       </Modal>
@@ -761,6 +761,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
           </>
         )}
       </Modal>
+
+      <EmailAnalysisModal
         analysis={analysis}
         saving={busy === 'confirm'}
         onClose={() => setAnalysis(null)}

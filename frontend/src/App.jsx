@@ -27,6 +27,7 @@ const {
   '/': DashboardScreen, '/transactions': TransactionsScreen, '/investments': InvestmentsScreen,
   '/cyclic': CyclicScreen, '/analytics': AnalyticsScreen, '/categories': CategoriesScreen, '/settings': SettingsScreen,
   '/settings/ai-training': AiTrainingScreen, '/settings/email': EmailManagementScreen,
+  '/settings/notifications': NotificationSettingsScreen,
 } = pages;
 
 function App() {
@@ -79,6 +80,7 @@ function App() {
                               <Route path="/settings" element={<SettingsScreen />} />
                               <Route path="/settings/ai-training" element={<AiTrainingScreen />} />
                               <Route path="/settings/email" element={<EmailManagementScreen />} />
+                              <Route path="/settings/notifications" element={<NotificationSettingsScreen />} />
                             </Routes>
                           </Suspense>
                           <ToastContainer />

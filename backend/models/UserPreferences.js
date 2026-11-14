@@ -7,6 +7,12 @@ const userPreferencesSchema = new mongoose.Schema({
   aiModel: { type: String, default: 'llama-3.3-70b-versatile', maxlength: 100 },
   groqApiKey: { type: String, default: '' },
   emailAlertsEnabled: { type: Boolean, default: true },
+  // Pop-up notifications shown by the browser (OS). Permission itself is per device.
+  browserNotificationsEnabled: { type: Boolean, default: true },
+  // Credit card bill reminder email: days before the due date, and an optional
+  // second email on the due date itself while the bill is still unpaid.
+  ccReminderDaysBefore: { type: Number, default: 1, min: 1, max: 10 },
+  ccReminderOnDueDate: { type: Boolean, default: false },
   // Opt-in: when false (default), Gmail emails are processed only by local rules
   // and their content is never sent to an AI service.
   aiEmailProcessingEnabled: { type: Boolean, default: false },

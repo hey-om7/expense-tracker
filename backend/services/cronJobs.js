@@ -174,13 +174,23 @@ const advanceDate = (date, period) => {
 };
 
 /**
- * Process credit card due date reminders
+ * Credit card due date reminders, on the schedule each user picked in
+ * Settings → Notifications:
+ *   - ccReminderDaysBefore (1–10, default 1): first reminder that many days before the due date
+ *   - ccReminderOnDueDate: a second reminder on the due date while the bill is unpaid
+ * Each reminder creates an in-app notification and, if email alerts are on, an email.
  */
+const DAY_MS = 24 * 60 * 60 * 1000;
+const dueInText = (days) => (days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`);
+
 const processCreditCards = async () => {
-  const tomorrow = getTomorrow();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const cards = await CreditCard.find({});
+  const prefsByUser = new Map(); // one lookup per user, not per card
 
   for (const card of cards) {
+    if (!card.billDueDate) continue;
     if (alreadySentToday(card.lastReminderSentDate)) continue;
 
     const dueDate = new Date(card.billDueDate);
@@ -193,41 +203,46 @@ const processCreditCards = async () => {
       if (isSameDay(paid, dueDate)) continue;
     }
 
-    if (isSameDay(dueDate, tomorrow)) {
-      const user = await User.findById(card.userId).select('email name');
-      const prefs = await UserPreferences.findOne({ userId: card.userId }).lean();
-      const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false;
+    const key = String(card.userId);
+    if (!prefsByUser.has(key)) prefsByUser.set(key, await UserPreferences.findOne({ userId: card.userId }).lean());
+    const prefs = prefsByUser.get(key);
+    const leadDays = Number.isInteger(prefs?.ccReminderDaysBefore) ? prefs.ccReminderDaysBefore : 1;
+    const daysLeft = Math.round((dueDate - today) / DAY_MS);
+    const isLead = daysLeft === leadDays;
+    const isDueDay = daysLeft === 0 && prefs?.ccReminderOnDueDate === true;
+    if (!isLead && !isDueDay) continue;
 
-      const msg = `Your "${card.name}" (****${card.last4Digits}) credit card bill is due tomorrow (${dueDate.toLocaleDateString('en-IN')}).`;
+    const user = await User.findById(card.userId).select('email name');
+    const sendEmailNotif = !prefs || prefs.emailAlertsEnabled !== false;
+    const msg = `Your "${card.name}" (****${card.last4Digits}) credit card bill is due ${dueInText(daysLeft)} (${dueDate.toLocaleDateString('en-IN')}).`;
 
-      // In-app notification
-      await new Notification({
-        userId: card.userId,
-        title: '💳 Credit Card Reminder',
-        message: msg,
-        isRead: false,
-        date: new Date(),
-      }).save();
+    // In-app notification
+    await new Notification({
+      userId: card.userId,
+      title: isDueDay ? '💳 Credit Card Bill Due Today' : '💳 Credit Card Reminder',
+      message: msg,
+      isRead: false,
+      date: new Date(),
+    }).save();
 
-      // Email notification
-      if (user?.email && sendEmailNotif) {
-        try {
-          await sendEmail(
-            user.email,
-            `Vestor Reminder: ${card.name} Bill Due`,
-            buildReminderEmail(user.name || 'there', msg)
-          );
-        } catch (emailErr) {
-          console.error(`Failed to send email to user ${user._id}:`, emailErr.message);
-        }
+    // Email notification
+    if (user?.email && sendEmailNotif) {
+      try {
+        await sendEmail(
+          user.email,
+          isDueDay ? `Vestor Reminder: ${card.name} Bill Due Today` : `Vestor Reminder: ${card.name} Bill Due`,
+          buildReminderEmail(user.name || 'there', msg)
+        );
+      } catch (emailErr) {
+        console.error(`Failed to send email to user ${user._id}:`, emailErr.message);
       }
-
-      // Mark as sent today
-      card.lastReminderSentDate = new Date();
-      await card.save();
-
-      console.log(`💳 CC reminder sent: ${card.name} → user ${card.userId}`);
     }
+
+    // Mark as sent today
+    card.lastReminderSentDate = new Date();
+    await card.save();
+
+    console.log(`💳 CC reminder sent (${daysLeft} day(s) left): ${card.name} → user ${card.userId}`);
   }
 };
 

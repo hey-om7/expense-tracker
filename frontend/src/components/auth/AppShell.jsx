@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppContext } from '../../context/AppContext';
 import { useLock } from '../../context/LockContext';
 import { preloadPage, preloadAllPages } from '../../pages/appPages';
+import { fetchSettings } from '../../services/api';
 import DashboardSkeleton from '../ui/skeletons/DashboardSkeleton';
 import HistorySkeleton from '../ui/skeletons/HistorySkeleton';
 
@@ -42,8 +43,11 @@ const AppShell = ({ children }) => {
     // After the first reveal: fetch the other pages' code so navigation never waits,
     // and ask for OS notification permission (no longer prompts over the PIN screen).
     whenIdle(preloadAllPages);
+    // Only ask when browser notifications are on in Settings → Notifications.
     if ('Notification' in window && Notification.permission === 'default') {
-      Promise.resolve(Notification.requestPermission()).catch(() => {});
+      fetchSettings()
+        .then((st) => (st?.browserNotificationsEnabled === false ? null : Notification.requestPermission()))
+        .catch(() => {});
     }
   }, [show, shown]);
 

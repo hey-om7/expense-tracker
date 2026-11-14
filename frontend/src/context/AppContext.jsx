@@ -139,6 +139,17 @@ export const AppProvider = ({ children, lite = false }) => {
   const totalUnrealizedProfit = derivedInvestments.reduce((acc, curr) => acc + (curr.unrealizedProfit || 0), 0);
 
   // ─── Notification Actions ───
+  // Browser pop-ups follow Settings → Notifications (on unless turned off).
+  const browserNotifsRef = React.useRef(true);
+  useEffect(() => {
+    if (lite) return undefined;
+    const apply = (s) => { if (s) browserNotifsRef.current = s.browserNotificationsEnabled !== false; };
+    api.fetchSettings().then(apply).catch(() => {});
+    const onChange = (e) => apply(e.detail);
+    window.addEventListener('vestor:settings-updated', onChange);
+    return () => window.removeEventListener('vestor:settings-updated', onChange);
+  }, [lite]);
+
   const getCategory = (id) => categories.find(c => c.id === id);
 
   const addNotification = useCallback(async (n) => {
@@ -147,7 +158,7 @@ export const AppProvider = ({ children, lite = false }) => {
       setNotifications(prev => [normalize(saved), ...prev]);
 
       // OS Notification Trigger
-      if ('Notification' in window && Notification.permission === 'granted') {
+      if (browserNotifsRef.current && 'Notification' in window && Notification.permission === 'granted') {
          new Notification(n.title, { body: n.message, icon: '/favicon.svg' });
       }
     } catch (err) {

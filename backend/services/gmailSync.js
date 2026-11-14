@@ -506,7 +506,7 @@ const notifyUser = async (userId, linked, pending, backfill) => {
       <tr style="color:#9a8f80;font-size:10px;text-transform:uppercase;"><th style="text-align:left;padding:6px 12px;">Card</th><th style="text-align:right;padding:6px 12px;">Amount</th><th style="text-align:right;padding:6px 12px;">Due</th></tr>
       ${rows}
     </table>
-    <p style="font-size:12px;opacity:.7;">We'll email you one day before each due date.</p>` : ''}
+    <p style="font-size:12px;opacity:.7;">We'll email you ${escapeHtml(reminderText(prefs))}.</p>` : ''}
     ${pendingList ? `<p>We also found statements for cards you don't track yet:</p><ul style="font-size:13px;">${pendingList}</ul>
     <p>Open the Bills tab in Vestor to add them for future tracking, or ignore them.</p>` : ''}
     ${base ? `<p style="text-align:center;margin-top:20px;"><a href="${escapeHtml(base)}/cyclic" style="background:#E5BA73;color:#1A120B;text-decoration:none;font-weight:bold;padding:10px 20px;border-radius:10px;">Open Vestor</a></p>` : ''}
@@ -521,6 +521,13 @@ const notifyUser = async (userId, linked, pending, backfill) => {
  * account was scanned within minAgeMs, so repeated page loads cost nothing.
  * @returns {{ synced: boolean, newSuggestions?: number }}
  */
+// "one day before each due date", "3 days before each due date and on the due date"
+function reminderText(prefs) {
+  const days = Number.isInteger(prefs?.ccReminderDaysBefore) ? prefs.ccReminderDaysBefore : 1;
+  const lead = days === 1 ? 'one day' : `${days} days`;
+  return `${lead} before each due date${prefs?.ccReminderOnDueDate ? ' and on the due date' : ''}`;
+}
+
 const syncNewForUser = async (userId, { minAgeMs = 60 * 1000 } = {}) => {
   const conn = await GmailConnection.findOne({ userId, status: { $in: ['active', 'error'] } })
     .select('_id backfillStatus lastScannedAt').lean();

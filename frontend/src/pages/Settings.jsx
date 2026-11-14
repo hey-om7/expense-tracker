@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import SettingsSkeleton from '../components/ui/skeletons/SettingsSkeleton';
 import FeatureTour from '../components/ui/FeatureTour';
+import Toggle from '../components/ui/Toggle';
 
 // ─── Tutorial & Help Section (extracted for clarity) ───
 const TutorialSection = () => {
@@ -110,23 +111,6 @@ const broadcastSettings = (saved) => {
   window.dispatchEvent(new CustomEvent('vestor:settings-updated', { detail: saved }));
 };
 
-const Toggle = ({ id, checked, disabled, onChange, describedBy }) => (
-  <div className="relative shrink-0">
-    <input
-      type="checkbox"
-      role="switch"
-      id={id}
-      aria-describedby={describedBy}
-      aria-checked={checked}
-      checked={checked}
-      disabled={disabled}
-      onChange={onChange}
-      className="sr-only peer"
-    />
-    <div className="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-on-surface after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-disabled:opacity-60 transition-all"></div>
-  </div>
-);
-
 const SettingsScreen = () => {
   const { addNotification } = useAppContext();
   const [loading, setLoading] = useState(true);
@@ -138,6 +122,9 @@ const SettingsScreen = () => {
     groqApiKey: '',
     emailAlertsEnabled: true,
     aiEmailProcessingEnabled: false,
+    browserNotificationsEnabled: true,
+    ccReminderDaysBefore: 1,
+    ccReminderOnDueDate: false,
   });
   // Masked form of the key stored on the server ('' if none).
   const [savedKey, setSavedKey] = useState('');
@@ -152,6 +139,9 @@ const SettingsScreen = () => {
       groqApiKey: data.groqApiKey || '',
       emailAlertsEnabled: data.emailAlertsEnabled ?? true,
       aiEmailProcessingEnabled: data.aiEmailProcessingEnabled === true,
+      browserNotificationsEnabled: data.browserNotificationsEnabled !== false,
+      ccReminderDaysBefore: data.ccReminderDaysBefore || 1,
+      ccReminderOnDueDate: data.ccReminderOnDueDate === true,
     });
     setSavedKey(data.groqApiKey || '');
   };
@@ -253,14 +243,6 @@ const SettingsScreen = () => {
     saveField('aiEnabled', { aiEnabled: enabled }, {
       title: enabled ? 'Vestor AI on' : 'Vestor AI off',
       message: enabled ? 'The AI assistant is available again.' : 'The AI assistant has been turned off.',
-    });
-  };
-
-  const handleEmailAlertsToggle = (e) => {
-    const enabled = e.target.checked;
-    saveField('emailAlertsEnabled', { emailAlertsEnabled: enabled }, {
-      title: enabled ? 'Email alerts on' : 'Email alerts off',
-      message: enabled ? 'You will get email reminders for renewals and bills.' : 'Email reminders have been turned off.',
     });
   };
 
@@ -414,21 +396,24 @@ const SettingsScreen = () => {
             )}
           </div>
         </section>
-        {/* Notification Settings */}
+        {/* Notifications: details on their own page */}
         <section className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
-            <span className="material-symbols-outlined text-primary text-3xl">mark_email_unread</span>
-            <h2 className="font-headline font-bold text-xl text-on-surface">Notification Settings</h2>
+            <span className="material-symbols-outlined text-primary text-3xl" aria-hidden="true">notifications</span>
+            <h2 className="font-headline font-bold text-xl text-on-surface">Notifications</h2>
           </div>
-
-          <label htmlFor="emailAlertsEnabled" className="flex items-center justify-between gap-4 cursor-pointer group">
-            <div>
-              <span className="block text-sm font-bold text-on-surface mb-1">Email Alerts</span>
-              <span className="block text-xs text-on-surface-variant max-w-md">Receive email reminders for upcoming subscription renewals and credit card bills.</span>
-            </div>
-            <Toggle id="emailAlertsEnabled" checked={settings.emailAlertsEnabled} disabled={savingField === 'emailAlertsEnabled'} onChange={handleEmailAlertsToggle} />
-          </label>
-          <p className="text-[10px] text-outline mt-3 italic">Note: In-app notifications are always enabled and cannot be turned off.</p>
+          <Link to="/settings/notifications" className="group flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/15 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
+            <span className="material-symbols-outlined text-lg text-primary" aria-hidden="true">tune</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-on-surface">Notification settings</span>
+              <span className="block text-xs text-on-surface-variant">
+                Browser pop-ups {settings.browserNotificationsEnabled ? 'on' : 'off'} · Email {settings.emailAlertsEnabled
+                  ? `on, bills ${settings.ccReminderDaysBefore === 1 ? '1 day' : `${settings.ccReminderDaysBefore} days`} before${settings.ccReminderOnDueDate ? ' and on the due date' : ''}`
+                  : 'off'}
+              </span>
+            </span>
+            <span className="material-symbols-outlined text-base text-on-surface-variant ml-auto transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_forward</span>
+          </Link>
         </section>
 
         {/* Email Processing (Gmail) */}

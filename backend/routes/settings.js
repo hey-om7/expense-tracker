@@ -12,6 +12,9 @@ const toPublic = (prefs) => ({
   aiEnabled: prefs.aiEnabled,
   aiModel: resolveModel(prefs.aiModel),
   emailAlertsEnabled: prefs.emailAlertsEnabled,
+  browserNotificationsEnabled: prefs.browserNotificationsEnabled !== false,
+  ccReminderDaysBefore: prefs.ccReminderDaysBefore || 1,
+  ccReminderOnDueDate: prefs.ccReminderOnDueDate === true,
   aiEmailProcessingEnabled: prefs.aiEmailProcessingEnabled === true,
   groqApiKey: maskKey(revealSecret(prefs.groqApiKey, contexts.groqKey(prefs.userId))),
 });
@@ -77,7 +80,10 @@ router.post(
 // PUT /api/settings - Update user preferences
 router.put('/', async (req, res) => {
   try {
-    const { aiEnabled, aiModel, groqApiKey, emailAlertsEnabled, aiEmailProcessingEnabled } = req.body;
+    const {
+      aiEnabled, aiModel, groqApiKey, emailAlertsEnabled, aiEmailProcessingEnabled,
+      browserNotificationsEnabled, ccReminderDaysBefore, ccReminderOnDueDate,
+    } = req.body;
 
     if (aiModel !== undefined && !isValidModelId(aiModel)) {
       return res.status(400).json({ message: 'Invalid AI model.' });
@@ -88,6 +94,15 @@ router.put('/', async (req, res) => {
     if (aiEnabled !== undefined) update.aiEnabled = Boolean(aiEnabled);
     if (aiModel !== undefined) update.aiModel = aiModel;
     if (emailAlertsEnabled !== undefined) update.emailAlertsEnabled = Boolean(emailAlertsEnabled);
+    if (typeof browserNotificationsEnabled === 'boolean') update.browserNotificationsEnabled = browserNotificationsEnabled;
+    if (typeof ccReminderOnDueDate === 'boolean') update.ccReminderOnDueDate = ccReminderOnDueDate;
+    if (ccReminderDaysBefore !== undefined) {
+      const days = Number(ccReminderDaysBefore);
+      if (!Number.isInteger(days) || days < 1 || days > 10) {
+        return res.status(400).json({ message: 'Reminder days must be a whole number from 1 to 10.' });
+      }
+      update.ccReminderDaysBefore = days;
+    }
     // Only an explicit boolean changes the email-AI opt-in; anything else leaves it as saved.
     if (typeof aiEmailProcessingEnabled === 'boolean') update.aiEmailProcessingEnabled = aiEmailProcessingEnabled;
     const groq = cleanKey(groqApiKey);

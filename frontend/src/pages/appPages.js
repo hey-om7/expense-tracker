@@ -13,6 +13,7 @@ const loaders = {
   '/settings': () => import('./Settings'),
   '/settings/ai-training': () => import('./AiTraining'),
   '/settings/email': () => import('./EmailManagement'),
+  '/settings/notifications': () => import('./NotificationSettings'),
 };
 
 // One import per page: preloading and React.lazy share the same promise.
