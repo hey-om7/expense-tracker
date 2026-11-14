@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { fetchSettings, updateSettings, peekCache } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import Toggle from '../components/ui/Toggle';
+import { BackLink, PageHeader } from '../components/settings/SettingsUi';
 
 const DEFAULTS = {
   browserNotificationsEnabled: true,
@@ -27,10 +27,10 @@ const broadcastSettings = (saved) => {
 const browserPermission = () => ('Notification' in window ? Notification.permission : 'unsupported');
 
 const PERMISSION_TEXT = {
-  granted: 'Allowed in this browser.',
-  default: 'This browser hasn’t been asked yet.',
-  denied: 'Blocked in this browser. Allow notifications for this site in your browser’s site settings.',
-  unsupported: 'This browser doesn’t support notifications.',
+  granted: ['Allowed', 'Pop-ups will appear in this browser.'],
+  default: ['Not asked yet', 'This browser hasn’t been asked for permission.'],
+  denied: ['Blocked', 'Allow notifications for this site in your browser’s site settings.'],
+  unsupported: ['Unsupported', 'This browser doesn’t support notifications.'],
 };
 
 const leadLabel = (d) => (d === 1 ? '1 day before' : `${d} days before`);
@@ -104,27 +104,18 @@ const NotificationSettingsScreen = () => {
 
   return (
     <main className="pt-24 pb-32 px-4 sm:px-6 max-w-3xl w-full mx-auto min-h-screen">
-      <Link to="/settings" className="group inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors">
-        <span className="material-symbols-outlined text-sm transition-transform group-hover:-translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_back</span>
-        Settings
-      </Link>
-
-      <header className="mt-5 mb-8 max-w-2xl">
-        <h1 className="font-headline font-extrabold text-on-surface tracking-tight leading-[1.02] text-[clamp(2rem,4.2vw,3rem)]">
-          Notifications
-        </h1>
-        <p className="mt-4 text-sm text-on-surface-variant leading-relaxed max-w-xl">
-          Choose how Vestor reaches you and when bill reminders arrive. Changes are saved automatically.
-          The bell icon in the app always shows every notification.
-        </p>
-      </header>
+      <BackLink />
+      <PageHeader title="Notifications">
+        Choose how Vestor reaches you and when bill reminders arrive. Changes are saved automatically.
+        The bell icon in the app always shows every notification.
+      </PageHeader>
 
       <div className="flex flex-col gap-8">
         {/* Browser */}
         <section aria-labelledby="notif-browser-title" className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="material-symbols-outlined text-primary text-3xl" aria-hidden="true">web</span>
-            <h2 id="notif-browser-title" className="font-headline font-bold text-xl text-on-surface">Browser notifications</h2>
+            <h2 id="notif-browser-title" className="font-headline font-bold text-xl text-on-surface">Browser Notifications</h2>
           </div>
 
           <Row htmlFor="browserNotificationsEnabled" title="Pop-up notifications" helpId="browserHelp"
@@ -134,12 +125,15 @@ const NotificationSettingsScreen = () => {
           </Row>
 
           {prefs.browserNotificationsEnabled && (
-            <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-outline/10 px-4 py-3">
-              <p role="status" className="flex items-start gap-2 text-xs text-on-surface-variant">
+            <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-surface-container-lowest border border-outline/10 px-4 py-3">
+              <p role="status" className="flex items-start gap-2 text-xs text-on-surface-variant leading-relaxed">
                 <span className={`material-symbols-outlined text-base ${permission === 'granted' ? 'text-primary' : permission === 'denied' ? 'text-error' : 'text-outline'}`} aria-hidden="true">
                   {permission === 'granted' ? 'check_circle' : permission === 'denied' ? 'block' : 'info'}
                 </span>
-                {PERMISSION_TEXT[permission]}
+                <span>
+                  <span className="block font-bold text-on-surface">{PERMISSION_TEXT[permission][0]}</span>
+                  {PERMISSION_TEXT[permission][1]}
+                </span>
               </p>
               {permission === 'default' && (
                 <button type="button" onClick={askPermission}
@@ -155,7 +149,7 @@ const NotificationSettingsScreen = () => {
         <section aria-labelledby="notif-email-title" className="bg-surface-container-low border border-outline/10 rounded-2xl p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="material-symbols-outlined text-primary text-3xl" aria-hidden="true">mark_email_unread</span>
-            <h2 id="notif-email-title" className="font-headline font-bold text-xl text-on-surface">Email notifications</h2>
+            <h2 id="notif-email-title" className="font-headline font-bold text-xl text-on-surface">Email Reminders &amp; Bill Schedule</h2>
           </div>
 
           <div className="flex flex-col gap-6">
@@ -168,9 +162,15 @@ const NotificationSettingsScreen = () => {
                 })} />
             </Row>
 
-            <fieldset disabled={busy} className="border-t border-outline/10 pt-6 flex flex-col gap-6">
+            <fieldset disabled={busy} aria-describedby={emailOff ? 'emailOffNote' : undefined}
+              className={`rounded-xl bg-surface-container-lowest border border-outline/10 p-4 sm:p-5 flex flex-col gap-6 transition-opacity motion-reduce:transition-none ${emailOff ? 'opacity-60' : ''}`}>
               <legend className="sr-only">Credit card bill reminders</legend>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant -mb-2">Credit card bills</p>
+              <div className="-mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Credit card bills</p>
+                {emailOff && (
+                  <p id="emailOffNote" className="mt-1.5 text-[11px] text-on-surface-variant">Email reminders are off. In-app bill reminders still follow this day schedule.</p>
+                )}
+              </div>
 
               <Row htmlFor="ccReminderDaysBefore" title="First reminder" helpId="leadHelp"
                 help="How early to remind you before a bill’s due date. Paid bills are skipped. The in-app reminder follows the same schedule.">
@@ -191,9 +191,7 @@ const NotificationSettingsScreen = () => {
               </Row>
             </fieldset>
 
-            {emailOff && (
-              <p className="text-[11px] text-on-surface-variant">Email reminders are off, so bill reminders appear only in the app.</p>
-            )}
+            <p className="text-[11px] text-outline">Subscription renewal reminders are always sent 1 day before expiry.</p>
           </div>
         </section>
       </div>

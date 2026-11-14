@@ -352,13 +352,28 @@ const AiTrainingScreen = () => {
   };
 
   const total = types?.reduce((n, t) => n + t.count, 0) || 0;
+  const [filter, setFilter] = useState('all');
+  const filters = useMemo(() => {
+    const list = types || [];
+    return [
+      { id: 'all', label: 'All', items: list },
+      { id: 'needs', label: 'Needs Training / Missing Merchant', items: list.filter(t => !t.trainedAt || t.missingMerchant > 0) },
+      { id: 'trained', label: 'Trained', items: list.filter(t => t.trainedAt) },
+    ];
+  }, [types]);
+  const shown = filters.find(f => f.id === filter).items;
 
   return (
     <main className="pt-24 pb-32 px-4 sm:px-6 max-w-6xl w-full mx-auto min-h-screen">
-      <Link to="/settings" className="group inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors">
-        <span className="material-symbols-outlined text-sm transition-transform group-hover:-translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_back</span>
-        Settings
-      </Link>
+      <nav aria-label="Breadcrumb">
+        <ol className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-on-surface-variant">
+          <li><Link to="/settings" className="hover:text-on-surface underline-offset-4 hover:underline transition-colors">Settings</Link></li>
+          <li aria-hidden="true" className="text-outline">/</li>
+          <li><Link to="/settings/email" className="hover:text-on-surface underline-offset-4 hover:underline transition-colors">Email Management</Link></li>
+          <li aria-hidden="true" className="text-outline">/</li>
+          <li aria-current="page" className="text-on-surface">AI Training</li>
+        </ol>
+      </nav>
 
       <header className="mt-5 mb-10 max-w-2xl">
         <h1 className="font-headline font-extrabold text-on-surface tracking-tight leading-[1.02] text-[clamp(2rem,4.2vw,3rem)]">
@@ -397,7 +412,17 @@ const AiTrainingScreen = () => {
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-3">
               {types.length} kind{types.length === 1 ? '' : 's'} · {total} email{total === 1 ? '' : 's'}, last 90 days
             </p>
-            <TypeList types={types} activeId={activeId} onOpen={open} />
+            <div role="group" aria-label="Filter email types" className="flex flex-wrap gap-1.5 mb-4">
+              {filters.map(f => (
+                <button key={f.id} type="button" onClick={() => setFilter(f.id)} aria-pressed={filter === f.id}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === f.id ? 'bg-primary/15 border-primary/40 text-primary' : 'border-outline/20 text-on-surface-variant hover:text-on-surface hover:border-outline/40'}`}>
+                  {f.label} ({f.items.length})
+                </button>
+              ))}
+            </div>
+            {shown.length > 0
+              ? <TypeList types={shown} activeId={activeId} onOpen={open} />
+              : <p className="text-xs text-on-surface-variant border-y border-outline/10 py-6">{filter === 'trained' ? 'No email types trained yet.' : 'Every email type is trained and has a merchant.'}</p>}
           </aside>
           <section ref={workspaceRef} aria-label="Selected email" className="min-w-0 scroll-mt-24">
             {activeId && <Trainer key={activeId} id={activeId} onTrained={load} />}

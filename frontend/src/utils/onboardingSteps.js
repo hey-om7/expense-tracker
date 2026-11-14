@@ -105,20 +105,20 @@ export const onboardingSteps = {
 
   settings: [
     {
-      title: 'Your Preferences',
-      description: 'Configure Vestor to work exactly how you want. From AI model selection to notification preferences and security settings — everything is customizable.',
-      targetSelector: null,
-      icon: 'tune',
-    },
-    {
-      title: 'AI Configuration',
-      description: 'Add your own Groq API key, test it, then pick from the models Groq currently has active. Your key is stored encrypted in your profile.',
+      title: 'Vestor AI',
+      description: 'Everything in Settings is grouped here. Use the switch to turn the AI assistant on or off, or open the row to add your Groq API key and pick a model. Your key is stored encrypted in your profile.',
       targetSelector: '[data-onboarding="settings-ai"]',
       icon: 'smart_toy',
     },
     {
+      title: 'Notifications',
+      description: 'Choose browser pop-ups, email reminders, and how many days before a credit card bill is due you hear about it.',
+      targetSelector: '[data-onboarding="settings-notifications"]',
+      icon: 'notifications',
+    },
+    {
       title: 'Tutorial Controls',
-      description: 'You can replay this tutorial anytime or reset your progress completely from the Tutorial & Help section below. That\'s it — enjoy using Vestor! 🎉',
+      description: 'Replay this tour anytime or reset your progress from App Guide & Walkthroughs. That\'s it, enjoy using Vestor! 🎉',
       targetSelector: '[data-onboarding="settings-tutorial"]',
       icon: 'school',
     },

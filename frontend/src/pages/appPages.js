@@ -11,6 +11,7 @@ const loaders = {
   '/analytics': () => import('./Analytics'),
   '/categories': () => import('./Categories'),
   '/settings': () => import('./Settings'),
+  '/settings/ai': () => import('./AiSettings'),
   '/settings/ai-training': () => import('./AiTraining'),
   '/settings/email': () => import('./EmailManagement'),
   '/settings/notifications': () => import('./NotificationSettings'),
