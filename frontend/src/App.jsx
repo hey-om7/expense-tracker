@@ -26,7 +26,7 @@ const legalFallback = <div className="min-h-screen bg-background" aria-busy="tru
 const {
   '/': DashboardScreen, '/transactions': TransactionsScreen, '/investments': InvestmentsScreen,
   '/cyclic': CyclicScreen, '/analytics': AnalyticsScreen, '/categories': CategoriesScreen, '/settings': SettingsScreen,
-  '/settings/ai-training': AiTrainingScreen,
+  '/settings/ai-training': AiTrainingScreen, '/settings/email': EmailManagementScreen,
 } = pages;
 
 function App() {
@@ -78,6 +78,7 @@ function App() {
                               <Route path="/categories" element={<CategoriesScreen />} />
                               <Route path="/settings" element={<SettingsScreen />} />
                               <Route path="/settings/ai-training" element={<AiTrainingScreen />} />
+                              <Route path="/settings/email" element={<EmailManagementScreen />} />
                             </Routes>
                           </Suspense>
                           <ToastContainer />

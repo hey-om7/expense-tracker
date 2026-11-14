@@ -39,6 +39,12 @@ const financialEmailSchema = new mongoose.Schema({
   // Review items: the last "Analyze with AI" answer, waiting for the user to confirm.
   // { category, confidence, fields, anchors, analyzedAt }. Labels only, never the body.
   proposal: { type: mongoose.Schema.Types.Mixed, default: null },
+  // "Don't track": the EmailRule that hid this email and its state before, for undo.
+  untrack: {
+    ruleId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailRule', default: null },
+    status: { type: String, default: null },
+    suggestionState: { type: String, default: null },
+  },
 }, { timestamps: true });
 
 financialEmailSchema.index({ userId: 1, gmailMessageId: 1 }, { unique: true });

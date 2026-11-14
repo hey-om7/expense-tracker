@@ -37,6 +37,51 @@ const groupPending = (statements) => {
   return [...groups.values()];
 };
 
+// Untracked email types (newest first). Each row can list the emails it hid and be undone.
+const UntrackedList = ({ items, busy, openId, onToggle, onUndo, btn }) => (
+  <ul className="flex flex-col divide-y divide-outline/10">
+    {items.map((rl) => {
+      const open = openId === rl._id;
+      return (
+        <li key={rl._id} className="py-2.5 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-bold text-sm text-on-surface truncate">{rl.sampleSubject || '(no subject)'}</p>
+              <p className="text-on-surface-variant">
+                {rl.institutionName || rl.senderDomain} · untracked {fmtDate(rl.untrackedAt)}
+                {rl.timesApplied ? ` · ${rl.timesApplied} skipped since` : ''}
+              </p>
+              {rl.emails.length > 0 && (
+                <button type="button" onClick={() => onToggle(open ? null : rl._id)} aria-expanded={open}
+                  className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline underline-offset-2">
+                  {open ? 'Hide' : 'Show'} {rl.emails.length} hidden email{rl.emails.length === 1 ? '' : 's'}
+                  <span className="material-symbols-outlined text-sm" aria-hidden="true">{open ? 'expand_less' : 'expand_more'}</span>
+                </button>
+              )}
+            </div>
+            <button type="button" disabled={!!busy} onClick={() => onUndo(rl)} className={`${btn} text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 shrink-0`}>
+              {busy === `undo-${rl._id}`
+                ? <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                : <span className="material-symbols-outlined text-sm" aria-hidden="true">undo</span>}
+              Undo
+            </button>
+          </div>
+          {open && (
+            <ul className="mt-2 ml-3 pl-3 border-l border-outline/15 flex flex-col gap-1.5">
+              {rl.emails.map((e) => (
+                <li key={e._id} className="flex items-center justify-between gap-3 text-on-surface-variant">
+                  <span className="truncate">{e.subject || '(no subject)'}</span>
+                  <span className="shrink-0 tabular-nums">{e.amount != null ? `${formatCurrency(e.amount)} · ` : ''}{fmtDate(e.receivedAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      );
+    })}
+  </ul>
+);
+
 const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -57,18 +102,22 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
   const [analysis, setAnalysis] = useState(null); // { email, proposal }
   const [pwPrompt, setPwPrompt] = useState(null); // { email, filename, savedPasswordFailed, error }
   const [pdfPasswords, setPdfPasswords] = useState(snapshot?.pdfPasswords ?? []);
+  const [untracked, setUntracked] = useState(snapshot?.untracked ?? []);
+  const [showUntracked, setShowUntracked] = useState(false);
+  const [openUntracked, setOpenUntracked] = useState(null); // rule id whose hidden emails are listed
 
   const load = useCallback(async () => {
     try {
       // All in parallel instead of status first, then the lists.
-      const [s, p, h, r, sv, rl, pw] = await Promise.all([
+      const [s, p, h, r, sv, rl, pw, ut] = await Promise.all([
         api.fetchGmailStatus(),
         api.fetchCardStatements({ status: 'pending' }).catch(() => []),
         api.fetchCardStatements({ status: 'linked' }).catch(() => []),
         api.fetchFinancialEmails('review').catch(() => []),
-        api.fetchSavedFinancialEmails().catch(() => []),
+        api.fetchFinancialEmails('recorded').catch(() => []),
         api.fetchEmailRules().catch(() => []),
         api.fetchPdfPasswords().catch(() => []),
+        api.fetchUntrackedEmails().catch(() => []),
       ]);
       setStatus(s);
       setPending(p);
@@ -77,7 +126,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
       setSaved(sv);
       setEmailRules(rl);
       setPdfPasswords(pw);
-      api.setCache('gmail-panel', { status: s, pending: p, history: h, review: r, saved: sv, emailRules: rl, pdfPasswords: pw });
+      setUntracked(ut);
+      api.setCache('gmail-panel', { status: s, pending: p, history: h, review: r, saved: sv, emailRules: rl, pdfPasswords: pw, untracked: ut });
       return s;
     } catch {
       setStatus({ connected: false, available: false });
@@ -205,7 +255,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
     setAnalysis(null);
     const what = {
       linked: 'Saved to your credit card.', pending: 'Saved. The card is listed under untracked cards.',
-      dismissed: 'Ignored.', recorded: 'Saved under Saved bank emails.',
+      dismissed: 'Ignored.', recorded: 'Saved under Tracked bank emails.',
     }[r.action] || 'Saved.';
     setBanner({
       ok: true,
@@ -223,6 +273,27 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
       await load();
     });
   };
+
+  const handleUntrack = (email) => {
+    const from = email.institutionName || email.senderDomain || 'this sender';
+    if (!window.confirm(`Stop tracking emails like "${email.subject || '(no subject)'}" from ${from}? Saved emails of this kind are hidden too. You can undo this under Untracked emails.`)) return;
+    run(`untrack-${email._id}`, async () => {
+      const r = await api.untrackFinancialEmail(email._id);
+      setSheet(null);
+      setBanner({
+        ok: true,
+        text: 'Vestor will skip emails like this from now on.',
+        detail: r.hidden > 1 ? `${r.hidden} saved emails of this kind were hidden. Undo it under Untracked emails.` : 'Undo it under Untracked emails.',
+      });
+      await load();
+    });
+  };
+
+  const handleUndoUntrack = (rule) => run(`undo-${rule._id}`, async () => {
+    const r = await api.undoUntrackEmails(rule._id);
+    setBanner({ ok: true, text: `Tracking "${rule.sampleSubject}" again.`, detail: r.restored ? `${r.restored} email(s) restored.` : '' });
+    await load();
+  });
 
   const handleDismissAllReview = () => {
     if (!window.confirm('Dismiss all emails waiting for review?')) return;
@@ -385,6 +456,11 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                       {busy === `analyze-${e._id}` ? 'Analyzing…' : 'Analyze with AI'}
                     </button>
                   )}
+                  <button disabled={!!busy} onClick={() => handleUntrack(e)} title="Skip emails like this from now on"
+                    className={`${btn} text-on-surface-variant border border-outline/20 hover:text-error hover:border-error/30`}>
+                    <span className="material-symbols-outlined text-sm" aria-hidden="true">block</span>
+                    {busy === `untrack-${e._id}` ? 'Stopping…' : "Don't track"}
+                  </button>
                   <button disabled={!!busy} onClick={() => handleDismissReview(e._id)} className={`${btn} text-on-surface-variant border border-outline/20`}>
                     Dismiss
                   </button>
@@ -399,7 +475,7 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
       {(saved.length > 0 || emailRules.length > 0 || pdfPasswords.length > 0) && (
         <div className="max-md:hidden bg-surface-container-low rounded-xl border border-outline/10">
           <button onClick={() => setShowSaved((v) => !v)} aria-expanded={showSaved} className="w-full flex items-center justify-between p-4 text-sm font-bold text-on-surface">
-            <span>Saved bank emails ({saved.length}){emailRules.length > 0 && <span className="font-normal text-on-surface-variant"> · {emailRules.length} remembered {emailRules.length === 1 ? 'type' : 'types'}</span>}</span>
+            <span>Tracked bank emails ({saved.length}){emailRules.length > 0 && <span className="font-normal text-on-surface-variant"> · {emailRules.length} remembered {emailRules.length === 1 ? 'type' : 'types'}</span>}</span>
             <span className="material-symbols-outlined text-base" aria-hidden="true">{showSaved ? 'expand_less' : 'expand_more'}</span>
           </button>
           {showSaved && (
@@ -414,7 +490,14 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                           {EMAIL_CATEGORY_LABELS[e.category] || 'Bank email'} · {e.institutionName || e.senderDomain} · {fmtDate(e.receivedAt)}
                         </p>
                       </div>
-                      <span className="font-headline font-extrabold text-on-surface shrink-0">{e.fields?.amount != null ? formatCurrency(e.fields.amount) : ''}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-headline font-extrabold text-on-surface">{e.fields?.amount != null ? formatCurrency(e.fields.amount) : ''}</span>
+                        <button disabled={!!busy} onClick={() => handleUntrack(e)} title="Skip emails like this from now on"
+                          className={`${btn} text-on-surface-variant border border-outline/20 hover:text-error hover:border-error/30`}>
+                          <span className="material-symbols-outlined text-sm" aria-hidden="true">block</span>
+                          {busy === `untrack-${e._id}` ? 'Stopping…' : "Don't track"}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -459,6 +542,22 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Email types the user stopped tracking, with undo */}
+      {untracked.length > 0 && (
+        <div className="max-md:hidden bg-surface-container-low rounded-xl border border-outline/10">
+          <button onClick={() => setShowUntracked((v) => !v)} aria-expanded={showUntracked} className="w-full flex items-center justify-between p-4 text-sm font-bold text-on-surface">
+            <span>Untracked emails ({untracked.length}) <span className="font-normal text-on-surface-variant">· skipped from now on</span></span>
+            <span className="material-symbols-outlined text-base" aria-hidden="true">{showUntracked ? 'expand_less' : 'expand_more'}</span>
+          </button>
+          {showUntracked && (
+            <div className="px-4 pb-4">
+              <p className="text-xs text-on-surface-variant mb-2">Undo to track a kind of email again. Its hidden emails come back as they were.</p>
+              <UntrackedList items={untracked} busy={busy} openId={openUntracked} onToggle={setOpenUntracked} onUndo={handleUndoUntrack} btn={btn} />
             </div>
           )}
         </div>
@@ -510,7 +609,8 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
           pendingGroups.length > 0 && { key: 'pending', icon: 'add_card', tone: 'text-primary', label: `${pendingGroups.length} untracked ${pendingGroups.length === 1 ? 'card' : 'cards'} found` },
           review.length > 0 && { key: 'review', icon: 'help', tone: 'text-on-surface-variant', label: `${review.length} bank ${review.length === 1 ? 'email' : 'emails'} to review` },
           history.length > 0 && { key: 'history', icon: 'history', tone: 'text-on-surface-variant', label: `Statement history · ${history.length}` },
-          (saved.length > 0 || emailRules.length > 0 || pdfPasswords.length > 0) && { key: 'saved', icon: 'inventory_2', tone: 'text-on-surface-variant', label: `Saved bank emails · ${saved.length}` },
+          (saved.length > 0 || emailRules.length > 0 || pdfPasswords.length > 0) && { key: 'saved', icon: 'inventory_2', tone: 'text-on-surface-variant', label: `Tracked bank emails · ${saved.length}` },
+          untracked.length > 0 && { key: 'untracked', icon: 'block', tone: 'text-on-surface-variant', label: `Untracked emails · ${untracked.length}` },
         ].filter(Boolean).map(row => (
           <li key={row.key}>
             <button type="button" onClick={() => setSheet(row.key)} className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-surface-container transition-colors">
@@ -600,12 +700,16 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                   {busy === `analyze-${e._id}` ? 'Analyzing…' : 'Analyze with AI'}
                 </button>
               )}
+              <button type="button" disabled={!!busy} onClick={() => handleUntrack(e)} className="mt-2 ml-2 min-h-[40px] px-4 rounded-full border border-outline/20 text-on-surface-variant text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">block</span>
+                Don&apos;t track
+              </button>
             </li>
           ))}
         </ul>
       </Modal>
 
-      <Modal isOpen={sheet === 'saved'} onClose={() => setSheet(null)} title="Saved bank emails">
+      <Modal isOpen={sheet === 'saved'} onClose={() => setSheet(null)} title="Tracked bank emails">
         {saved.length === 0 && <p className="text-sm text-on-surface-variant">Nothing saved yet.</p>}
         <ul className="divide-y divide-outline/10">
           {saved.map(e => (
@@ -614,7 +718,12 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
                 <p className="text-sm font-semibold text-on-surface line-clamp-2">{e.subject}</p>
                 <p className="mt-0.5 text-xs text-on-surface-variant">{EMAIL_CATEGORY_LABELS[e.category] || 'Bank email'} · {fmtDate(e.receivedAt)}</p>
               </div>
-              {e.fields?.amount != null && <span className="shrink-0 font-headline font-bold tabular-nums text-sm text-on-surface">{formatCurrency(e.fields.amount)}</span>}
+              <div className="shrink-0 flex items-center gap-1">
+                {e.fields?.amount != null && <span className="font-headline font-bold tabular-nums text-sm text-on-surface">{formatCurrency(e.fields.amount)}</span>}
+                <button type="button" disabled={!!busy} onClick={() => handleUntrack(e)} aria-label={`Don't track emails like ${e.subject || 'this'}`} title="Don't track" className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-50">
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">block</span>
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -664,6 +773,12 @@ const GmailStatementsPanel = ({ creditCards, onCardsChanged }) => {
         onClose={() => setPwPrompt(null)}
         onSubmit={handlePasswordSubmit}
       />
+
+      <Modal isOpen={sheet === 'untracked'} onClose={() => setSheet(null)} title="Untracked emails">
+        <p className="text-xs text-on-surface-variant mb-2">Vestor skips these kinds of email. Undo to track one again; its hidden emails come back as they were.</p>
+        <UntrackedList items={untracked} busy={busy} openId={openUntracked} onToggle={setOpenUntracked} onUndo={handleUndoUntrack}
+          btn="min-h-[40px] px-3.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50" />
+      </Modal>
 
       <Modal isOpen={sheet === 'history'} onClose={() => setSheet(null)} title="Statement history">
         <ul className="divide-y divide-outline/10">

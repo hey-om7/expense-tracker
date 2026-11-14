@@ -385,8 +385,8 @@ const AiTrainingScreen = () => {
           <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
             Once Gmail is connected and a scan finds card or UPI spend alerts, each kind of email shows up here.
           </p>
-          <Link to="/cyclic" className="mt-5 inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4 decoration-primary/40 hover:decoration-primary transition-colors">
-            Open Bills to connect or scan Gmail
+          <Link to="/settings/email" className="mt-5 inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4 decoration-primary/40 hover:decoration-primary transition-colors">
+            Open Email management to connect or scan Gmail
           </Link>
         </section>
       )}

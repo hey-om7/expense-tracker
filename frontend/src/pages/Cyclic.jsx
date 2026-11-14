@@ -5,7 +5,7 @@ import Modal from '../components/ui/Modal';
 import AddSubscriptionForm from '../components/forms/AddSubscriptionForm';
 import AddCreditCardForm from '../components/forms/AddCreditCardForm';
 import FeatureTour from '../components/ui/FeatureTour';
-import GmailStatementsPanel from '../components/ui/GmailStatementsPanel';
+import { Link } from 'react-router-dom';
 import { isCardPaid } from '../utils/creditCard';
 
 // Helper function to force DD/MM/YYYY format
@@ -22,7 +22,7 @@ const formatDateToDDMMYYYY = (dateString) => {
 };
 
 const CyclicScreen = () => {
-  const { subscriptions, creditCards, updateSubscription, updateCreditCard, refetchCreditCards } = useAppContext();
+  const { subscriptions, creditCards, updateSubscription, updateCreditCard } = useAppContext();
   const [payingId, setPayingId] = useState(null);
 
   // Marks the current bill paid (or undoes it). Paid status is tied to the
@@ -270,7 +270,14 @@ const CyclicScreen = () => {
                </div>
             </div>
 
-            <GmailStatementsPanel creditCards={creditCards} onCardsChanged={refetchCreditCards} />
+            <Link to="/settings/email" className="group mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-low border border-outline/10 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
+              <span className="material-symbols-outlined text-[22px] text-primary" aria-hidden="true">mark_email_read</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-on-surface">Gmail statements</span>
+                <span className="block text-xs text-on-surface-variant">Connect, scan and review bank emails in Settings → Email management.</span>
+              </span>
+              <span className="material-symbols-outlined text-base text-on-surface-variant ml-auto transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_forward</span>
+            </Link>
 
             {sortedCreditCards.length === 0 ? (
                <div className="text-center py-16 bg-surface-container-low rounded-xl border border-dashed border-outline/20 max-md:py-10 max-md:rounded-lg">

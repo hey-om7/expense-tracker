@@ -461,8 +461,16 @@ const SettingsScreen = () => {
               until then, emails are processed with the built-in rules.
             </p>
           )}
-          <p className="text-[10px] text-outline mt-3 italic">Applies from the next Gmail scan. Emails that can&apos;t be read reliably are listed for review in the Bills tab instead of being recorded.</p>
-          <Link to="/settings/ai-training" className="group mt-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/15 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
+          <p className="text-[10px] text-outline mt-3 italic">Applies from the next Gmail scan. Emails that can&apos;t be read reliably are listed for review in Email management instead of being recorded.</p>
+          <Link to="/settings/email" className="group mt-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/15 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
+            <span className="material-symbols-outlined text-lg text-primary" aria-hidden="true">inbox</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-on-surface">Email management</span>
+              <span className="block text-xs text-on-surface-variant">Connect and scan Gmail, review bank emails, and stop tracking promotional or unrelated ones.</span>
+            </span>
+            <span className="material-symbols-outlined text-base text-on-surface-variant ml-auto transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true">arrow_forward</span>
+          </Link>
+          <Link to="/settings/ai-training" className="group mt-3 flex items-center gap-3 px-4 py-3 rounded-xl border border-outline/15 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
             <span className="material-symbols-outlined text-lg text-primary" aria-hidden="true">school</span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-on-surface">AI training</span>

@@ -18,6 +18,9 @@
  *  POST /api/gmail/emails/:id/confirm           → save it and remember the email type (no AI next time)
  *  GET  /api/gmail/rules                        → remembered email types
  *  DELETE /api/gmail/rules/:id                  → forget one
+ *  POST /api/gmail/emails/:id/untrack           → don't track this email type any more (hides saved ones too)
+ *  GET  /api/gmail/untracked                    → email types the user stopped tracking, with the hidden emails
+ *  POST /api/gmail/untracked/:id/undo           → track that type again and restore its emails
  *  GET  /api/gmail/pdf-passwords                → banks with a saved statement PDF password
  *  DELETE /api/gmail/pdf-passwords/:id          → remove one
  */
@@ -36,12 +39,13 @@ const Transaction = require('../models/Transaction');
 const EmailRule = require('../models/EmailRule');
 const gmail = require('../services/gmailSync');
 const emailReview = require('../services/emailReview');
+const emailUntrack = require('../services/emailUntrack');
 const statementPasswords = require('../services/statementPasswords');
 const { isConfigured: isEncryptionConfigured } = require('../utils/tokenCrypto');
 
 const NONCE_COOKIE = 'vestor_gmail_oauth';
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
-const frontendUrl = (query) => `${(process.env.FRONTEND_URL || '').replace(/\/$/, '')}/cyclic?gmail=${query}`;
+const frontendUrl = (query) => `${(process.env.FRONTEND_URL || '').replace(/\/$/, '')}/settings/email?gmail=${query}`;
 
 const readCookie = (req, name) => {
   const match = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(`${name}=`));
@@ -328,7 +332,8 @@ router.post('/emails/:id/confirm', validateId, async (req, res) => {
 
 router.get('/rules', async (req, res) => {
   try {
-    const list = await EmailRule.find({ userId: req.userId })
+    // Untracked types are listed (and undone) under /untracked instead.
+    const list = await EmailRule.find({ userId: req.userId, untrackedAt: null })
       .select('institutionName senderDomain sampleSubject category timesApplied lastAppliedAt createdAt')
       .sort({ createdAt: -1 }).limit(100).lean();
     res.json(list);
@@ -344,6 +349,37 @@ router.delete('/rules/:id', validateId, async (req, res) => {
     res.json({ message: 'Forgotten. These emails will go through the normal checks again.' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to forget email type' });
+  }
+});
+
+// ─── "Don't track": block an email type, list what was blocked, undo ───
+const sendUntrackError = (res, err, fallback) => {
+  if (err instanceof emailUntrack.UntrackError) return res.status(err.status).json({ message: err.message });
+  console.error(`${fallback}:`, err.message);
+  return res.status(500).json({ message: fallback });
+};
+
+router.post('/emails/:id/untrack', validateId, async (req, res) => {
+  try {
+    res.json(await emailUntrack.untrack(req.userId, req.params.id));
+  } catch (err) {
+    sendUntrackError(res, err, 'Failed to stop tracking email');
+  }
+});
+
+router.get('/untracked', async (req, res) => {
+  try {
+    res.json(await emailUntrack.history(req.userId));
+  } catch (err) {
+    sendUntrackError(res, err, 'Failed to load untracked emails');
+  }
+});
+
+router.post('/untracked/:id/undo', validateId, async (req, res) => {
+  try {
+    res.json(await emailUntrack.undo(req.userId, req.params.id));
+  } catch (err) {
+    sendUntrackError(res, err, 'Failed to undo');
   }
 });
 

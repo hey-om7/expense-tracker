@@ -149,6 +149,10 @@ export const dismissFinancialEmail = (id) => request(`/gmail/emails/${id}/dismis
 export const dismissAllFinancialEmails = () => request('/gmail/emails/dismiss-all', { method: 'POST' });
 export const fetchSavedFinancialEmails = () =>
   request(`/gmail/emails?${new URLSearchParams({ status: 'recorded', exclude: 'transaction_alert' }).toString()}`);
+// "Don't track": skip this email type from now on and hide its saved emails. Undo restores them.
+export const untrackFinancialEmail = (id) => request(`/gmail/emails/${id}/untrack`, { method: 'POST' });
+export const fetchUntrackedEmails = () => request('/gmail/untracked');
+export const undoUntrackEmails = (ruleId) => request(`/gmail/untracked/${ruleId}/undo`, { method: 'POST' });
 export const analyzeFinancialEmail = (id, data = {}) => request(`/gmail/emails/${id}/analyze`, { method: 'POST', body: data });
 export const fetchPdfPasswords = () => request('/gmail/pdf-passwords');
 export const deletePdfPassword = (id) => request(`/gmail/pdf-passwords/${id}`, { method: 'DELETE' });

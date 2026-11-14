@@ -34,6 +34,10 @@ const emailRuleSchema = new mongoose.Schema({
   sampleSubject: { type: String, default: '', maxlength: 300 },
   // Learned from the attached statement PDF: read the PDF (with the saved password) next time.
   usesPdf: { type: Boolean, default: false },
+  // Set when the user chose "Don't track" for an email of this type (services/emailUntrack.js).
+  // previousCategory: what the rule did before, so undo can restore a taught rule instead of deleting it.
+  untrackedAt: { type: Date, default: null },
+  previousCategory: { type: String, default: null },
   timesApplied: { type: Number, default: 0 },
   lastAppliedAt: { type: Date, default: null },
 }, { timestamps: true });
