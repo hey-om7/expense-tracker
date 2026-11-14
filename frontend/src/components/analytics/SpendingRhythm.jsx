@@ -3,9 +3,13 @@ import { formatRupees as formatCurrency } from '../../utils/currency';
 import { panelClass, SectionHeader } from '../dashboard/dashboardUi';
 import { WEEKDAYS } from './analyticsData';
 
-// Five intensity steps so heavy days stand out without a legend full of numbers.
-const level = (amount, max) => (amount <= 0 || max <= 0 ? 0 : Math.min(4, Math.ceil((amount / max) * 4)));
-const LEVEL_BG = ['transparent', 'rgba(255,215,150,0.14)', 'rgba(255,215,150,0.3)', 'rgba(255,215,150,0.52)', 'rgba(255,215,150,0.85)'];
+// Shade each day by its share of the month's biggest day: no spend = no fill,
+// the biggest day = full colour. The square-root curve keeps small days visible
+// instead of fading out next to one large purchase.
+const MIN_ALPHA = 0.1;
+const MAX_ALPHA = 0.9;
+const intensity = (amount, max) => (amount <= 0 || max <= 0 ? 0 : Math.sqrt(Math.min(1, amount / max)));
+const dayBg = (t) => (t === 0 ? 'transparent' : `rgba(255,215,150,${(MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * t).toFixed(3)})`);
 
 // When money goes out: a day-by-day calendar for the month and the usual weekday pattern.
 const SpendingRhythm = ({ calendar, period, weekdays, weekdayHasData, monthName, className = '' }) => {
@@ -26,7 +30,7 @@ const SpendingRhythm = ({ calendar, period, weekdays, weekdayHasData, monthName,
         {WEEKDAYS.map(w => <span key={w} className="text-[10px] font-semibold text-outline pb-1" aria-hidden="true">{w[0]}</span>)}
         {Array.from({ length: period.firstWeekday }, (_, i) => <span key={`pad-${i}`} aria-hidden="true" />)}
         {days.map((d) => {
-          const lv = level(d.amount, maxDay);
+          const t = intensity(d.amount, maxDay);
           const active = shown?.day === d.day;
           return (
             <button
@@ -37,9 +41,9 @@ const SpendingRhythm = ({ calendar, period, weekdays, weekdayHasData, monthName,
               aria-label={`${d.day} ${monthName}: ${d.amount ? formatCurrency(d.amount) : 'no spending'}`}
               aria-pressed={active}
               className={`aspect-square rounded-[4px] text-[11px] tabular-nums flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
-                ${d.future ? 'text-outline/40 cursor-default' : lv >= 3 ? 'text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}
+                ${d.future ? 'text-outline/40 cursor-default' : t >= 0.7 ? 'text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}
                 ${active ? 'ring-1 ring-on-surface/70' : ''} ${d.today ? 'underline underline-offset-2' : ''}`}
-              style={{ backgroundColor: d.future ? 'transparent' : LEVEL_BG[lv], boxShadow: !d.future && lv === 0 ? 'inset 0 0 0 1px rgba(154,143,128,0.18)' : undefined }}
+              style={{ backgroundColor: d.future ? 'transparent' : dayBg(t), boxShadow: !d.future && t === 0 ? 'inset 0 0 0 1px rgba(154,143,128,0.18)' : undefined }}
             >
               {d.day}
             </button>
